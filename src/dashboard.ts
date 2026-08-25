@@ -1,5 +1,6 @@
-import type { HourlyByModel, HourlySeries, ModelId, WindowResult } from "./types.js";
-import { LOCATION, WINDOW } from "./config.js";
+import type { HourlyByModel, ModelId, WindowResult } from "./types.js";
+import { aggregateInterval, type AggregatedPoint } from "./analyze.js";
+import { LOCATION, WINDOW, ROLLING_WINDOW, RAIN_CHART_INTERVAL_HOURS } from "./config.js";
 
 /** Fixed categorical order/colors match config.MODELS, per the dataviz palette (slots 1-5). */
 const MODEL_LABELS: Record<ModelId, string> = {
@@ -55,6 +56,21 @@ function formatCandidateHeading(candidateStart: string): string {
   return `Na ${WEEKDAY_NAMES[weekday]} ${d}.${m}. o ${timePart.slice(0, 5)}`;
 }
 
+/** Formats an absolute instant in LOCATION.timezone (Europe/Vienna, same clock as Bratislava). */
+function formatGeneratedAt(d: Date): string {
+  const parts = new Intl.DateTimeFormat("sk-SK", {
+    timeZone: LOCATION.timezone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}.${get("month")}.${get("year")} ${get("hour")}:${get("minute")}`;
+}
+
 function summarize(result: WindowResult): string {
   if (result.ok) {
     return "Všetkých 5 modelov sa zhoduje: počas celého okna (pred maľovaním, počas aj po ňom) by nemalo pršať.";
@@ -84,41 +100,21 @@ function summarize(result: WindowResult): string {
   return sentences.join(" ");
 }
 
-interface ChartPoint {
-  time: string;
-  ms: number;
-  values: Partial<Record<ModelId, number>>;
-}
-
-function extractWindowSeries(
-  hourlyByModel: HourlyByModel,
-  windowStartMs: number,
-  windowEndMs: number,
-  valueOf: (series: HourlySeries, i: number) => number | null
-): ChartPoint[] {
-  const models = Object.keys(hourlyByModel) as ModelId[];
-  const byTime = new Map<string, ChartPoint>();
-
-  for (const model of models) {
-    const series = hourlyByModel[model];
-    for (let i = 0; i < series.time.length; i++) {
-      const t = series.time[i];
-      const ms = new Date(t).getTime();
-      if (ms < windowStartMs || ms >= windowEndMs) continue;
-      if (!byTime.has(t)) byTime.set(t, { time: t, ms, values: {} });
-      const value = valueOf(series, i);
-      if (value === null) continue; // no data for this model at this hour
-      byTime.get(t)!.values[model] = value;
-    }
-  }
-
-  return [...byTime.values()].sort((a, b) => a.ms - b.ms);
-}
-
 function niceTicks(max: number, count = 4): number[] {
   const ticks: number[] = [];
   for (let i = 0; i <= count; i++) ticks.push((max / count) * i);
   return ticks;
+}
+
+interface ChartBand {
+  from: number;
+  to: number;
+  label: string;
+}
+
+interface ChartMarker {
+  ms: number;
+  label: string;
 }
 
 interface ChartOptions {
@@ -126,30 +122,27 @@ interface ChartOptions {
   showThreshold: boolean;
   decimals: number;
   unitSuffix: string;
+  /** CSS custom property (e.g. "--metric-rain") used for the envelope band and median line. */
+  colorVar: string;
+  /** Also label the x-axis at this local HH:MM on every day (e.g. the candidate start hour). */
+  highlightHour?: string;
+  bands?: ChartBand[];
+  markers?: ChartMarker[];
 }
 
 function buildChart(
   chartId: string,
-  result: WindowResult,
-  points: ChartPoint[],
-  models: ModelId[],
+  windowStartMs: number,
+  windowEndMs: number,
+  points: AggregatedPoint[],
   opts: ChartOptions
 ): { svg: string; script: string } {
-  const windowStartMs = new Date(result.windowStart).getTime();
-  const windowEndMs = new Date(result.windowEnd).getTime();
-  const startMs = new Date(result.candidateStart).getTime();
-  const paintEndMs = startMs + WINDOW.paintHours * 3600_000;
   const span = windowEndMs - windowStartMs;
 
   const xScale = (ms: number) => MARGIN.left + ((ms - windowStartMs) / span) * PLOT_W;
   const yScale = (v: number) => MARGIN.top + PLOT_H - (v / opts.yMax) * PLOT_H;
 
-  const bands = [
-    { from: windowStartMs, to: startMs, label: PHASE_BAND_LABELS["pred-schnutie"] },
-    { from: startMs, to: paintEndMs, label: PHASE_BAND_LABELS.malovanie },
-    { from: paintEndMs, to: windowEndMs, label: PHASE_BAND_LABELS.schnutie },
-  ];
-  const bandRects = bands
+  const bandRects = (opts.bands ?? [])
     .map((b, i) => {
       const x1 = xScale(Math.max(b.from, windowStartMs));
       const x2 = xScale(Math.min(b.to, windowEndMs));
@@ -185,7 +178,7 @@ function buildChart(
   const xLabels: string[] = [];
   for (const p of points) {
     const { date, time } = formatLocal(p.time);
-    if (time === "08:00" || date !== lastDate) {
+    if (date !== lastDate || (opts.highlightHour && time === opts.highlightHour)) {
       const x = xScale(p.ms);
       xLabels.push(
         `<text x="${x.toFixed(1)}" y="${CHART_HEIGHT - MARGIN.bottom + 16}" class="axis-label" text-anchor="middle">${esc(date)} ${esc(time)}</text>`
@@ -194,38 +187,55 @@ function buildChart(
     }
   }
 
-  const lines = models
-    .map((model) => {
-      const path = points
-        .filter((p) => p.values[model] !== undefined)
-        .map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(p.ms).toFixed(1)} ${yScale(p.values[model]!).toFixed(1)}`)
-        .join(" ");
-      return `<path d="${path}" class="series-line" style="stroke: var(--series-${model})" />`;
+  const forward = points.map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(p.ms).toFixed(1)} ${yScale(p.max).toFixed(1)}`).join(" ");
+  const backward = [...points]
+    .reverse()
+    .map((p) => `L ${xScale(p.ms).toFixed(1)} ${yScale(p.min).toFixed(1)}`)
+    .join(" ");
+  const band =
+    points.length > 0
+      ? `<path d="${forward} ${backward} Z" class="envelope-band" style="fill: var(${opts.colorVar})" />`
+      : "";
+  const medianPath = points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(p.ms).toFixed(1)} ${yScale(p.median).toFixed(1)}`)
+    .join(" ");
+  const medianLine = `<path d="${medianPath}" class="median-line" style="stroke: var(${opts.colorVar})" />`;
+
+  const markerLines = (opts.markers ?? [])
+    .map((mk) => {
+      const x = xScale(mk.ms);
+      return `
+        <line x1="${x.toFixed(1)}" y1="${MARGIN.top}" x2="${x.toFixed(1)}" y2="${MARGIN.top + PLOT_H}" class="now-marker" />
+        <text x="${x.toFixed(1)}" y="${MARGIN.top + 12}" class="now-marker-label" text-anchor="middle">${esc(mk.label)}</text>
+      `;
     })
     .join("");
 
   const svg = `
-    <svg viewBox="0 0 ${CHART_WIDTH} ${CHART_HEIGHT}" class="chart-svg" role="img" aria-label="Graf pre okno ${esc(result.candidateStart)}">
+    <svg viewBox="0 0 ${CHART_WIDTH} ${CHART_HEIGHT}" class="chart-svg" role="img" aria-label="Graf ${esc(chartId)}">
       ${bandRects}
       ${yGrid}
       ${thresholdLine}
       ${xLabels.join("")}
-      ${lines}
+      ${band}
+      ${medianLine}
+      ${markerLines}
       <line class="crosshair" x1="0" y1="${MARGIN.top}" x2="0" y2="${MARGIN.top + PLOT_H}" data-chart="${chartId}" />
       <rect class="hover-capture" x="${MARGIN.left}" y="${MARGIN.top}" width="${PLOT_W}" height="${PLOT_H}" data-chart="${chartId}" />
     </svg>
     <div class="tooltip" data-chart-tooltip="${chartId}"></div>
   `;
 
-  const dataset = points.map((p) => ({
-    x: Number(xScale(p.ms).toFixed(1)),
-    label: `${formatLocal(p.time).date} ${formatLocal(p.time).time}`,
-    values: models.map((m) => ({
-      model: m,
-      label: MODEL_LABELS[m],
-      valueLabel: p.values[m] === undefined ? null : `${p.values[m]!.toFixed(opts.decimals)}${opts.unitSuffix}`,
+  const dataset = {
+    colorVar: opts.colorVar,
+    points: points.map((p) => ({
+      x: Number(xScale(p.ms).toFixed(1)),
+      label: `${formatLocal(p.time).date} ${formatLocal(p.time).time}`,
+      minLabel: `${p.min.toFixed(opts.decimals)}${opts.unitSuffix}`,
+      medianLabel: `${p.median.toFixed(opts.decimals)}${opts.unitSuffix}`,
+      maxLabel: `${p.max.toFixed(opts.decimals)}${opts.unitSuffix}`,
     })),
-  }));
+  };
 
   const script = `CHART_DATA[${JSON.stringify(chartId)}] = ${JSON.stringify(dataset)};`;
 
@@ -235,32 +245,35 @@ function buildChart(
 function renderCandidateCard(
   result: WindowResult,
   hourlyByModel: HourlyByModel,
-  models: ModelId[],
   index: number
 ): { html: string; script: string } {
   const windowStartMs = new Date(result.windowStart).getTime();
   const windowEndMs = new Date(result.windowEnd).getTime();
+  const startMs = new Date(result.candidateStart).getTime();
+  const paintEndMs = startMs + WINDOW.paintHours * 3600_000;
+  const highlightHour = formatLocal(result.candidateStart).time;
+  const bands: ChartBand[] = [
+    { from: windowStartMs, to: startMs, label: PHASE_BAND_LABELS["pred-schnutie"] },
+    { from: startMs, to: paintEndMs, label: PHASE_BAND_LABELS.malovanie },
+    { from: paintEndMs, to: windowEndMs, label: PHASE_BAND_LABELS.schnutie },
+  ];
 
-  const rainPoints = extractWindowSeries(hourlyByModel, windowStartMs, windowEndMs, (s, i) => s.precipitation[i]);
-  const observedMaxMm = Math.max(0, ...rainPoints.flatMap((p) => models.map((m) => p.values[m] ?? 0)));
-  const rainChart = buildChart(`rain-${index}`, result, rainPoints, models, {
-    yMax: Math.max(observedMaxMm * 1.25, 1),
-    showThreshold: true,
-    decimals: 2,
-    unitSuffix: " mm/h",
-  });
-
-  const sunPoints = extractWindowSeries(
+  const rainPoints = aggregateInterval(
     hourlyByModel,
     windowStartMs,
     windowEndMs,
-    (s, i) => (s.sunshineSeconds[i] === null ? null : (s.sunshineSeconds[i]! / 3600) * 100)
+    RAIN_CHART_INTERVAL_HOURS,
+    (s, i) => s.precipitation[i]
   );
-  const sunChart = buildChart(`sun-${index}`, result, sunPoints, models, {
-    yMax: 100,
+  const observedMaxMm = Math.max(0, ...rainPoints.map((p) => p.max));
+  const rainChart = buildChart(`rain-${index}`, windowStartMs, windowEndMs, rainPoints, {
+    yMax: Math.max(observedMaxMm * 1.25, 1),
     showThreshold: false,
-    decimals: 0,
-    unitSuffix: " %",
+    decimals: 1,
+    unitSuffix: " mm",
+    colorVar: "--metric-rain",
+    highlightHour,
+    bands,
   });
 
   const summaryRows = result.perModel
@@ -273,13 +286,6 @@ function renderCandidateCard(
           <td class="num">${m.hoursCovered}/${m.hoursExpected}</td>
           <td><span class="badge ${m.dry ? "badge-good" : "badge-critical"}">${m.dry ? "OK" : "ZLYHAL"}</span></td>
         </tr>`
-    )
-    .join("");
-
-  const legend = models
-    .map(
-      (m) =>
-        `<span class="legend-item"><span class="legend-swatch" style="background: var(--series-${m})"></span>${esc(MODEL_LABELS[m])}</span>`
     )
     .join("");
 
@@ -307,11 +313,9 @@ function renderCandidateCard(
       <details class="more-info">
         <summary>Viac info</summary>
         <p class="muted">Okno (pred-maľovaním + maľovanie + schnutie): ${esc(result.windowStart)} &ndash; ${esc(result.windowEnd)}</p>
-        <div class="legend">${legend}</div>
+        <p class="muted">Pás = rozptyl 5 modelov (min&ndash;max), čiara = medián.</p>
         <h3>Zrážky</h3>
         ${rainChart.svg}
-        <h3>Slnečný svit</h3>
-        ${sunChart.svg}
         <table class="summary-table">
           <thead><tr><th>Model</th><th>Max mm/h</th><th>Súčet mm</th><th>Pokrytie</th><th>Stav</th></tr></thead>
           <tbody>${summaryRows}</tbody>
@@ -331,7 +335,74 @@ function renderCandidateCard(
     </section>
   `;
 
-  return { html, script: rainChart.script + "\n" + sunChart.script };
+  return { html, script: rainChart.script };
+}
+
+/**
+ * A rolling ±N-day view around "now" (independent of the weekend candidates), so the
+ * user can eyeball recent rain (wet substrate) against upcoming rain (drying conditions
+ * for the pine boards) and judge for themselves - not tied to the WINDOW rule.
+ */
+function renderRollingSection(hourlyByModel: HourlyByModel, models: ModelId[], now: Date): { html: string; script: string } {
+  const nowMs = now.getTime();
+  const windowStartMs = nowMs - ROLLING_WINDOW.pastDays * 24 * 3600_000;
+  const windowEndMs = nowMs + ROLLING_WINDOW.aheadDays * 24 * 3600_000;
+  const markers: ChartMarker[] = [{ ms: nowMs, label: "teraz" }];
+
+  const rainPoints = aggregateInterval(
+    hourlyByModel,
+    windowStartMs,
+    windowEndMs,
+    RAIN_CHART_INTERVAL_HOURS,
+    (s, i) => s.precipitation[i]
+  );
+  const observedMaxMm = Math.max(0, ...rainPoints.map((p) => p.max));
+  const rainChart = buildChart("rolling-rain", windowStartMs, windowEndMs, rainPoints, {
+    yMax: Math.max(observedMaxMm * 1.25, 1),
+    showThreshold: false,
+    decimals: 1,
+    unitSuffix: " mm",
+    colorVar: "--metric-rain",
+    markers,
+  });
+
+  let maxPastRainMm = 0;
+  let minFutureDryHours = Infinity;
+  for (const model of models) {
+    const series = hourlyByModel[model];
+    let past = 0;
+    let futureDry = 0;
+    for (let i = 0; i < series.time.length; i++) {
+      const t = new Date(series.time[i]).getTime();
+      if (t < windowStartMs || t >= windowEndMs) continue;
+      const mm = series.precipitation[i];
+      if (mm === null) continue;
+      if (t < nowMs) past += mm;
+      else if (mm < WINDOW.rainThresholdMm) futureDry++;
+    }
+    maxPastRainMm = Math.max(maxPastRainMm, past);
+    minFutureDryHours = Math.min(minFutureDryHours, futureDry);
+  }
+  if (!Number.isFinite(minFutureDryHours)) minFutureDryHours = 0;
+
+  const html = `
+    <section class="card">
+      <h2 class="section-title">Dážď (posledné ${ROLLING_WINDOW.pastDays} / najbližšie ${ROLLING_WINDOW.aheadDays} dni)</h2>
+      <p class="muted">
+        Na vlastné posúdenie vlhkosti podkladu (borovicové dosky): koľko pršalo predtým a koľko
+        suchých hodín je pred nami. Zvislá čiarkovaná čiara označuje "teraz".
+      </p>
+      <p class="muted">Pás = rozptyl 5 modelov (min&ndash;max), čiara = medián.</p>
+      ${rainChart.svg}
+      <p class="muted">
+        Najviac zrážok spomedzi modelov za posledné ${ROLLING_WINDOW.pastDays} dni: ${maxPastRainMm.toFixed(1)} mm.
+        Suché hodiny (pod prahom ${WINDOW.rainThresholdMm} mm/h) v najbližších ${ROLLING_WINDOW.aheadDays} dňoch
+        podľa najprísnejšieho modelu: ${minFutureDryHours} h.
+      </p>
+    </section>
+  `;
+
+  return { html, script: rainChart.script };
 }
 
 export function renderDashboardHtml(
@@ -340,7 +411,8 @@ export function renderDashboardHtml(
   generatedAt: Date
 ): string {
   const models = Object.keys(hourlyByModel) as ModelId[];
-  const cards = results.map((r, i) => renderCandidateCard(r, hourlyByModel, models, i));
+  const rolling = renderRollingSection(hourlyByModel, models, generatedAt);
+  const cards = results.map((r, i) => renderCandidateCard(r, hourlyByModel, i));
   const seriesVars = models.map((m) => `--series-${m}: ${MODEL_COLORS[m].light};`).join(" ");
   const seriesVarsDark = models.map((m) => `--series-${m}: ${MODEL_COLORS[m].dark};`).join(" ");
 
@@ -369,6 +441,7 @@ export function renderDashboardHtml(
     --critical: #d03b3b;
     --border: rgba(11,11,11,0.10);
     ${seriesVars}
+    --metric-rain: var(--series-icon_seamless);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -384,6 +457,7 @@ export function renderDashboardHtml(
       --critical: #e66767;
       --border: rgba(255,255,255,0.10);
       ${seriesVarsDark}
+      --metric-rain: var(--series-icon_seamless);
     }
   }
   * { box-sizing: border-box; }
@@ -394,7 +468,7 @@ export function renderDashboardHtml(
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     padding: 24px 16px 64px;
   }
-  .wrap { max-width: 720px; margin: 0 auto; }
+  .wrap { max-width: 1400px; margin: 0 auto; }
   h1 { font-size: 1.3rem; margin: 0 0 8px; }
   .hero { font-size: 1.15rem; font-weight: 600; margin: 0 0 20px; }
   .muted { color: var(--text-secondary); font-size: 0.85rem; }
@@ -424,8 +498,6 @@ export function renderDashboardHtml(
   details.more-info { margin-top: 14px; border-top: 1px solid var(--gridline); padding-top: 10px; }
   details.more-info > summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; }
   details.more-info h3 { font-size: 0.9rem; margin: 18px 0 4px; }
-  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0; font-size: 0.82rem; color: var(--text-secondary); }
-  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
   .legend-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
   .chart-svg { width: 100%; height: auto; overflow: visible; }
   .phase-band-0 { fill: var(--gridline); opacity: 0.35; }
@@ -435,7 +507,11 @@ export function renderDashboardHtml(
   .gridline { stroke: var(--gridline); stroke-width: 1; }
   .axis-label { fill: var(--muted); font-size: 10px; }
   .threshold-line { stroke: var(--baseline); stroke-width: 1; stroke-dasharray: 4 3; }
-  .series-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .now-marker { stroke: var(--critical); stroke-width: 1.5; stroke-dasharray: 3 3; opacity: 0.85; }
+  .now-marker-label { fill: var(--critical); font-size: 10px; font-weight: 600; }
+  .section-title { font-size: 1.05rem; margin: 0 0 4px; }
+  .envelope-band { opacity: 0.18; }
+  .median-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .crosshair { stroke: var(--baseline); stroke-width: 1; opacity: 0; pointer-events: none; }
   .hover-capture { fill: transparent; cursor: crosshair; }
   .tooltip {
@@ -467,11 +543,13 @@ export function renderDashboardHtml(
   <div class="wrap">
     <h1>Terasa – watchdog počasia</h1>
     <p class="hero">${esc(hero)}</p>
-    <p class="muted">${esc(LOCATION.name)} &middot; vygenerované ${esc(generatedAt.toISOString())}</p>
+    <p class="muted">${esc(LOCATION.name)} &middot; vygenerované ${esc(formatGeneratedAt(generatedAt))}</p>
+    ${rolling.html}
     ${cards.map((c) => c.html).join("")}
   </div>
   <script>
     const CHART_DATA = {};
+    ${rolling.script}
     ${cards.map((c) => c.script).join("\n")}
 
     document.querySelectorAll(".hover-capture").forEach((rect) => {
@@ -479,7 +557,8 @@ export function renderDashboardHtml(
       const svg = rect.closest("svg");
       const crosshair = svg.querySelector(\`.crosshair[data-chart="\${chartId}"]\`);
       const tooltip = document.querySelector(\`[data-chart-tooltip="\${chartId}"]\`);
-      const data = CHART_DATA[chartId];
+      const chart = CHART_DATA[chartId];
+      const data = chart.points;
 
       function nearestPoint(mouseX) {
         let best = data[0];
@@ -507,20 +586,20 @@ export function renderDashboardHtml(
         timeEl.className = "tooltip-time";
         timeEl.textContent = point.label;
         tooltip.appendChild(timeEl);
-        for (const v of point.values) {
-          if (v.valueLabel === null) continue;
+        const swatchColor = getComputedStyle(document.documentElement).getPropertyValue(chart.colorVar);
+        for (const [rowLabel, valueLabel] of [["Min", point.minLabel], ["Medián", point.medianLabel], ["Max", point.maxLabel]]) {
           const row = document.createElement("div");
           row.className = "tooltip-row";
           const key = document.createElement("span");
           key.className = "tooltip-key";
           const line = document.createElement("span");
           line.className = "tooltip-line";
-          line.style.background = getComputedStyle(document.documentElement).getPropertyValue(\`--series-\${v.model}\`);
+          line.style.background = swatchColor;
           key.appendChild(line);
-          key.appendChild(document.createTextNode(v.label));
+          key.appendChild(document.createTextNode(rowLabel));
           const value = document.createElement("span");
           value.className = "tooltip-value";
-          value.textContent = v.valueLabel;
+          value.textContent = valueLabel;
           row.appendChild(key);
           row.appendChild(value);
           tooltip.appendChild(row);

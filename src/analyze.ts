@@ -1,5 +1,6 @@
 import type {
   HourlyByModel,
+  HourlySeries,
   ModelId,
   ModelWindowSummary,
   WindowFailure,
@@ -112,3 +113,67 @@ export function pickCandidateStarts(times: string[]): string[] {
     return CANDIDATE_STARTS.some((c) => c.weekday === weekday && c.hour === hour);
   });
 }
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+export interface AggregatedPoint {
+  time: string;
+  ms: number;
+  min: number;
+  median: number;
+  max: number;
+}
+
+/**
+ * Buckets hours into `intervalHours`-wide chunks anchored to windowStartMs, summing each
+ * model's value within a bucket (so a 3h bucket holds "total over that chunk", not a rate),
+ * then collapses across models into one min/median/max per bucket - this is what lets the
+ * dashboard show a single envelope+median line instead of 5 raw series, at whatever time
+ * resolution the chart wants. `intervalHours: 1` reduces to one bucket per hour (today's
+ * per-hour behavior, since summing a single value is a no-op). A bucket with zero reporting
+ * models is omitted (never emitted as NaN). Bucket labels reuse the earliest raw `time`
+ * string seen in that bucket (never reconstructed via Date), preserving the naive local
+ * wall-clock timestamps Open-Meteo returns.
+ */
+export function aggregateInterval(
+  hourlyByModel: HourlyByModel,
+  windowStartMs: number,
+  windowEndMs: number,
+  intervalHours: number,
+  valueOf: (series: HourlySeries, i: number) => number | null
+): AggregatedPoint[] {
+  const models = Object.keys(hourlyByModel) as ModelId[];
+  const intervalMs = intervalHours * 3600_000;
+  const buckets = new Map<number, { time: string; values: Map<ModelId, number> }>();
+
+  for (const model of models) {
+    const series = hourlyByModel[model];
+    for (let i = 0; i < series.time.length; i++) {
+      const t = series.time[i];
+      const ms = new Date(t).getTime();
+      if (ms < windowStartMs || ms >= windowEndMs) continue;
+      const value = valueOf(series, i);
+      if (value === null) continue;
+      const bucketMs = windowStartMs + Math.floor((ms - windowStartMs) / intervalMs) * intervalMs;
+      if (!buckets.has(bucketMs)) buckets.set(bucketMs, { time: t, values: new Map() });
+      const bucket = buckets.get(bucketMs)!;
+      if (ms < new Date(bucket.time).getTime()) bucket.time = t;
+      bucket.values.set(model, (bucket.values.get(model) ?? 0) + value);
+    }
+  }
+
+  return [...buckets.entries()]
+    .map(([ms, { time, values }]) => ({
+      time,
+      ms,
+      min: Math.min(...values.values()),
+      median: median([...values.values()]),
+      max: Math.max(...values.values()),
+    }))
+    .sort((a, b) => a.ms - b.ms);
+}
+

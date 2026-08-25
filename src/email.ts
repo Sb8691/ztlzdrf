@@ -1,5 +1,5 @@
 import type { WindowResult } from "./types.js";
-import { LOCATION } from "./config.js";
+import { LOCATION, WINDOW } from "./config.js";
 
 export interface EmailConfig {
   apiKey: string;
@@ -21,7 +21,7 @@ export function renderAlertEmail(result: WindowResult): { subject: string; html:
     <h2>Vhodné okno na maľovanie terasy</h2>
     <p>Lokalita: ${LOCATION.name}</p>
     <p>Odporúčaný štart maľovania: <strong>${result.candidateStart}</strong> (čas lokálny, ${LOCATION.timezone})</p>
-    <p>Súvislé suché okno (24h pred + 12h maľovania + 24h schnutia): ${result.windowStart} &ndash; ${result.windowEnd}</p>
+    <p>Súvislé suché okno (${WINDOW.preDryHours}h pred + ${WINDOW.paintHours}h maľovania + ${WINDOW.postDryHours}h schnutia): ${result.windowStart} &ndash; ${result.windowEnd}</p>
     <p>Porovnanie zrážok podľa modelu v rámci tohto okna:</p>
     <table border="1" cellpadding="6" cellspacing="0">
       <thead><tr><th>Model</th><th>Max zrážky/h</th><th>Súčet za okno</th></tr></thead>

@@ -10,8 +10,6 @@ export interface HourlySeries {
   time: string[];
   /** Precipitation in mm for the preceding hour, aligned index-for-index with `time`. Open-Meteo returns null at the edge of a model's actual horizon. */
   precipitation: (number | null)[];
-  /** Sunshine duration in seconds for the preceding hour (0-3600), aligned index-for-index with `time`. Can be null, see `precipitation`. */
-  sunshineSeconds: (number | null)[];
 }
 
 export type HourlyByModel = Record<ModelId, HourlySeries>;

@@ -36,7 +36,11 @@ async function main() {
 
   const hourlyByModel = await fetchModelForecasts();
   const anyModel = Object.values(hourlyByModel)[0];
-  const candidateStarts = pickCandidateStarts(anyModel.time);
+  // past_days on the Open-Meteo request adds recent history to the same array, so
+  // pickCandidateStarts would otherwise also match already-passed Sat/Sun 08:00 slots.
+  const candidateStarts = pickCandidateStarts(anyModel.time).filter(
+    (t) => new Date(t).getTime() >= Date.now()
+  );
   const results = findPaintWindows(hourlyByModel, candidateStarts, WINDOW);
 
   console.log(`Lokalita: ${LOCATION.name}`);

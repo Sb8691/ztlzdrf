@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findPaintWindows, pickCandidateStarts } from "./analyze.js";
+import { aggregateInterval, findPaintWindows, pickCandidateStarts } from "./analyze.js";
 import type { HourlyByModel } from "./types.js";
 
 const OPTS = { preDryHours: 24, paintHours: 12, postDryHours: 24, rainThresholdMm: 0.1 };
@@ -9,14 +9,12 @@ const OPTS = { preDryHours: 24, paintHours: 12, postDryHours: 24, rainThresholdM
 function series(startIso: string, hours: number, mm: number) {
   const time: string[] = [];
   const precipitation: number[] = [];
-  const sunshineSeconds: number[] = [];
   const start = new Date(startIso).getTime();
   for (let i = 0; i < hours; i++) {
     time.push(new Date(start + i * 3600_000).toISOString());
     precipitation.push(mm);
-    sunshineSeconds.push(0);
   }
-  return { time, precipitation, sunshineSeconds };
+  return { time, precipitation };
 }
 
 test("marks window ok when every model is fully dry", () => {
@@ -89,14 +87,55 @@ test("marks window not ok when forecast doesn't fully cover it", () => {
   assert.equal(result.ok, false);
 });
 
+test("aggregateInterval computes min/median/max across all reporting models (1h buckets)", () => {
+  const t = "2026-08-29T08:00:00.000Z";
+  const ms = new Date(t).getTime();
+  const hourlyByModel: HourlyByModel = {
+    icon_seamless: { time: [t], precipitation: [1] },
+    gfs_seamless: { time: [t], precipitation: [3] },
+    ecmwf_ifs025: { time: [t], precipitation: [2] },
+  } as HourlyByModel;
+
+  const [point] = aggregateInterval(hourlyByModel, ms, ms + 1, 1, (s, i) => s.precipitation[i]);
+  assert.deepEqual(point, { time: t, ms, min: 1, median: 2, max: 3 });
+});
+
+test("aggregateInterval ignores missing models and omits hours with zero reporting models (1h buckets)", () => {
+  const t1 = "2026-08-29T08:00:00.000Z";
+  const t2 = "2026-08-29T09:00:00.000Z";
+  const ms1 = new Date(t1).getTime();
+  const ms2 = new Date(t2).getTime();
+  const hourlyByModel: HourlyByModel = {
+    icon_seamless: { time: [t1, t2], precipitation: [1, null] },
+    gfs_seamless: { time: [t1, t2], precipitation: [null, null] },
+  } as HourlyByModel;
+
+  const points = aggregateInterval(hourlyByModel, ms1, ms2 + 1, 1, (s, i) => s.precipitation[i]);
+  assert.deepEqual(points, [{ time: t1, ms: ms1, min: 1, median: 1, max: 1 }]);
+});
+
+test("aggregateInterval sums each model's hours within a bucket before taking min/median/max", () => {
+  const t1 = "2026-08-29T08:00:00.000Z";
+  const t2 = "2026-08-29T09:00:00.000Z";
+  const ms1 = new Date(t1).getTime();
+  const hourlyByModel: HourlyByModel = {
+    icon_seamless: { time: [t1, t2], precipitation: [1, 1] }, // sums to 2
+    gfs_seamless: { time: [t1, t2], precipitation: [2, 3] }, // sums to 5
+  } as HourlyByModel;
+
+  const points = aggregateInterval(hourlyByModel, ms1, ms1 + 2 * 3600_000, 2, (s, i) => s.precipitation[i]);
+  assert.deepEqual(points, [{ time: t1, ms: ms1, min: 2, median: 3.5, max: 5 }]);
+});
+
 test("pickCandidateStarts keeps only configured weekday/hour slots", () => {
   const times = [
-    "2026-08-28T08:00", // Friday 08:00 - not a candidate
+    "2026-08-27T08:00", // Thursday 08:00 - not a candidate
+    "2026-08-28T08:00", // Friday 08:00 - candidate
     "2026-08-29T08:00", // Saturday 08:00 - candidate
     "2026-08-29T09:00", // Saturday 09:00 - not a candidate
     "2026-08-30T08:00", // Sunday 08:00 - candidate
   ];
 
   const picked = pickCandidateStarts(times);
-  assert.deepEqual(picked, ["2026-08-29T08:00", "2026-08-30T08:00"]);
+  assert.deepEqual(picked, ["2026-08-28T08:00", "2026-08-29T08:00", "2026-08-30T08:00"]);
 });
