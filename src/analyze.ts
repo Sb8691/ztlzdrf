@@ -1,4 +1,11 @@
-import type { HourlyByModel, ModelId, ModelWindowSummary, WindowResult } from "./types.js";
+import type {
+  HourlyByModel,
+  ModelId,
+  ModelWindowSummary,
+  WindowFailure,
+  WindowPhase,
+  WindowResult,
+} from "./types.js";
 import { CANDIDATE_STARTS, WINDOW } from "./config.js";
 
 interface AnalyzeOptions {
@@ -6,6 +13,12 @@ interface AnalyzeOptions {
   paintHours: number;
   postDryHours: number;
   rainThresholdMm: number;
+}
+
+function classifyPhase(hourMs: number, startMs: number, opts: AnalyzeOptions): WindowPhase {
+  if (hourMs < startMs) return "pred-schnutie";
+  if (hourMs < startMs + opts.paintHours * 3600_000) return "malovanie";
+  return "schnutie";
 }
 
 /**
@@ -29,6 +42,7 @@ export function findPaintWindows(
     const expectedHours = Math.round((windowEndMs - windowStartMs) / 3600_000);
 
     const perModel: ModelWindowSummary[] = [];
+    const failures: WindowFailure[] = [];
     let ok = models.length > 0;
 
     for (const model of models) {
@@ -41,18 +55,35 @@ export function findPaintWindows(
       for (let i = 0; i < series.time.length; i++) {
         const t = new Date(series.time[i]).getTime();
         if (t < windowStartMs || t >= windowEndMs) continue;
+        const raw = series.precipitation[i];
+        if (raw === null) continue; // no data at this hour - doesn't count as covered
         hoursSeen++;
-        const mm = series.precipitation[i] ?? 0;
+        const mm = raw;
         maxHourlyMm = Math.max(maxHourlyMm, mm);
         totalMm += mm;
-        if (mm >= opts.rainThresholdMm) modelDry = false;
+        if (mm >= opts.rainThresholdMm) {
+          modelDry = false;
+          failures.push({
+            model,
+            time: series.time[i],
+            phase: classifyPhase(t, startMs, opts),
+            precipitationMm: mm,
+          });
+        }
       }
 
       // Forecast doesn't fully cover the window: can't confirm it's dry.
       if (hoursSeen < expectedHours) modelDry = false;
       if (!modelDry) ok = false;
 
-      perModel.push({ model, maxHourlyMm, totalMm });
+      perModel.push({
+        model,
+        maxHourlyMm,
+        totalMm,
+        hoursCovered: hoursSeen,
+        hoursExpected: expectedHours,
+        dry: modelDry,
+      });
     }
 
     return {
@@ -61,6 +92,7 @@ export function findPaintWindows(
       windowEnd: new Date(windowEndMs).toISOString(),
       ok,
       perModel,
+      failures,
     };
   });
 }

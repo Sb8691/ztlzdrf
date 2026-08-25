@@ -8,16 +8,30 @@ export type ModelId =
 export interface HourlySeries {
   /** Local wall-clock timestamps in LOCATION.timezone, e.g. "2026-08-29T08:00" (no UTC offset). */
   time: string[];
-  /** Precipitation in mm for the preceding hour, aligned index-for-index with `time`. */
-  precipitation: number[];
+  /** Precipitation in mm for the preceding hour, aligned index-for-index with `time`. Open-Meteo returns null at the edge of a model's actual horizon. */
+  precipitation: (number | null)[];
+  /** Sunshine duration in seconds for the preceding hour (0-3600), aligned index-for-index with `time`. Can be null, see `precipitation`. */
+  sunshineSeconds: (number | null)[];
 }
 
 export type HourlyByModel = Record<ModelId, HourlySeries>;
+
+export type WindowPhase = "pred-schnutie" | "malovanie" | "schnutie";
 
 export interface ModelWindowSummary {
   model: ModelId;
   maxHourlyMm: number;
   totalMm: number;
+  hoursCovered: number;
+  hoursExpected: number;
+  dry: boolean;
+}
+
+export interface WindowFailure {
+  model: ModelId;
+  time: string;
+  phase: WindowPhase;
+  precipitationMm: number;
 }
 
 export interface WindowResult {
@@ -26,4 +40,6 @@ export interface WindowResult {
   windowEnd: string;
   ok: boolean;
   perModel: ModelWindowSummary[];
+  /** Every hour where precipitation reached the threshold, across all models - the reasons `ok` is false. */
+  failures: WindowFailure[];
 }

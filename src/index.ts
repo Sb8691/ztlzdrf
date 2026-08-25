@@ -1,8 +1,35 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { fetchModelForecasts } from "./openMeteo.js";
 import { findPaintWindows, pickCandidateStarts } from "./analyze.js";
 import { WINDOW, ALERT_LOOKAHEAD_DAYS, LOCATION } from "./config.js";
 import { sendAlert } from "./email.js";
 import { readState, writeState } from "./state.js";
+import { renderDashboardHtml } from "./dashboard.js";
+import type { WindowResult } from "./types.js";
+
+const DASHBOARD_DIR = fileURLToPath(new URL("../docs", import.meta.url));
+
+function printWindowReport(r: WindowResult) {
+  console.log(`Kandidát ${r.candidateStart}: ${r.ok ? "VHODNÉ OKNO" : "nevhodné"}`);
+  console.log(`  Okno: ${r.windowStart} – ${r.windowEnd}`);
+  for (const m of r.perModel) {
+    const coverage = `${m.hoursCovered}/${m.hoursExpected}h pokryté`;
+    const status = m.dry ? "OK" : "ZLYHAL";
+    console.log(
+      `  ${m.model}: max ${m.maxHourlyMm.toFixed(2)} mm/h, súčet ${m.totalMm.toFixed(2)} mm, ${coverage} [${status}]`
+    );
+  }
+  if (r.failures.length > 0) {
+    console.log("  Dôvody zlyhania (hodina, model, fáza, zrážky):");
+    const sorted = [...r.failures].sort((a, b) => a.time.localeCompare(b.time));
+    for (const f of sorted) {
+      console.log(
+        `    ${f.time} | ${f.model} | ${f.phase} | ${f.precipitationMm.toFixed(2)} mm/h (prah ${WINDOW.rainThresholdMm} mm/h)`
+      );
+    }
+  }
+}
 
 async function main() {
   const sendEmail = process.env.SEND_EMAIL !== "false";
@@ -14,11 +41,12 @@ async function main() {
 
   console.log(`Lokalita: ${LOCATION.name}`);
   for (const r of results) {
-    console.log(`Kandidát ${r.candidateStart}: ${r.ok ? "VHODNÉ OKNO" : "nevhodné"}`);
-    for (const m of r.perModel) {
-      console.log(`  ${m.model}: max ${m.maxHourlyMm.toFixed(2)} mm/h, súčet ${m.totalMm.toFixed(2)} mm`);
-    }
+    printWindowReport(r);
   }
+
+  mkdirSync(DASHBOARD_DIR, { recursive: true });
+  writeFileSync(`${DASHBOARD_DIR}/index.html`, renderDashboardHtml(hourlyByModel, results, new Date()));
+  console.log("Dashboard vygenerovaný do docs/index.html.");
 
   // candidateStart is a naive Vienna wall-clock string (no UTC offset), so this
   // comparison against Date.now() can be off by Vienna's UTC offset (1-2h) -

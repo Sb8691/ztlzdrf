@@ -9,12 +9,14 @@ const OPTS = { preDryHours: 24, paintHours: 12, postDryHours: 24, rainThresholdM
 function series(startIso: string, hours: number, mm: number) {
   const time: string[] = [];
   const precipitation: number[] = [];
+  const sunshineSeconds: number[] = [];
   const start = new Date(startIso).getTime();
   for (let i = 0; i < hours; i++) {
     time.push(new Date(start + i * 3600_000).toISOString());
     precipitation.push(mm);
+    sunshineSeconds.push(0);
   }
-  return { time, precipitation };
+  return { time, precipitation, sunshineSeconds };
 }
 
 test("marks window ok when every model is fully dry", () => {
@@ -41,6 +43,29 @@ test("marks window not ok when one model rains inside the post-paint drying peri
 
   const [result] = findPaintWindows(hourlyByModel, [start], OPTS);
   assert.equal(result.ok, false);
+  assert.deepEqual(result.failures, [
+    {
+      model: "gfs_seamless",
+      time: "2026-08-29T22:00:00.000Z",
+      phase: "schnutie",
+      precipitationMm: 0.5,
+    },
+  ]);
+});
+
+test("classifies failures by phase (pred-schnutie / malovanie / schnutie)", () => {
+  const start = "2026-08-29T08:00:00.000Z";
+  const rainy = series("2026-08-27T00:00:00.000Z", 96, 0);
+  // Pre-dry phase: 2026-08-28T10:00Z is before the 08:00 start.
+  rainy.precipitation[rainy.time.indexOf("2026-08-28T10:00:00.000Z")] = 0.3;
+  // Painting phase: 2026-08-29T14:00Z is within [start, start+12h).
+  rainy.precipitation[rainy.time.indexOf("2026-08-29T14:00:00.000Z")] = 0.4;
+
+  const hourlyByModel = { icon_seamless: rainy } as HourlyByModel;
+  const [result] = findPaintWindows(hourlyByModel, [start], OPTS);
+
+  const phases = result.failures.map((f) => f.phase).sort();
+  assert.deepEqual(phases, ["malovanie", "pred-schnutie"]);
 });
 
 test("trace precipitation below the threshold still counts as dry", () => {

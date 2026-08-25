@@ -1,0 +1,1480 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Terasa – watchdog počasia</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --good: #0ca30c;
+    --critical: #d03b3b;
+    --border: rgba(11,11,11,0.10);
+    --series-icon_seamless: #2a78d6; --series-gfs_seamless: #eb6834; --series-ecmwf_ifs025: #1baf7a; --series-gem_seamless: #eda100; --series-meteofrance_seamless: #e87ba4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --good: #0ca30c;
+      --critical: #e66767;
+      --border: rgba(255,255,255,0.10);
+      --series-icon_seamless: #3987e5; --series-gfs_seamless: #d95926; --series-ecmwf_ifs025: #199e70; --series-gem_seamless: #c98500; --series-meteofrance_seamless: #d55181;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 8px; }
+  .hero { font-size: 1.15rem; font-weight: 600; margin: 0 0 20px; }
+  .muted { color: var(--text-secondary); font-size: 0.85rem; }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 16px 0;
+    position: relative;
+  }
+  .simple-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .simple-date { font-size: 1.05rem; font-weight: 600; }
+  .reason { margin: 8px 0 0; color: var(--text-secondary); font-size: 0.95rem; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .badge-good { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+  .badge-critical { color: var(--critical); background: color-mix(in srgb, var(--critical) 14%, transparent); }
+  details.more-info { margin-top: 14px; border-top: 1px solid var(--gridline); padding-top: 10px; }
+  details.more-info > summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; }
+  details.more-info h3 { font-size: 0.9rem; margin: 18px 0 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0; font-size: 0.82rem; color: var(--text-secondary); }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .chart-svg { width: 100%; height: auto; overflow: visible; }
+  .phase-band-0 { fill: var(--gridline); opacity: 0.35; }
+  .phase-band-1 { fill: var(--gridline); opacity: 0.6; }
+  .phase-band-2 { fill: var(--gridline); opacity: 0.35; }
+  .phase-label { fill: var(--muted); font-size: 10px; }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .axis-label { fill: var(--muted); font-size: 10px; }
+  .threshold-line { stroke: var(--baseline); stroke-width: 1; stroke-dasharray: 4 3; }
+  .series-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .crosshair { stroke: var(--baseline); stroke-width: 1; opacity: 0; pointer-events: none; }
+  .hover-capture { fill: transparent; cursor: crosshair; }
+  .tooltip {
+    position: absolute;
+    display: none;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    pointer-events: none;
+    z-index: 10;
+    max-width: 220px;
+  }
+  .tooltip-time { color: var(--text-secondary); margin-bottom: 4px; }
+  .tooltip-row { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+  .tooltip-key { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); }
+  .tooltip-line { width: 10px; height: 2px; display: inline-block; }
+  .tooltip-value { font-weight: 600; }
+  .summary-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.85rem; }
+  .summary-table th, .summary-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--gridline); }
+  .summary-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  details.failures { margin-top: 12px; }
+  details.failures summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Terasa – watchdog počasia</h1>
+    <p class="hero">Momentálne nie je nájdené vhodné okno na najbližšie víkendy.</p>
+    <p class="muted">Zedlitzdorf, Gnesau (Feldkirchen, Kärnten, Rakúsko) &middot; vygenerované 2026-08-25T16:11:03.845Z</p>
+    
+    <section class="card">
+      <div class="simple-row">
+        <span class="simple-date">Na sobotu 29.8. o 08:00</span>
+        <span class="badge badge-critical">NEVHODNÉ</span>
+      </div>
+      <p class="reason">5 z 5 modelov hlási dážď, najmä počas maľovania. Predpoveď zatiaľ nepokrýva celé okno pre: Météo-France.</p>
+      <details class="more-info">
+        <summary>Viac info</summary>
+        <p class="muted">Okno (pred-maľovaním + maľovanie + schnutie): 2026-08-28T06:00:00.000Z &ndash; 2026-08-30T18:00:00.000Z</p>
+        <div class="legend"><span class="legend-item"><span class="legend-swatch" style="background: var(--series-icon_seamless)"></span>ICON (DWD)</span><span class="legend-item"><span class="legend-swatch" style="background: var(--series-gfs_seamless)"></span>GFS (NOAA)</span><span class="legend-item"><span class="legend-swatch" style="background: var(--series-ecmwf_ifs025)"></span>ECMWF</span><span class="legend-item"><span class="legend-swatch" style="background: var(--series-gem_seamless)"></span>GEM (Kanada)</span><span class="legend-item"><span class="legend-swatch" style="background: var(--series-meteofrance_seamless)"></span>Météo-France</span></div>
+        <h3>Zrážky</h3>
+        
+    <svg viewBox="0 0 900 260" class="chart-svg" role="img" aria-label="Graf pre okno 2026-08-29T08:00">
+      
+        <rect x="40.0" y="30" width="337.6" height="196" class="phase-band phase-band-0" />
+        <text x="208.8" y="20" class="phase-label" text-anchor="middle">pred maľovaním</text>
+      
+        <rect x="377.6" y="30" width="168.8" height="196" class="phase-band phase-band-1" />
+        <text x="462.0" y="20" class="phase-label" text-anchor="middle">maľovanie</text>
+      
+        <rect x="546.4" y="30" width="337.6" height="196" class="phase-band phase-band-2" />
+        <text x="715.2" y="20" class="phase-label" text-anchor="middle">schnutie</text>
+      
+      
+        <line x1="40" y1="226.0" x2="884" y2="226.0" class="gridline" />
+        <text x="32" y="229.0" class="axis-label" text-anchor="end">0.00</text>
+      
+        <line x1="40" y1="177.0" x2="884" y2="177.0" class="gridline" />
+        <text x="32" y="180.0" class="axis-label" text-anchor="end">0.69</text>
+      
+        <line x1="40" y1="128.0" x2="884" y2="128.0" class="gridline" />
+        <text x="32" y="131.0" class="axis-label" text-anchor="end">1.38</text>
+      
+        <line x1="40" y1="79.0" x2="884" y2="79.0" class="gridline" />
+        <text x="32" y="82.0" class="axis-label" text-anchor="end">2.06</text>
+      
+        <line x1="40" y1="30.0" x2="884" y2="30.0" class="gridline" />
+        <text x="32" y="33.0" class="axis-label" text-anchor="end">2.75</text>
+      
+      
+          <line x1="40" y1="218.9" x2="884" y2="218.9" class="threshold-line" />
+          <text x="884" y="214.9" class="axis-label" text-anchor="end">prah 0.1 mm/h</text>
+        
+      <text x="40.0" y="242" class="axis-label" text-anchor="middle">28.08. 08:00</text><text x="265.1" y="242" class="axis-label" text-anchor="middle">29.08. 00:00</text><text x="377.6" y="242" class="axis-label" text-anchor="middle">29.08. 08:00</text><text x="602.7" y="242" class="axis-label" text-anchor="middle">30.08. 00:00</text><text x="715.2" y="242" class="axis-label" text-anchor="middle">30.08. 08:00</text>
+      <path d="M 40.0 226.0 L 54.1 226.0 L 68.1 226.0 L 82.2 226.0 L 96.3 226.0 L 110.3 226.0 L 124.4 226.0 L 138.5 226.0 L 152.5 226.0 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 226.0 L 391.7 226.0 L 405.7 226.0 L 419.8 226.0 L 433.9 218.9 L 447.9 218.9 L 462.0 218.9 L 476.1 226.0 L 490.1 226.0 L 504.2 226.0 L 518.3 226.0 L 532.3 226.0 L 546.4 226.0 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 226.0 L 729.3 226.0 L 743.3 226.0 L 757.4 226.0 L 771.5 226.0 L 785.5 226.0 L 799.6 226.0 L 813.7 226.0 L 827.7 226.0 L 841.8 226.0 L 855.9 226.0 L 869.9 226.0" class="series-line" style="stroke: var(--series-icon_seamless)" /><path d="M 40.0 226.0 L 54.1 226.0 L 68.1 226.0 L 82.2 226.0 L 96.3 226.0 L 110.3 226.0 L 124.4 226.0 L 138.5 226.0 L 152.5 226.0 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0 L 222.9 226.0 L 236.9 226.0 L 251.0 218.9 L 265.1 197.5 L 279.1 154.7 L 293.2 197.5 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 211.7 L 363.5 218.9 L 377.6 211.7 L 391.7 226.0 L 405.7 226.0 L 419.8 226.0 L 433.9 226.0 L 447.9 226.0 L 462.0 226.0 L 476.1 226.0 L 490.1 226.0 L 504.2 226.0 L 518.3 226.0 L 532.3 226.0 L 546.4 226.0 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 226.0 L 729.3 226.0 L 743.3 226.0 L 757.4 226.0 L 771.5 226.0 L 785.5 226.0 L 799.6 226.0 L 813.7 218.9 L 827.7 218.9 L 841.8 218.9 L 855.9 218.9 L 869.9 218.9" class="series-line" style="stroke: var(--series-gfs_seamless)" /><path d="M 40.0 226.0 L 54.1 226.0 L 68.1 226.0 L 82.2 226.0 L 96.3 226.0 L 110.3 226.0 L 124.4 226.0 L 138.5 226.0 L 152.5 226.0 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0 L 222.9 218.9 L 236.9 218.9 L 251.0 218.9 L 265.1 218.9 L 279.1 218.9 L 293.2 218.9 L 307.3 69.2 L 321.3 69.2 L 335.4 69.2 L 349.5 204.6 L 363.5 204.6 L 377.6 204.6 L 391.7 226.0 L 405.7 226.0 L 419.8 226.0 L 433.9 218.9 L 447.9 218.9 L 462.0 218.9 L 476.1 211.7 L 490.1 211.7 L 504.2 211.7 L 518.3 218.9 L 532.3 218.9 L 546.4 218.9 L 560.5 197.5 L 574.5 197.5 L 588.6 197.5 L 602.7 218.9 L 616.7 218.9 L 630.8 218.9 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 226.0 L 729.3 226.0 L 743.3 226.0 L 757.4 226.0 L 771.5 226.0 L 785.5 226.0 L 799.6 226.0 L 813.7 226.0 L 827.7 226.0 L 841.8 226.0 L 855.9 226.0 L 869.9 226.0" class="series-line" style="stroke: var(--series-ecmwf_ifs025)" /><path d="M 40.0 226.0 L 54.1 226.0 L 68.1 226.0 L 82.2 226.0 L 96.3 226.0 L 110.3 226.0 L 124.4 226.0 L 138.5 226.0 L 152.5 226.0 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0 L 222.9 218.9 L 236.9 218.9 L 251.0 218.9 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 218.9 L 321.3 218.9 L 335.4 218.9 L 349.5 197.5 L 363.5 197.5 L 377.6 197.5 L 391.7 161.9 L 405.7 161.9 L 419.8 161.9 L 433.9 211.7 L 447.9 211.7 L 462.0 211.7 L 476.1 211.7 L 490.1 211.7 L 504.2 211.7 L 518.3 226.0 L 532.3 226.0 L 546.4 226.0 L 560.5 204.6 L 574.5 204.6 L 588.6 204.6 L 602.7 218.9 L 616.7 218.9 L 630.8 218.9 L 644.9 218.9 L 658.9 218.9 L 673.0 218.9 L 687.1 226.0 L 701.1 226.0 L 715.2 226.0 L 729.3 226.0 L 743.3 226.0 L 757.4 226.0 L 771.5 226.0 L 785.5 226.0 L 799.6 226.0 L 813.7 226.0 L 827.7 226.0 L 841.8 226.0 L 855.9 226.0 L 869.9 226.0" class="series-line" style="stroke: var(--series-gem_seamless)" /><path d="M 40.0 226.0 L 54.1 226.0 L 68.1 226.0 L 82.2 226.0 L 96.3 226.0 L 110.3 226.0 L 124.4 226.0 L 138.5 226.0 L 152.5 226.0 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 226.0 L 391.7 226.0 L 405.7 218.9 L 419.8 211.7 L 433.9 176.1 L 447.9 183.2 L 462.0 169.0 L 476.1 197.5 L 490.1 211.7 L 504.2 204.6 L 518.3 211.7 L 532.3 211.7 L 546.4 133.3" class="series-line" style="stroke: var(--series-meteofrance_seamless)" />
+      <line class="crosshair" x1="0" y1="30" x2="0" y2="226" data-chart="rain-0" />
+      <rect class="hover-capture" x="40" y="30" width="844" height="196" data-chart="rain-0" />
+    </svg>
+    <div class="tooltip" data-chart-tooltip="rain-0"></div>
+  
+        <h3>Slnečný svit</h3>
+        
+    <svg viewBox="0 0 900 260" class="chart-svg" role="img" aria-label="Graf pre okno 2026-08-29T08:00">
+      
+        <rect x="40.0" y="30" width="337.6" height="196" class="phase-band phase-band-0" />
+        <text x="208.8" y="20" class="phase-label" text-anchor="middle">pred maľovaním</text>
+      
+        <rect x="377.6" y="30" width="168.8" height="196" class="phase-band phase-band-1" />
+        <text x="462.0" y="20" class="phase-label" text-anchor="middle">maľovanie</text>
+      
+        <rect x="546.4" y="30" width="337.6" height="196" class="phase-band phase-band-2" />
+        <text x="715.2" y="20" class="phase-label" text-anchor="middle">schnutie</text>
+      
+      
+        <line x1="40" y1="226.0" x2="884" y2="226.0" class="gridline" />
+        <text x="32" y="229.0" class="axis-label" text-anchor="end">0</text>
+      
+        <line x1="40" y1="177.0" x2="884" y2="177.0" class="gridline" />
+        <text x="32" y="180.0" class="axis-label" text-anchor="end">25</text>
+      
+        <line x1="40" y1="128.0" x2="884" y2="128.0" class="gridline" />
+        <text x="32" y="131.0" class="axis-label" text-anchor="end">50</text>
+      
+        <line x1="40" y1="79.0" x2="884" y2="79.0" class="gridline" />
+        <text x="32" y="82.0" class="axis-label" text-anchor="end">75</text>
+      
+        <line x1="40" y1="30.0" x2="884" y2="30.0" class="gridline" />
+        <text x="32" y="33.0" class="axis-label" text-anchor="end">100</text>
+      
+      
+      <text x="40.0" y="242" class="axis-label" text-anchor="middle">28.08. 08:00</text><text x="265.1" y="242" class="axis-label" text-anchor="middle">29.08. 00:00</text><text x="377.6" y="242" class="axis-label" text-anchor="middle">29.08. 08:00</text><text x="602.7" y="242" class="axis-label" text-anchor="middle">30.08. 00:00</text><text x="715.2" y="242" class="axis-label" text-anchor="middle">30.08. 08:00</text>
+      <path d="M 40.0 30.0 L 54.1 30.0 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 30.0 L 152.5 30.0 L 166.6 30.0 L 180.7 30.0 L 194.7 141.8 L 208.8 226.0 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 84.3 L 391.7 66.4 L 405.7 30.0 L 419.8 30.0 L 433.9 30.0 L 447.9 30.0 L 462.0 30.0 L 476.1 30.0 L 490.1 30.0 L 504.2 30.0 L 518.3 30.0 L 532.3 30.0 L 546.4 113.0 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 149.6 L 729.3 41.2 L 743.3 30.0 L 757.4 30.0 L 771.5 30.0 L 785.5 30.0 L 799.6 30.0 L 813.7 30.0 L 827.7 30.0 L 841.8 30.0 L 855.9 30.0 L 869.9 30.0" class="series-line" style="stroke: var(--series-icon_seamless)" /><path d="M 40.0 30.0 L 54.1 30.0 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 30.0 L 152.5 30.0 L 166.6 30.0 L 180.7 30.0 L 194.7 30.0 L 208.8 74.3 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 187.1 L 391.7 30.0 L 405.7 30.0 L 419.8 30.0 L 433.9 30.0 L 447.9 30.0 L 462.0 30.0 L 476.1 30.0 L 490.1 30.0 L 504.2 30.0 L 518.3 30.0 L 532.3 30.0 L 546.4 131.5 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 225.5 L 715.2 30.0 L 729.3 30.0 L 743.3 30.0 L 757.4 30.0 L 771.5 30.0 L 785.5 30.0 L 799.6 30.0 L 813.7 30.0 L 827.7 30.0 L 841.8 30.0 L 855.9 30.0 L 869.9 30.0" class="series-line" style="stroke: var(--series-gfs_seamless)" /><path d="M 40.0 82.9 L 54.1 30.0 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 30.0 L 152.5 30.0 L 166.6 30.0 L 180.7 30.0 L 194.7 30.0 L 208.8 180.4 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 226.0 L 391.7 146.5 L 405.7 47.5 L 419.8 30.0 L 433.9 30.0 L 447.9 30.0 L 462.0 30.0 L 476.1 30.0 L 490.1 30.0 L 504.2 30.0 L 518.3 30.0 L 532.3 30.0 L 546.4 226.0 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 30.0 L 729.3 30.0 L 743.3 30.0 L 757.4 30.0 L 771.5 30.0 L 785.5 30.0 L 799.6 30.0 L 813.7 30.0 L 827.7 30.0 L 841.8 30.0 L 855.9 30.0 L 869.9 30.0" class="series-line" style="stroke: var(--series-ecmwf_ifs025)" /><path d="M 40.0 30.0 L 54.1 30.0 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 226.0 L 152.5 226.0 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 74.3 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 30.0 L 391.7 30.0 L 405.7 30.0 L 419.8 30.0 L 433.9 30.0 L 447.9 30.0 L 462.0 30.0 L 476.1 30.0 L 490.1 30.0 L 504.2 30.0 L 518.3 226.0 L 532.3 226.0 L 546.4 80.4 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 205.4 L 715.2 226.0 L 729.3 226.0 L 743.3 226.0 L 757.4 226.0 L 771.5 226.0 L 785.5 226.0 L 799.6 226.0 L 813.7 226.0 L 827.7 226.0 L 841.8 226.0 L 855.9 226.0 L 869.9 226.0" class="series-line" style="stroke: var(--series-gem_seamless)" /><path d="M 40.0 30.0 L 54.1 30.0 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 30.0 L 152.5 30.0 L 166.6 30.0 L 180.7 30.0 L 194.7 30.0 L 208.8 226.0 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 60.1 L 391.7 30.0 L 405.7 30.0 L 419.8 30.0 L 433.9 30.0 L 447.9 181.4 L 462.0 176.6 L 476.1 194.6 L 490.1 148.1 L 504.2 226.0 L 518.3 226.0 L 532.3 226.0 L 546.4 226.0" class="series-line" style="stroke: var(--series-meteofrance_seamless)" />
+      <line class="crosshair" x1="0" y1="30" x2="0" y2="226" data-chart="sun-0" />
+      <rect class="hover-capture" x="40" y="30" width="844" height="196" data-chart="sun-0" />
+    </svg>
+    <div class="tooltip" data-chart-tooltip="sun-0"></div>
+  
+        <table class="summary-table">
+          <thead><tr><th>Model</th><th>Max mm/h</th><th>Súčet mm</th><th>Pokrytie</th><th>Stav</th></tr></thead>
+          <tbody>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-icon_seamless)"></span>ICON (DWD)</td>
+          <td class="num">0.10</td>
+          <td class="num">0.30</td>
+          <td class="num">60/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-gfs_seamless)"></span>GFS (NOAA)</td>
+          <td class="num">1.00</td>
+          <td class="num">2.90</td>
+          <td class="num">60/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-ecmwf_ifs025)"></span>ECMWF</td>
+          <td class="num">2.20</td>
+          <td class="num">10.80</td>
+          <td class="num">60/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-gem_seamless)"></span>GEM (Kanada)</td>
+          <td class="num">0.90</td>
+          <td class="num">7.20</td>
+          <td class="num">60/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-meteofrance_seamless)"></span>Météo-France</td>
+          <td class="num">1.30</td>
+          <td class="num">5.00</td>
+          <td class="num">37/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr></tbody>
+        </table>
+        <details class="failures">
+                 <summary>Dôvody zlyhania (80)</summary>
+                 <table class="summary-table">
+                   <thead><tr><th>Čas</th><th>Model</th><th>Fáza</th><th>mm/h</th></tr></thead>
+                   <tbody>
+        <tr>
+          <td>28.08. 21:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>28.08. 21:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>28.08. 22:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>28.08. 22:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>28.08. 23:00</td>
+          <td>GFS (NOAA)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>28.08. 23:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>28.08. 23:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 00:00</td>
+          <td>GFS (NOAA)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 00:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 01:00</td>
+          <td>GFS (NOAA)</td>
+          <td>pred maľovaním</td>
+          <td class="num">1.00</td>
+        </tr>
+        <tr>
+          <td>29.08. 01:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 02:00</td>
+          <td>GFS (NOAA)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 02:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 03:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">2.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 03:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 04:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">2.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 04:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 05:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">2.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 05:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 06:00</td>
+          <td>GFS (NOAA)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 06:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 06:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 07:00</td>
+          <td>GFS (NOAA)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 07:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 07:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 08:00</td>
+          <td>GFS (NOAA)</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 08:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 08:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 09:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.90</td>
+        </tr>
+        <tr>
+          <td>29.08. 10:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.90</td>
+        </tr>
+        <tr>
+          <td>29.08. 10:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 11:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.90</td>
+        </tr>
+        <tr>
+          <td>29.08. 11:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 12:00</td>
+          <td>ICON (DWD)</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 12:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 12:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 12:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.70</td>
+        </tr>
+        <tr>
+          <td>29.08. 13:00</td>
+          <td>ICON (DWD)</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 13:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 13:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 13:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.60</td>
+        </tr>
+        <tr>
+          <td>29.08. 14:00</td>
+          <td>ICON (DWD)</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 14:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 14:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 14:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.80</td>
+        </tr>
+        <tr>
+          <td>29.08. 15:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 15:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 15:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 16:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 16:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 16:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 17:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 17:00</td>
+          <td>GEM (Kanada)</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 17:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 18:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 18:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 19:00</td>
+          <td>ECMWF</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 19:00</td>
+          <td>Météo-France</td>
+          <td>maľovanie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 20:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 20:00</td>
+          <td>Météo-France</td>
+          <td>schnutie</td>
+          <td class="num">1.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 21:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 21:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 22:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 22:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 23:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 23:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>30.08. 00:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 00:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 01:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 01:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 02:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 02:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 03:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 04:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 05:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 15:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 16:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 17:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 18:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 19:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr></tbody>
+                 </table>
+               </details>
+      </details>
+    </section>
+  
+    <section class="card">
+      <div class="simple-row">
+        <span class="simple-date">Na nedeľu 30.8. o 08:00</span>
+        <span class="badge badge-critical">NEVHODNÉ</span>
+      </div>
+      <p class="reason">5 z 5 modelov hlási dážď, najmä pred maľovaním. Predpoveď zatiaľ nepokrýva celé okno pre: Météo-France.</p>
+      <details class="more-info">
+        <summary>Viac info</summary>
+        <p class="muted">Okno (pred-maľovaním + maľovanie + schnutie): 2026-08-29T06:00:00.000Z &ndash; 2026-08-31T18:00:00.000Z</p>
+        <div class="legend"><span class="legend-item"><span class="legend-swatch" style="background: var(--series-icon_seamless)"></span>ICON (DWD)</span><span class="legend-item"><span class="legend-swatch" style="background: var(--series-gfs_seamless)"></span>GFS (NOAA)</span><span class="legend-item"><span class="legend-swatch" style="background: var(--series-ecmwf_ifs025)"></span>ECMWF</span><span class="legend-item"><span class="legend-swatch" style="background: var(--series-gem_seamless)"></span>GEM (Kanada)</span><span class="legend-item"><span class="legend-swatch" style="background: var(--series-meteofrance_seamless)"></span>Météo-France</span></div>
+        <h3>Zrážky</h3>
+        
+    <svg viewBox="0 0 900 260" class="chart-svg" role="img" aria-label="Graf pre okno 2026-08-30T08:00">
+      
+        <rect x="40.0" y="30" width="337.6" height="196" class="phase-band phase-band-0" />
+        <text x="208.8" y="20" class="phase-label" text-anchor="middle">pred maľovaním</text>
+      
+        <rect x="377.6" y="30" width="168.8" height="196" class="phase-band phase-band-1" />
+        <text x="462.0" y="20" class="phase-label" text-anchor="middle">maľovanie</text>
+      
+        <rect x="546.4" y="30" width="337.6" height="196" class="phase-band phase-band-2" />
+        <text x="715.2" y="20" class="phase-label" text-anchor="middle">schnutie</text>
+      
+      
+        <line x1="40" y1="226.0" x2="884" y2="226.0" class="gridline" />
+        <text x="32" y="229.0" class="axis-label" text-anchor="end">0.00</text>
+      
+        <line x1="40" y1="177.0" x2="884" y2="177.0" class="gridline" />
+        <text x="32" y="180.0" class="axis-label" text-anchor="end">0.56</text>
+      
+        <line x1="40" y1="128.0" x2="884" y2="128.0" class="gridline" />
+        <text x="32" y="131.0" class="axis-label" text-anchor="end">1.13</text>
+      
+        <line x1="40" y1="79.0" x2="884" y2="79.0" class="gridline" />
+        <text x="32" y="82.0" class="axis-label" text-anchor="end">1.69</text>
+      
+        <line x1="40" y1="30.0" x2="884" y2="30.0" class="gridline" />
+        <text x="32" y="33.0" class="axis-label" text-anchor="end">2.25</text>
+      
+      
+          <line x1="40" y1="217.3" x2="884" y2="217.3" class="threshold-line" />
+          <text x="884" y="213.3" class="axis-label" text-anchor="end">prah 0.1 mm/h</text>
+        
+      <text x="40.0" y="242" class="axis-label" text-anchor="middle">29.08. 08:00</text><text x="265.1" y="242" class="axis-label" text-anchor="middle">30.08. 00:00</text><text x="377.6" y="242" class="axis-label" text-anchor="middle">30.08. 08:00</text><text x="602.7" y="242" class="axis-label" text-anchor="middle">31.08. 00:00</text><text x="715.2" y="242" class="axis-label" text-anchor="middle">31.08. 08:00</text>
+      <path d="M 40.0 226.0 L 54.1 226.0 L 68.1 226.0 L 82.2 226.0 L 96.3 217.3 L 110.3 217.3 L 124.4 217.3 L 138.5 226.0 L 152.5 226.0 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 226.0 L 391.7 226.0 L 405.7 226.0 L 419.8 226.0 L 433.9 226.0 L 447.9 226.0 L 462.0 226.0 L 476.1 226.0 L 490.1 226.0 L 504.2 226.0 L 518.3 226.0 L 532.3 226.0 L 546.4 226.0 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 226.0 L 729.3 226.0 L 743.3 226.0 L 757.4 226.0 L 771.5 226.0 L 785.5 226.0 L 799.6 226.0 L 813.7 138.9 L 827.7 138.9 L 841.8 138.9 L 855.9 226.0 L 869.9 226.0" class="series-line" style="stroke: var(--series-icon_seamless)" /><path d="M 40.0 208.6 L 54.1 226.0 L 68.1 226.0 L 82.2 226.0 L 96.3 226.0 L 110.3 226.0 L 124.4 226.0 L 138.5 226.0 L 152.5 226.0 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 226.0 L 391.7 226.0 L 405.7 226.0 L 419.8 226.0 L 433.9 226.0 L 447.9 226.0 L 462.0 226.0 L 476.1 217.3 L 490.1 217.3 L 504.2 217.3 L 518.3 217.3 L 532.3 217.3 L 546.4 217.3 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 226.0 L 729.3 217.3 L 743.3 217.3 L 757.4 217.3 L 771.5 182.4 L 785.5 182.4 L 799.6 182.4 L 813.7 173.7 L 827.7 173.7 L 841.8 173.7 L 855.9 217.3 L 869.9 217.3" class="series-line" style="stroke: var(--series-gfs_seamless)" /><path d="M 40.0 199.9 L 54.1 226.0 L 68.1 226.0 L 82.2 226.0 L 96.3 217.3 L 110.3 217.3 L 124.4 217.3 L 138.5 208.6 L 152.5 208.6 L 166.6 208.6 L 180.7 217.3 L 194.7 217.3 L 208.8 217.3 L 222.9 191.2 L 236.9 191.2 L 251.0 191.2 L 265.1 217.3 L 279.1 217.3 L 293.2 217.3 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 226.0 L 391.7 226.0 L 405.7 226.0 L 419.8 226.0 L 433.9 226.0 L 447.9 226.0 L 462.0 226.0 L 476.1 226.0 L 490.1 226.0 L 504.2 226.0 L 518.3 226.0 L 532.3 226.0 L 546.4 226.0 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 226.0 L 729.3 217.3 L 743.3 217.3 L 757.4 217.3 L 771.5 217.3 L 785.5 217.3 L 799.6 217.3 L 813.7 208.6 L 827.7 208.6 L 841.8 208.6 L 855.9 208.6 L 869.9 208.6" class="series-line" style="stroke: var(--series-ecmwf_ifs025)" /><path d="M 40.0 191.2 L 54.1 147.6 L 68.1 147.6 L 82.2 147.6 L 96.3 208.6 L 110.3 208.6 L 124.4 208.6 L 138.5 208.6 L 152.5 208.6 L 166.6 208.6 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0 L 222.9 199.9 L 236.9 199.9 L 251.0 199.9 L 265.1 217.3 L 279.1 217.3 L 293.2 217.3 L 307.3 217.3 L 321.3 217.3 L 335.4 217.3 L 349.5 226.0 L 363.5 226.0 L 377.6 226.0 L 391.7 226.0 L 405.7 226.0 L 419.8 226.0 L 433.9 226.0 L 447.9 226.0 L 462.0 226.0 L 476.1 226.0 L 490.1 226.0 L 504.2 226.0 L 518.3 226.0 L 532.3 226.0 L 546.4 226.0 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 226.0 L 729.3 226.0 L 743.3 226.0 L 757.4 226.0 L 771.5 217.3 L 785.5 217.3 L 799.6 217.3 L 813.7 69.2 L 827.7 69.2 L 841.8 69.2 L 855.9 191.2 L 869.9 191.2" class="series-line" style="stroke: var(--series-gem_seamless)" /><path d="M 40.0 226.0 L 54.1 226.0 L 68.1 217.3 L 82.2 208.6 L 96.3 165.0 L 110.3 173.7 L 124.4 156.3 L 138.5 191.2 L 152.5 208.6 L 166.6 199.9 L 180.7 208.6 L 194.7 208.6 L 208.8 112.8" class="series-line" style="stroke: var(--series-meteofrance_seamless)" />
+      <line class="crosshair" x1="0" y1="30" x2="0" y2="226" data-chart="rain-1" />
+      <rect class="hover-capture" x="40" y="30" width="844" height="196" data-chart="rain-1" />
+    </svg>
+    <div class="tooltip" data-chart-tooltip="rain-1"></div>
+  
+        <h3>Slnečný svit</h3>
+        
+    <svg viewBox="0 0 900 260" class="chart-svg" role="img" aria-label="Graf pre okno 2026-08-30T08:00">
+      
+        <rect x="40.0" y="30" width="337.6" height="196" class="phase-band phase-band-0" />
+        <text x="208.8" y="20" class="phase-label" text-anchor="middle">pred maľovaním</text>
+      
+        <rect x="377.6" y="30" width="168.8" height="196" class="phase-band phase-band-1" />
+        <text x="462.0" y="20" class="phase-label" text-anchor="middle">maľovanie</text>
+      
+        <rect x="546.4" y="30" width="337.6" height="196" class="phase-band phase-band-2" />
+        <text x="715.2" y="20" class="phase-label" text-anchor="middle">schnutie</text>
+      
+      
+        <line x1="40" y1="226.0" x2="884" y2="226.0" class="gridline" />
+        <text x="32" y="229.0" class="axis-label" text-anchor="end">0</text>
+      
+        <line x1="40" y1="177.0" x2="884" y2="177.0" class="gridline" />
+        <text x="32" y="180.0" class="axis-label" text-anchor="end">25</text>
+      
+        <line x1="40" y1="128.0" x2="884" y2="128.0" class="gridline" />
+        <text x="32" y="131.0" class="axis-label" text-anchor="end">50</text>
+      
+        <line x1="40" y1="79.0" x2="884" y2="79.0" class="gridline" />
+        <text x="32" y="82.0" class="axis-label" text-anchor="end">75</text>
+      
+        <line x1="40" y1="30.0" x2="884" y2="30.0" class="gridline" />
+        <text x="32" y="33.0" class="axis-label" text-anchor="end">100</text>
+      
+      
+      <text x="40.0" y="242" class="axis-label" text-anchor="middle">29.08. 08:00</text><text x="265.1" y="242" class="axis-label" text-anchor="middle">30.08. 00:00</text><text x="377.6" y="242" class="axis-label" text-anchor="middle">30.08. 08:00</text><text x="602.7" y="242" class="axis-label" text-anchor="middle">31.08. 00:00</text><text x="715.2" y="242" class="axis-label" text-anchor="middle">31.08. 08:00</text>
+      <path d="M 40.0 84.3 L 54.1 66.4 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 30.0 L 152.5 30.0 L 166.6 30.0 L 180.7 30.0 L 194.7 30.0 L 208.8 113.0 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 149.6 L 391.7 41.2 L 405.7 30.0 L 419.8 30.0 L 433.9 30.0 L 447.9 30.0 L 462.0 30.0 L 476.1 30.0 L 490.1 30.0 L 504.2 30.0 L 518.3 30.0 L 532.3 30.0 L 546.4 184.9 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 30.0 L 729.3 30.0 L 743.3 30.0 L 757.4 30.0 L 771.5 30.0 L 785.5 30.0 L 799.6 30.0 L 813.7 49.4 L 827.7 136.2 L 841.8 160.7 L 855.9 91.3 L 869.9 113.3" class="series-line" style="stroke: var(--series-icon_seamless)" /><path d="M 40.0 187.1 L 54.1 30.0 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 30.0 L 152.5 30.0 L 166.6 30.0 L 180.7 30.0 L 194.7 30.0 L 208.8 131.5 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 225.5 L 377.6 30.0 L 391.7 30.0 L 405.7 30.0 L 419.8 30.0 L 433.9 30.0 L 447.9 30.0 L 462.0 30.0 L 476.1 30.0 L 490.1 30.0 L 504.2 30.0 L 518.3 30.0 L 532.3 30.0 L 546.4 184.5 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 149.2 L 715.2 30.0 L 729.3 30.0 L 743.3 30.0 L 757.4 44.0 L 771.5 30.0 L 785.5 30.0 L 799.6 30.0 L 813.7 30.0 L 827.7 30.0 L 841.8 61.6 L 855.9 190.1 L 869.9 222.2" class="series-line" style="stroke: var(--series-gfs_seamless)" /><path d="M 40.0 226.0 L 54.1 146.5 L 68.1 47.5 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 30.0 L 152.5 30.0 L 166.6 30.0 L 180.7 30.0 L 194.7 30.0 L 208.8 226.0 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 226.0 L 377.6 30.0 L 391.7 30.0 L 405.7 30.0 L 419.8 30.0 L 433.9 30.0 L 447.9 30.0 L 462.0 30.0 L 476.1 30.0 L 490.1 30.0 L 504.2 30.0 L 518.3 30.0 L 532.3 30.0 L 546.4 178.9 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 226.0 L 715.2 30.0 L 729.3 30.0 L 743.3 30.0 L 757.4 30.0 L 771.5 30.0 L 785.5 30.0 L 799.6 30.0 L 813.7 30.0 L 827.7 30.0 L 841.8 30.0 L 855.9 30.0 L 869.9 30.0" class="series-line" style="stroke: var(--series-ecmwf_ifs025)" /><path d="M 40.0 30.0 L 54.1 30.0 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 30.0 L 124.4 30.0 L 138.5 30.0 L 152.5 30.0 L 166.6 30.0 L 180.7 226.0 L 194.7 226.0 L 208.8 80.4 L 222.9 226.0 L 236.9 226.0 L 251.0 226.0 L 265.1 226.0 L 279.1 226.0 L 293.2 226.0 L 307.3 226.0 L 321.3 226.0 L 335.4 226.0 L 349.5 226.0 L 363.5 205.4 L 377.6 226.0 L 391.7 226.0 L 405.7 226.0 L 419.8 226.0 L 433.9 226.0 L 447.9 226.0 L 462.0 226.0 L 476.1 226.0 L 490.1 226.0 L 504.2 226.0 L 518.3 226.0 L 532.3 226.0 L 546.4 86.4 L 560.5 226.0 L 574.5 226.0 L 588.6 226.0 L 602.7 226.0 L 616.7 226.0 L 630.8 226.0 L 644.9 226.0 L 658.9 226.0 L 673.0 226.0 L 687.1 226.0 L 701.1 216.9 L 715.2 226.0 L 729.3 226.0 L 743.3 226.0 L 757.4 226.0 L 771.5 226.0 L 785.5 226.0 L 799.6 226.0 L 813.7 30.0 L 827.7 30.0 L 841.8 30.0 L 855.9 30.0 L 869.9 30.0" class="series-line" style="stroke: var(--series-gem_seamless)" /><path d="M 40.0 60.1 L 54.1 30.0 L 68.1 30.0 L 82.2 30.0 L 96.3 30.0 L 110.3 181.4 L 124.4 176.6 L 138.5 194.6 L 152.5 148.1 L 166.6 226.0 L 180.7 226.0 L 194.7 226.0 L 208.8 226.0" class="series-line" style="stroke: var(--series-meteofrance_seamless)" />
+      <line class="crosshair" x1="0" y1="30" x2="0" y2="226" data-chart="sun-1" />
+      <rect class="hover-capture" x="40" y="30" width="844" height="196" data-chart="sun-1" />
+    </svg>
+    <div class="tooltip" data-chart-tooltip="sun-1"></div>
+  
+        <table class="summary-table">
+          <thead><tr><th>Model</th><th>Max mm/h</th><th>Súčet mm</th><th>Pokrytie</th><th>Stav</th></tr></thead>
+          <tbody>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-icon_seamless)"></span>ICON (DWD)</td>
+          <td class="num">1.00</td>
+          <td class="num">3.30</td>
+          <td class="num">60/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-gfs_seamless)"></span>GFS (NOAA)</td>
+          <td class="num">0.60</td>
+          <td class="num">4.60</td>
+          <td class="num">60/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-ecmwf_ifs025)"></span>ECMWF</td>
+          <td class="num">0.40</td>
+          <td class="num">4.60</td>
+          <td class="num">60/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-gem_seamless)"></span>GEM (Kanada)</td>
+          <td class="num">1.80</td>
+          <td class="num">12.30</td>
+          <td class="num">60/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr>
+        <tr>
+          <td><span class="legend-swatch" style="background: var(--series-meteofrance_seamless)"></span>Météo-France</td>
+          <td class="num">1.30</td>
+          <td class="num">5.00</td>
+          <td class="num">13/60</td>
+          <td><span class="badge badge-critical">ZLYHAL</span></td>
+        </tr></tbody>
+        </table>
+        <details class="failures">
+                 <summary>Dôvody zlyhania (89)</summary>
+                 <table class="summary-table">
+                   <thead><tr><th>Čas</th><th>Model</th><th>Fáza</th><th>mm/h</th></tr></thead>
+                   <tbody>
+        <tr>
+          <td>29.08. 08:00</td>
+          <td>GFS (NOAA)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 08:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 08:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 09:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.90</td>
+        </tr>
+        <tr>
+          <td>29.08. 10:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.90</td>
+        </tr>
+        <tr>
+          <td>29.08. 10:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 11:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.90</td>
+        </tr>
+        <tr>
+          <td>29.08. 11:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 12:00</td>
+          <td>ICON (DWD)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 12:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 12:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 12:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.70</td>
+        </tr>
+        <tr>
+          <td>29.08. 13:00</td>
+          <td>ICON (DWD)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 13:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 13:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 13:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.60</td>
+        </tr>
+        <tr>
+          <td>29.08. 14:00</td>
+          <td>ICON (DWD)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 14:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 14:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 14:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.80</td>
+        </tr>
+        <tr>
+          <td>29.08. 15:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 15:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 15:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 16:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 16:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 16:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 17:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 17:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 17:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 18:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 18:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 19:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 19:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>29.08. 20:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>29.08. 20:00</td>
+          <td>Météo-France</td>
+          <td>pred maľovaním</td>
+          <td class="num">1.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 21:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 21:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 22:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 22:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>29.08. 23:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>29.08. 23:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.30</td>
+        </tr>
+        <tr>
+          <td>30.08. 00:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 00:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 01:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 01:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 02:00</td>
+          <td>ECMWF</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 02:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 03:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 04:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 05:00</td>
+          <td>GEM (Kanada)</td>
+          <td>pred maľovaním</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 15:00</td>
+          <td>GFS (NOAA)</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 16:00</td>
+          <td>GFS (NOAA)</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 17:00</td>
+          <td>GFS (NOAA)</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 18:00</td>
+          <td>GFS (NOAA)</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 19:00</td>
+          <td>GFS (NOAA)</td>
+          <td>maľovanie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>30.08. 20:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 09:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 09:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 10:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 10:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 11:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 11:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 12:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.50</td>
+        </tr>
+        <tr>
+          <td>31.08. 12:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 12:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 13:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.50</td>
+        </tr>
+        <tr>
+          <td>31.08. 13:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 13:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 14:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.50</td>
+        </tr>
+        <tr>
+          <td>31.08. 14:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 14:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 15:00</td>
+          <td>ICON (DWD)</td>
+          <td>schnutie</td>
+          <td class="num">1.00</td>
+        </tr>
+        <tr>
+          <td>31.08. 15:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.60</td>
+        </tr>
+        <tr>
+          <td>31.08. 15:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>31.08. 15:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">1.80</td>
+        </tr>
+        <tr>
+          <td>31.08. 16:00</td>
+          <td>ICON (DWD)</td>
+          <td>schnutie</td>
+          <td class="num">1.00</td>
+        </tr>
+        <tr>
+          <td>31.08. 16:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.60</td>
+        </tr>
+        <tr>
+          <td>31.08. 16:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>31.08. 16:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">1.80</td>
+        </tr>
+        <tr>
+          <td>31.08. 17:00</td>
+          <td>ICON (DWD)</td>
+          <td>schnutie</td>
+          <td class="num">1.00</td>
+        </tr>
+        <tr>
+          <td>31.08. 17:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.60</td>
+        </tr>
+        <tr>
+          <td>31.08. 17:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>31.08. 17:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">1.80</td>
+        </tr>
+        <tr>
+          <td>31.08. 18:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 18:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>31.08. 18:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.40</td>
+        </tr>
+        <tr>
+          <td>31.08. 19:00</td>
+          <td>GFS (NOAA)</td>
+          <td>schnutie</td>
+          <td class="num">0.10</td>
+        </tr>
+        <tr>
+          <td>31.08. 19:00</td>
+          <td>ECMWF</td>
+          <td>schnutie</td>
+          <td class="num">0.20</td>
+        </tr>
+        <tr>
+          <td>31.08. 19:00</td>
+          <td>GEM (Kanada)</td>
+          <td>schnutie</td>
+          <td class="num">0.40</td>
+        </tr></tbody>
+                 </table>
+               </details>
+      </details>
+    </section>
+  
+  </div>
+  <script>
+    const CHART_DATA = {};
+    CHART_DATA["rain-0"] = [{"x":40,"label":"28.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":54.1,"label":"28.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":68.1,"label":"28.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":82.2,"label":"28.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":96.3,"label":"28.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":110.3,"label":"28.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":124.4,"label":"28.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":138.5,"label":"28.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":152.5,"label":"28.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":166.6,"label":"28.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":180.7,"label":"28.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":194.7,"label":"28.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":208.8,"label":"28.08. 20:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":222.9,"label":"28.08. 21:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":236.9,"label":"28.08. 22:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":251,"label":"28.08. 23:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":265.1,"label":"29.08. 00:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.40 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":279.1,"label":"29.08. 01:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"1.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":293.2,"label":"29.08. 02:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.40 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":307.3,"label":"29.08. 03:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"2.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":321.3,"label":"29.08. 04:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"2.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":335.4,"label":"29.08. 05:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"2.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":349.5,"label":"29.08. 06:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.20 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.30 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.40 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":363.5,"label":"29.08. 07:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.30 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.40 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":377.6,"label":"29.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.20 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.30 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.40 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":391.7,"label":"29.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.90 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":405.7,"label":"29.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.90 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.10 mm/h"}]},{"x":419.8,"label":"29.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.90 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.20 mm/h"}]},{"x":433.9,"label":"29.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.10 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.70 mm/h"}]},{"x":447.9,"label":"29.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.10 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.60 mm/h"}]},{"x":462,"label":"29.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.10 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.80 mm/h"}]},{"x":476.1,"label":"29.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.40 mm/h"}]},{"x":490.1,"label":"29.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.20 mm/h"}]},{"x":504.2,"label":"29.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.30 mm/h"}]},{"x":518.3,"label":"29.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.20 mm/h"}]},{"x":532.3,"label":"29.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.20 mm/h"}]},{"x":546.4,"label":"29.08. 20:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"1.30 mm/h"}]},{"x":560.5,"label":"29.08. 21:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.40 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.30 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":574.5,"label":"29.08. 22:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.40 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.30 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":588.6,"label":"29.08. 23:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.40 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.30 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":602.7,"label":"30.08. 00:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":616.7,"label":"30.08. 01:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":630.8,"label":"30.08. 02:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":644.9,"label":"30.08. 03:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":658.9,"label":"30.08. 04:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":673,"label":"30.08. 05:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":687.1,"label":"30.08. 06:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":701.1,"label":"30.08. 07:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":715.2,"label":"30.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":729.3,"label":"30.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":743.3,"label":"30.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":757.4,"label":"30.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":771.5,"label":"30.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":785.5,"label":"30.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":799.6,"label":"30.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":813.7,"label":"30.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":827.7,"label":"30.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":841.8,"label":"30.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":855.9,"label":"30.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":869.9,"label":"30.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]}];
+CHART_DATA["sun-0"] = [{"x":40,"label":"28.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"73 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":54.1,"label":"28.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":68.1,"label":"28.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":82.2,"label":"28.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":96.3,"label":"28.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":110.3,"label":"28.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":124.4,"label":"28.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":138.5,"label":"28.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":152.5,"label":"28.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":166.6,"label":"28.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":180.7,"label":"28.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":194.7,"label":"28.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"43 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":208.8,"label":"28.08. 20:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"77 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"23 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"77 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":222.9,"label":"28.08. 21:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":236.9,"label":"28.08. 22:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":251,"label":"28.08. 23:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":265.1,"label":"29.08. 00:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":279.1,"label":"29.08. 01:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":293.2,"label":"29.08. 02:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":307.3,"label":"29.08. 03:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":321.3,"label":"29.08. 04:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":335.4,"label":"29.08. 05:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":349.5,"label":"29.08. 06:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":363.5,"label":"29.08. 07:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":377.6,"label":"29.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"72 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"20 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"85 %"}]},{"x":391.7,"label":"29.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"81 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"41 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":405.7,"label":"29.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"91 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":419.8,"label":"29.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":433.9,"label":"29.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":447.9,"label":"29.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"23 %"}]},{"x":462,"label":"29.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"25 %"}]},{"x":476.1,"label":"29.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"16 %"}]},{"x":490.1,"label":"29.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"40 %"}]},{"x":504.2,"label":"29.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":518.3,"label":"29.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":532.3,"label":"29.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":546.4,"label":"29.08. 20:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"58 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"48 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"74 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":560.5,"label":"29.08. 21:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":574.5,"label":"29.08. 22:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":588.6,"label":"29.08. 23:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":602.7,"label":"30.08. 00:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":616.7,"label":"30.08. 01:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":630.8,"label":"30.08. 02:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":644.9,"label":"30.08. 03:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":658.9,"label":"30.08. 04:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":673,"label":"30.08. 05:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":687.1,"label":"30.08. 06:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":701.1,"label":"30.08. 07:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"11 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":715.2,"label":"30.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"39 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":729.3,"label":"30.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"94 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":743.3,"label":"30.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":757.4,"label":"30.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":771.5,"label":"30.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":785.5,"label":"30.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":799.6,"label":"30.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":813.7,"label":"30.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":827.7,"label":"30.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":841.8,"label":"30.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":855.9,"label":"30.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":869.9,"label":"30.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]}];
+CHART_DATA["rain-1"] = [{"x":40,"label":"29.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.20 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.30 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.40 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":54.1,"label":"29.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.90 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.00 mm/h"}]},{"x":68.1,"label":"29.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.90 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.10 mm/h"}]},{"x":82.2,"label":"29.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.90 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.20 mm/h"}]},{"x":96.3,"label":"29.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.10 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.70 mm/h"}]},{"x":110.3,"label":"29.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.10 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.60 mm/h"}]},{"x":124.4,"label":"29.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.10 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.80 mm/h"}]},{"x":138.5,"label":"29.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.40 mm/h"}]},{"x":152.5,"label":"29.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.20 mm/h"}]},{"x":166.6,"label":"29.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.20 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.30 mm/h"}]},{"x":180.7,"label":"29.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.20 mm/h"}]},{"x":194.7,"label":"29.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0.20 mm/h"}]},{"x":208.8,"label":"29.08. 20:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"1.30 mm/h"}]},{"x":222.9,"label":"29.08. 21:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.40 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.30 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":236.9,"label":"29.08. 22:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.40 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.30 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":251,"label":"29.08. 23:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.40 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.30 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":265.1,"label":"30.08. 00:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":279.1,"label":"30.08. 01:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":293.2,"label":"30.08. 02:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":307.3,"label":"30.08. 03:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":321.3,"label":"30.08. 04:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":335.4,"label":"30.08. 05:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":349.5,"label":"30.08. 06:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":363.5,"label":"30.08. 07:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":377.6,"label":"30.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":391.7,"label":"30.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":405.7,"label":"30.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":419.8,"label":"30.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":433.9,"label":"30.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":447.9,"label":"30.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":462,"label":"30.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":476.1,"label":"30.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":490.1,"label":"30.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":504.2,"label":"30.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":518.3,"label":"30.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":532.3,"label":"30.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":546.4,"label":"30.08. 20:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":560.5,"label":"30.08. 21:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":574.5,"label":"30.08. 22:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":588.6,"label":"30.08. 23:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":602.7,"label":"31.08. 00:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":616.7,"label":"31.08. 01:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":630.8,"label":"31.08. 02:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":644.9,"label":"31.08. 03:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":658.9,"label":"31.08. 04:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":673,"label":"31.08. 05:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":687.1,"label":"31.08. 06:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":701.1,"label":"31.08. 07:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":715.2,"label":"31.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.00 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.00 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":729.3,"label":"31.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":743.3,"label":"31.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":757.4,"label":"31.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.00 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":771.5,"label":"31.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.50 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":785.5,"label":"31.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.50 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":799.6,"label":"31.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.50 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.10 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.10 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":813.7,"label":"31.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"1.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.60 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"1.80 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":827.7,"label":"31.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"1.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.60 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"1.80 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":841.8,"label":"31.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"1.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.60 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"1.80 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":855.9,"label":"31.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.40 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":869.9,"label":"31.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0.00 mm/h"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0.10 mm/h"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0.20 mm/h"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0.40 mm/h"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]}];
+CHART_DATA["sun-1"] = [{"x":40,"label":"29.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"72 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"20 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"85 %"}]},{"x":54.1,"label":"29.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"81 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"41 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":68.1,"label":"29.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"91 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":82.2,"label":"29.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":96.3,"label":"29.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"100 %"}]},{"x":110.3,"label":"29.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"23 %"}]},{"x":124.4,"label":"29.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"25 %"}]},{"x":138.5,"label":"29.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"16 %"}]},{"x":152.5,"label":"29.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"40 %"}]},{"x":166.6,"label":"29.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":180.7,"label":"29.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":194.7,"label":"29.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":208.8,"label":"29.08. 20:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"58 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"48 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"74 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":"0 %"}]},{"x":222.9,"label":"29.08. 21:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":236.9,"label":"29.08. 22:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":251,"label":"29.08. 23:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":265.1,"label":"30.08. 00:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":279.1,"label":"30.08. 01:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":293.2,"label":"30.08. 02:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":307.3,"label":"30.08. 03:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":321.3,"label":"30.08. 04:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":335.4,"label":"30.08. 05:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":349.5,"label":"30.08. 06:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":363.5,"label":"30.08. 07:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"11 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":377.6,"label":"30.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"39 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":391.7,"label":"30.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"94 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":405.7,"label":"30.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":419.8,"label":"30.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":433.9,"label":"30.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":447.9,"label":"30.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":462,"label":"30.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":476.1,"label":"30.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":490.1,"label":"30.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":504.2,"label":"30.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":518.3,"label":"30.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":532.3,"label":"30.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":546.4,"label":"30.08. 20:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"21 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"21 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"24 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"71 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":560.5,"label":"30.08. 21:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":574.5,"label":"30.08. 22:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":588.6,"label":"30.08. 23:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":602.7,"label":"31.08. 00:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":616.7,"label":"31.08. 01:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":630.8,"label":"31.08. 02:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":644.9,"label":"31.08. 03:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":658.9,"label":"31.08. 04:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":673,"label":"31.08. 05:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":687.1,"label":"31.08. 06:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"0 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":701.1,"label":"31.08. 07:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"0 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"39 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"0 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"5 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":715.2,"label":"31.08. 08:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":729.3,"label":"31.08. 09:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":743.3,"label":"31.08. 10:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":757.4,"label":"31.08. 11:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"93 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":771.5,"label":"31.08. 12:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":785.5,"label":"31.08. 13:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":799.6,"label":"31.08. 14:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"100 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"0 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":813.7,"label":"31.08. 15:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"90 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":827.7,"label":"31.08. 16:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"46 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"100 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":841.8,"label":"31.08. 17:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"33 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"84 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":855.9,"label":"31.08. 18:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"69 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"18 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]},{"x":869.9,"label":"31.08. 19:00","values":[{"model":"icon_seamless","label":"ICON (DWD)","valueLabel":"57 %"},{"model":"gfs_seamless","label":"GFS (NOAA)","valueLabel":"2 %"},{"model":"ecmwf_ifs025","label":"ECMWF","valueLabel":"100 %"},{"model":"gem_seamless","label":"GEM (Kanada)","valueLabel":"100 %"},{"model":"meteofrance_seamless","label":"Météo-France","valueLabel":null}]}];
+
+    document.querySelectorAll(".hover-capture").forEach((rect) => {
+      const chartId = rect.getAttribute("data-chart");
+      const svg = rect.closest("svg");
+      const crosshair = svg.querySelector(`.crosshair[data-chart="${chartId}"]`);
+      const tooltip = document.querySelector(`[data-chart-tooltip="${chartId}"]`);
+      const data = CHART_DATA[chartId];
+
+      function nearestPoint(mouseX) {
+        let best = data[0];
+        let bestDist = Infinity;
+        for (const p of data) {
+          const dist = Math.abs(p.x - mouseX);
+          if (dist < bestDist) { bestDist = dist; best = p; }
+        }
+        return best;
+      }
+
+      rect.addEventListener("pointermove", (evt) => {
+        const box = svg.getBoundingClientRect();
+        const scale = 900 / box.width;
+        const mouseX = (evt.clientX - box.left) * scale;
+        const point = nearestPoint(mouseX);
+        if (!point) return;
+
+        crosshair.setAttribute("x1", point.x);
+        crosshair.setAttribute("x2", point.x);
+        crosshair.style.opacity = "1";
+
+        tooltip.replaceChildren();
+        const timeEl = document.createElement("div");
+        timeEl.className = "tooltip-time";
+        timeEl.textContent = point.label;
+        tooltip.appendChild(timeEl);
+        for (const v of point.values) {
+          if (v.valueLabel === null) continue;
+          const row = document.createElement("div");
+          row.className = "tooltip-row";
+          const key = document.createElement("span");
+          key.className = "tooltip-key";
+          const line = document.createElement("span");
+          line.className = "tooltip-line";
+          line.style.background = getComputedStyle(document.documentElement).getPropertyValue(`--series-${v.model}`);
+          key.appendChild(line);
+          key.appendChild(document.createTextNode(v.label));
+          const value = document.createElement("span");
+          value.className = "tooltip-value";
+          value.textContent = v.valueLabel;
+          row.appendChild(key);
+          row.appendChild(value);
+          tooltip.appendChild(row);
+        }
+
+        const cardBox = rect.closest(".card").getBoundingClientRect();
+        tooltip.style.display = "block";
+        tooltip.style.left = (evt.clientX - cardBox.left + 12) + "px";
+        tooltip.style.top = (evt.clientY - cardBox.top + 12) + "px";
+      });
+
+      rect.addEventListener("pointerleave", () => {
+        crosshair.style.opacity = "0";
+        tooltip.style.display = "none";
+      });
+    });
+  </script>
+</body>
+</html>
