@@ -52,26 +52,34 @@ async function main() {
   writeFileSync(`${DASHBOARD_DIR}/index.html`, renderDashboardHtml(hourlyByModel, results, new Date()));
   console.log("Dashboard vygenerovaný do docs/index.html.");
 
+  // FORCE_ALERT=true bypasses the "ok" / lookahead gate and the state dedup so you can
+  // see what the alert e-mail actually looks like, regardless of whether the forecast is
+  // currently suitable. Testing-only: never writes state.json.
+  const forceAlert = process.env.FORCE_ALERT === "true";
+
   // candidateStart is a naive Vienna wall-clock string (no UTC offset), so this
   // comparison against Date.now() can be off by Vienna's UTC offset (1-2h) -
   // negligible next to the multi-day ALERT_LOOKAHEAD_DAYS threshold.
   const lookaheadMs = ALERT_LOOKAHEAD_DAYS * 24 * 3600_000;
-  const best = results.find(
-    (r) => r.ok && new Date(r.candidateStart).getTime() - Date.now() <= lookaheadMs
-  );
+  const best = forceAlert
+    ? results[0]
+    : results.find((r) => r.ok && new Date(r.candidateStart).getTime() - Date.now() <= lookaheadMs);
 
   if (!best) {
     console.log("Žiadne vhodné okno na najbližšie víkendy.");
     return;
   }
 
-  const state = readState();
-  if (state.lastAlertedStart === best.candidateStart) {
-    console.log(`Už bol odoslaný alert pre ${best.candidateStart}, preskakujem.`);
-    return;
+  if (forceAlert) {
+    console.log(`FORCE_ALERT=true – posielam testovací e-mail pre ${best.candidateStart} (ok=${best.ok}), bez zápisu do state.json.`);
+  } else {
+    const state = readState();
+    if (state.lastAlertedStart === best.candidateStart) {
+      console.log(`Už bol odoslaný alert pre ${best.candidateStart}, preskakujem.`);
+      return;
+    }
+    console.log(`Nájdené vhodné okno: ${best.candidateStart}`);
   }
-
-  console.log(`Nájdené vhodné okno: ${best.candidateStart}`);
 
   if (sendEmail) {
     const apiKey = process.env.RESEND_API_KEY;
@@ -86,7 +94,9 @@ async function main() {
     console.log("SEND_EMAIL=false – e-mail sa neposiela (dry-run).");
   }
 
-  writeState({ lastAlertedStart: best.candidateStart });
+  if (!forceAlert) {
+    writeState({ lastAlertedStart: best.candidateStart });
+  }
 }
 
 main().catch((err) => {
