@@ -25,13 +25,52 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      - run: node dist/index.js
+
+      # Generates docs/index.html + docs/chart.png without sending the e-mail yet - the e-mail
+      # links to the chart as a hosted image (Gmail strips inline <svg> and refuses data: URIs),
+      # so that image has to actually be live on GitHub Pages *before* the e-mail goes out, or an
+      # early open shows a permanently broken image (each e-mail's chart URL is cache-busted and
+      # only ever fetched once).
+      - name: Generate dashboard + chart (no e-mail yet)
+        run: node dist/index.js
+        env:
+          SEND_EMAIL: "false"
+
+      - name: Publish dashboard so the chart image is live before the e-mail links to it
+        id: publish
+        run: |
+          if ! git diff --quiet -- docs/index.html docs/chart.png; then
+            git config user.name "terrace-watchdog-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add docs/index.html docs/chart.png
+            git commit -m "chore: update watchdog dashboard"
+            git push
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for GitHub Pages to actually serve the new chart
+        if: steps.publish.outputs.published == 'true'
+        run: |
+          local_hash=$(sha256sum docs/chart.png | cut -d' ' -f1)
+          for i in $(seq 1 24); do
+            remote_hash=$(curl -s "https://sb8691.github.io/ztlzdrf/chart.png?cb=$RANDOM$RANDOM" | sha256sum | cut -d' ' -f1)
+            if [ "$remote_hash" = "$local_hash" ]; then
+              echo "GitHub Pages is serving the fresh chart (attempt $i)."
+              exit 0
+            fi
+            echo "Not live yet (attempt $i/24), waiting 10s..."
+            sleep 10
+          done
+          echo "::warning::GitHub Pages didn't confirm the new chart within the timeout; sending the e-mail anyway."
+
+      - name: Send e-mail
+        run: node dist/index.js
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
           ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
 
-      - name: Commit updated dashboard
+      - name: Commit any dashboard drift from the final run
         run: |
           if ! git diff --quiet -- docs/index.html docs/chart.png; then
             git config user.name "terrace-watchdog-bot"
