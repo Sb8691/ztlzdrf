@@ -14,8 +14,8 @@ const PALETTE = {
   critical: "#d03b3b",
 };
 
-const CHART_WIDTH = 900;
-const CHART_HEIGHT = 320;
+export const CHART_WIDTH = 900;
+export const CHART_HEIGHT = 320;
 const MARGIN = { top: 30, right: 44, bottom: 34, left: 44 };
 const PLOT_W = CHART_WIDTH - MARGIN.left - MARGIN.right;
 const PLOT_H = CHART_HEIGHT - MARGIN.top - MARGIN.bottom;
@@ -210,8 +210,16 @@ export function buildWeatherChart(
     `
     : "";
 
+  // Only the non-interactive (e-mail) render is ever rasterized to a standalone PNG, where a
+  // transparent background would render unpredictably - the interactive dashboard SVG sits on
+  // its own themed card and stays transparent.
+  const background = !interactive
+    ? `<rect x="0" y="0" width="${CHART_WIDTH}" height="${CHART_HEIGHT}" style="fill:#ffffff" />`
+    : "";
+
   const svg = `
-    <svg viewBox="0 0 ${CHART_WIDTH} ${CHART_HEIGHT}" class="chart-svg" role="img" aria-label="Graf predpovede počasia">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CHART_WIDTH} ${CHART_HEIGHT}" width="${CHART_WIDTH}" height="${CHART_HEIGHT}" class="chart-svg" role="img" aria-label="Graf predpovede počasia">
+      ${background}
       ${precipGrid}
       ${xLabels.join("")}
       ${radiationArea}

@@ -1,6 +1,7 @@
+import { Resvg } from "@resvg/resvg-js";
 import type { WeatherPoint } from "./types.js";
 import { LOCATION } from "./config.js";
-import { buildWeatherChart, computeStats } from "./dashboard.js";
+import { buildWeatherChart, computeStats, CHART_WIDTH } from "./dashboard.js";
 
 export interface EmailConfig {
   apiKey: string;
@@ -12,6 +13,18 @@ const HEADER = "#54606e";
 const MUTED = "#767268";
 const INK = "#22201b";
 const BORDER = "#e6e3dc";
+
+/**
+ * Gmail (and most mail clients) strip inline <svg> out of HTML e-mails entirely, leaving only the
+ * bare text nodes floating in the message - so the chart is rasterized to a PNG here instead, which
+ * every client renders as a normal image. Rendered at 2x the display width for crisper text on
+ * high-DPI screens.
+ */
+function svgToPngDataUri(svg: string, displayWidth: number): string {
+  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: displayWidth * 2 } });
+  const png = resvg.render().asPng();
+  return `data:image/png;base64,${png.toString("base64")}`;
+}
 
 /** Formats an absolute instant in LOCATION.timezone (Europe/Vienna). */
 function formatGeneratedAt(d: Date): string {
@@ -32,6 +45,7 @@ export function renderAlertEmail(points: WeatherPoint[], generatedAt: Date): { s
   const subject = `🌤️ Predpoveď počasia – Zedlitzdorf 74 – ${niceNow}`;
   const stats = computeStats(points);
   const chart = buildWeatherChart(points, generatedAt.getTime(), { interactive: false });
+  const chartImgSrc = svgToPngDataUri(chart.svg, CHART_WIDTH);
   const tempPart =
     stats.minTempC !== null && stats.maxTempC !== null
       ? `teplota ${stats.minTempC.toFixed(1)}–${stats.maxTempC.toFixed(1)} °C`
@@ -62,7 +76,7 @@ export function renderAlertEmail(points: WeatherPoint[], generatedAt: Date): { s
             <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#1f9e89;margin-right:5px;"></span>Vlhkosť (%)
           </div>
 
-          ${chart.svg}
+          <img src="${chartImgSrc}" width="${CHART_WIDTH}" alt="Graf predpovede počasia: zrážky, teplota, slnečné žiarenie, vlhkosť" style="width:100%;max-width:${CHART_WIDTH}px;height:auto;display:block;border-radius:8px;border:1px solid ${BORDER};" />
 
           <p style="margin:16px 0 0;font-size:13px;color:${INK};">
             Súčet zrážok za celé okno: ${stats.totalPrecipMm.toFixed(1)} mm &middot; ${tempPart} &middot; ${humidityPart}.
