@@ -9,7 +9,10 @@ const PALETTE = {
   precip: "#2a78d6",
   temp: "#d9622a",
   radiation: "#e0b430",
-  humidity: "#1f9e89",
+  /** Deliberately a muted, desaturated powder-blue (not the vivid precip blue, and no longer
+   * a line at all) - humidity is meant to read as a faint ambient wash behind the other series,
+   * never as a competing foreground line the eye can confuse with precipitation. */
+  humidity: "#9fb7cc",
   gridline: "#d8d6cd",
   axis: "#8a8880",
   critical: "#d03b3b",
@@ -154,12 +157,16 @@ export function buildWeatherChart(
     ? `<path d="${tempPath}" style="fill:none;stroke:${PALETTE.temp};stroke-width:2;stroke-linecap:round;stroke-linejoin:round" />`
     : "";
 
+  // Humidity is rendered as a soft filled wash down to the plot floor, not a line - drawn first
+  // (furthest back, behind gridlines/bars/other series) so it reads as faint background context
+  // rather than a fourth foreground series competing for attention with precipitation.
   const humidityPath = points
     .filter((p) => p.humidityPct !== null)
     .map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(p.ms).toFixed(1)} ${yHumidity(p.humidityPct!).toFixed(1)}`)
     .join(" ");
-  const humidityLine = humidityPath
-    ? `<path d="${humidityPath}" style="fill:none;stroke:${PALETTE.humidity};stroke-width:1.5;stroke-dasharray:4 3;stroke-linecap:round" />`
+  const humidityFloorY = MARGIN.top + PLOT_H;
+  const humidityArea = humidityPath
+    ? `<path d="${humidityPath} L ${xScale(points[points.length - 1].ms).toFixed(1)} ${humidityFloorY} L ${xScale(points[0].ms).toFixed(1)} ${humidityFloorY} Z" style="fill:${PALETTE.humidity};opacity:0.22" />`
     : "";
 
   const precipTicks = niceTicks(0, precipMax, 4);
@@ -221,12 +228,12 @@ export function buildWeatherChart(
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CHART_WIDTH} ${CHART_HEIGHT}" width="${CHART_WIDTH}" height="${CHART_HEIGHT}" class="chart-svg" role="img" aria-label="Graf predpovede počasia">
       ${background}
+      ${humidityArea}
       ${precipGrid}
       ${xLabels.join("")}
       ${radiationArea}
       ${bars}
       ${radiationLine}
-      ${humidityLine}
       ${tempLine}
       ${tempAxis}
       ${nowMarker}
@@ -413,7 +420,7 @@ export function renderDashboardHtml(points: WeatherPoint[], generatedAt: Date): 
     --series-precip: #2a78d6;
     --series-temp: #d9622a;
     --series-radiation: #e0b430;
-    --series-humidity: #1f9e89;
+    --series-humidity: #9fb7cc;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -430,7 +437,7 @@ export function renderDashboardHtml(points: WeatherPoint[], generatedAt: Date): 
       --series-precip: #5b9be0;
       --series-temp: #e58a54;
       --series-radiation: #e0b430;
-      --series-humidity: #3fc2ab;
+      --series-humidity: #7f96a8;
     }
   }
   * { box-sizing: border-box; }

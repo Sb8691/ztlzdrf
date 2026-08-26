@@ -70,7 +70,7 @@ export function renderAlertEmail(points: WeatherPoint[], generatedAt: Date): { s
             &nbsp;&nbsp;
             <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#e0b430;margin-right:5px;"></span>Slnečné žiarenie (W/m²)
             &nbsp;&nbsp;
-            <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#1f9e89;margin-right:5px;"></span>Vlhkosť (%)
+            <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#9fb7cc;margin-right:5px;"></span>Vlhkosť (%)
           </div>
 
           <img src="${chartImgSrc}" width="${CHART_WIDTH}" alt="Graf predpovede počasia: zrážky, teplota, slnečné žiarenie, vlhkosť" style="width:100%;max-width:${CHART_WIDTH}px;height:auto;display:block;border-radius:8px;border:1px solid ${BORDER};" />
