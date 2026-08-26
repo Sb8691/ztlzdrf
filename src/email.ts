@@ -1,7 +1,6 @@
-import { Resvg } from "@resvg/resvg-js";
 import type { WeatherPoint } from "./types.js";
 import { LOCATION } from "./config.js";
-import { buildWeatherChart, computeStats, CHART_WIDTH } from "./dashboard.js";
+import { computeStats, CHART_WIDTH } from "./dashboard.js";
 
 export interface EmailConfig {
   apiKey: string;
@@ -15,15 +14,14 @@ const INK = "#22201b";
 const BORDER = "#e6e3dc";
 
 /**
- * Gmail (and most mail clients) strip inline <svg> out of HTML e-mails entirely, leaving only the
- * bare text nodes floating in the message - so the chart is rasterized to a PNG here instead, which
- * every client renders as a normal image. Rendered at 2x the display width for crisper text on
- * high-DPI screens.
+ * Gmail (and most mail clients) strip inline <svg> from HTML e-mails entirely, and separately
+ * refuse to load `data:` image URIs - so the chart can't be inlined at all, it has to be a real
+ * hosted image. `index.ts` publishes the same chart as docs/chart.png (served by GitHub Pages)
+ * before/alongside sending this e-mail; the `t=` query param cache-busts Gmail's image proxy,
+ * which otherwise caches by URL and would keep serving yesterday's chart image indefinitely.
  */
-function svgToPngDataUri(svg: string, displayWidth: number): string {
-  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: displayWidth * 2 } });
-  const png = resvg.render().asPng();
-  return `data:image/png;base64,${png.toString("base64")}`;
+function chartImageUrl(generatedAt: Date): string {
+  return `https://sb8691.github.io/ztlzdrf/chart.png?t=${generatedAt.getTime()}`;
 }
 
 /** Formats an absolute instant in LOCATION.timezone (Europe/Vienna). */
@@ -44,8 +42,7 @@ export function renderAlertEmail(points: WeatherPoint[], generatedAt: Date): { s
   const niceNow = formatGeneratedAt(generatedAt);
   const subject = `🌤️ Predpoveď počasia – Zedlitzdorf 74 – ${niceNow}`;
   const stats = computeStats(points);
-  const chart = buildWeatherChart(points, generatedAt.getTime(), { interactive: false });
-  const chartImgSrc = svgToPngDataUri(chart.svg, CHART_WIDTH);
+  const chartImgSrc = chartImageUrl(generatedAt);
   const tempPart =
     stats.minTempC !== null && stats.maxTempC !== null
       ? `teplota ${stats.minTempC.toFixed(1)}–${stats.maxTempC.toFixed(1)} °C`

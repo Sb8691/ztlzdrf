@@ -1,3 +1,4 @@
+import { Resvg } from "@resvg/resvg-js";
 import type { WeatherPoint } from "./types.js";
 import { LOCATION } from "./config.js";
 
@@ -250,6 +251,18 @@ export function buildWeatherChart(
   const script = `CHART_DATA[${JSON.stringify(chartId)}] = ${JSON.stringify(dataset)};`;
 
   return { svg, script };
+}
+
+/**
+ * Rasterizes the (non-interactive) chart to a PNG buffer at 2x CHART_WIDTH for crisper text on
+ * high-DPI screens. Used to publish a static docs/chart.png that the e-mail can link to - Gmail
+ * and most mail clients strip inline <svg> and also refuse to load `data:` image URIs, so a real
+ * hosted image is the only reliable way to show the chart in an e-mail.
+ */
+export function renderChartPng(points: WeatherPoint[], nowMs: number): Buffer {
+  const { svg } = buildWeatherChart(points, nowMs, { interactive: false });
+  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: CHART_WIDTH * 2 } });
+  return resvg.render().asPng();
 }
 
 function renderLegend(): string {

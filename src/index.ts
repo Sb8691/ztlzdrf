@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { fetchWeatherWindow } from "./geosphere.js";
 import { CHART_WINDOW, LOCATION } from "./config.js";
 import { sendAlert } from "./email.js";
-import { renderDashboardHtml, computeStats } from "./dashboard.js";
+import { renderDashboardHtml, renderChartPng, computeStats } from "./dashboard.js";
 
 const DASHBOARD_DIR = fileURLToPath(new URL("../docs", import.meta.url));
 
@@ -24,6 +24,12 @@ async function main() {
   mkdirSync(DASHBOARD_DIR, { recursive: true });
   writeFileSync(`${DASHBOARD_DIR}/index.html`, renderDashboardHtml(points, now));
   console.log("Dashboard vygenerovaný do docs/index.html.");
+
+  // Published so the e-mail can link to it as a real hosted image - Gmail (and most mail
+  // clients) strip inline <svg> and refuse `data:` image URIs, so this is the only reliable way
+  // to show the chart in the e-mail itself.
+  writeFileSync(`${DASHBOARD_DIR}/chart.png`, renderChartPng(points, now.getTime()));
+  console.log("Graf vygenerovaný do docs/chart.png.");
 
   if (sendEmail) {
     const apiKey = process.env.RESEND_API_KEY;
