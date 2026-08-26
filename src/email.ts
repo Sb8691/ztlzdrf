@@ -1,5 +1,6 @@
 import type { WindowResult } from "./types.js";
 import { LOCATION, WINDOW } from "./config.js";
+import { summarize } from "./dashboard.js";
 
 export interface EmailConfig {
   apiKey: string;
@@ -17,6 +18,7 @@ const MODEL_LABELS: Record<string, string> = {
 
 const GOOD = "#0ca30c";
 const CRITICAL = "#d03b3b";
+const NEUTRAL = "#54606e";
 const MUTED = "#767268";
 const INK = "#22201b";
 const BORDER = "#e6e3dc";
@@ -43,7 +45,11 @@ function formatWindowInstant(iso: string): string {
 
 export function renderAlertEmail(result: WindowResult): { subject: string; html: string } {
   const niceStart = formatCandidateStart(result.candidateStart);
-  const subject = `☀️ Terasa: vhodné okno na maľovanie – ${niceStart}`;
+  const headerColor = result.ok ? GOOD : NEUTRAL;
+  const subject = result.ok
+    ? `☀️ Terasa: vhodné okno na maľovanie – ${niceStart}`
+    : `🌦️ Terasa: ranná predpoveď (zatiaľ nevhodné) – ${niceStart}`;
+  const heroLabel = result.ok ? "Odporúčaný štart maľovania" : "Najbližší sledovaný termín";
 
   const rows = result.perModel
     .map((m) => {
@@ -66,9 +72,9 @@ export function renderAlertEmail(result: WindowResult): { subject: string; html:
   <div style="background:#f4f2ee;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid ${BORDER};">
       <tr>
-        <td style="background:${GOOD};padding:20px 28px;">
+        <td style="background:${headerColor};padding:20px 28px;">
           <span style="font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#ffffff;opacity:0.9;">Terrace Watchdog</span>
-          <h1 style="margin:6px 0 0;font-size:22px;line-height:1.3;color:#ffffff;font-weight:700;">☀️ Vhodné okno na maľovanie terasy</h1>
+          <h1 style="margin:6px 0 0;font-size:22px;line-height:1.3;color:#ffffff;font-weight:700;">${result.ok ? "☀️ Vhodné okno na maľovanie terasy" : "🌦️ Ranná predpoveď terasy"}</h1>
         </td>
       </tr>
       <tr>
@@ -76,12 +82,13 @@ export function renderAlertEmail(result: WindowResult): { subject: string; html:
           <p style="margin:0 0 16px;font-size:14px;color:${MUTED};">${LOCATION.name}</p>
 
           <div style="background:#f4f2ee;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
-            <p style="margin:0 0 4px;font-size:13px;color:${MUTED};">Odporúčaný štart maľovania</p>
+            <p style="margin:0 0 4px;font-size:13px;color:${MUTED};">${heroLabel}</p>
             <p style="margin:0;font-size:20px;font-weight:700;color:${INK};">${niceStart}</p>
             <p style="margin:10px 0 0;font-size:13px;color:${MUTED};">
               Súvislé suché okno (${WINDOW.preDryHours} h pred &middot; ${WINDOW.paintHours} h maľovania &middot; ${WINDOW.postDryHours} h schnutia)<br>
               ${formatWindowInstant(result.windowStart)} &ndash; ${formatWindowInstant(result.windowEnd)} (${LOCATION.timezone})
             </p>
+            ${!result.ok ? `<p style="margin:10px 0 0;font-size:13px;color:${INK};">${summarize(result)}</p>` : ""}
           </div>
 
           <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:${INK};">Porovnanie zrážok podľa modelu</p>

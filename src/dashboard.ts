@@ -71,7 +71,7 @@ function formatGeneratedAt(d: Date): string {
   return `${get("day")}.${get("month")}.${get("year")} ${get("hour")}:${get("minute")}`;
 }
 
-function summarize(result: WindowResult): string {
+export function summarize(result: WindowResult): string {
   if (result.ok) {
     return "Všetkých 5 modelov sa zhoduje: počas celého okna (pred maľovaním, počas aj po ňom) by nemalo pršať.";
   }

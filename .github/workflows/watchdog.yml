@@ -2,13 +2,13 @@ name: Terrace Painting Watchdog
 
 on:
   schedule:
-    - cron: "7 6 * * *"
-  workflow_dispatch:
-    inputs:
-      force_alert:
-        description: "Poslať testovací e-mail bez ohľadu na predpoveď (nezapíše state.json)"
-        type: boolean
-        default: false
+    # 09:00 Europe/Vienna, split into two cron entries since a single UTC
+    # time can't track the CEST/CET switch: 07:00 UTC during CEST (Apr-Oct),
+    # 08:00 UTC during CET (Nov-Mar). Off by up to an hour in the DST
+    # switchover week, which is fine for a daily weather digest.
+    - cron: "0 7 * 4-10 *"
+    - cron: "0 8 * 11,12,1,2,3 *"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -30,14 +30,13 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
           ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
-          FORCE_ALERT: ${{ inputs.force_alert }}
 
-      - name: Commit updated state and dashboard
+      - name: Commit updated dashboard
         run: |
-          if ! git diff --quiet -- state.json docs/index.html; then
+          if ! git diff --quiet -- docs/index.html; then
             git config user.name "terrace-watchdog-bot"
             git config user.email "actions@users.noreply.github.com"
-            git add state.json docs/index.html
-            git commit -m "chore: update watchdog state and dashboard"
+            git add docs/index.html
+            git commit -m "chore: update watchdog dashboard"
             git push
           fi

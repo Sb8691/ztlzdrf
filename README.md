@@ -4,9 +4,10 @@ Predpoved pocasia na vhodny termin natierania terasy.
 
 Terasu v **Zedlitzdorf (Gnesau, Feldkirchen, Kärnten, Rakúsko)** je vhodné natrieť iba ak nastane
 súvislé suché okno: **24 h bez dažďa pred štartom**, **6 h maľovania**, **12 h bez dažďa po
-maľovaní (schnutie)**. Projekt denne porovnáva predpoveď z piatich meteorologických modelov
-(ICON, GFS, ECMWF, GEM, Météo-France cez [Open-Meteo](https://open-meteo.com/), bez API kľúča)
-a keď nájde takéto okno na najbližší víkend, pošle e-mailový alert cez [Resend](https://resend.com/).
+maľovaní (schnutie)**. Projekt každé ráno o 9:00 (Europe/Vienna) porovná predpoveď z piatich
+meteorologických modelov (ICON, GFS, ECMWF, GEM, Météo-France cez [Open-Meteo](https://open-meteo.com/),
+bez API kľúča) a pošle e-mail cez [Resend](https://resend.com/) – **vždy**, bez ohľadu na to, či je
+najbližší víkend vhodný na maľovanie, aby si mal denný prehľad o stave predpovede.
 
 ## Ako to funguje
 
@@ -18,10 +19,10 @@ a keď nájde takéto okno na najbližší víkend, pošle e-mailový alert cez 
   5 modelov, čiara = medián) po 3-hodinových úsekoch. Sekcia "Dážď" ukazuje rovnaký typ grafu
   za posledné/najbližšie dni (s vyznačeným "teraz") pre rýchly odhad, ako rýchlo uschnú
   borovicové dosky.
-- `src/email.ts` – zostaví a odošle e-mail cez Resend API s porovnaním modelov.
-- `src/state.ts` – `state.json` v repozitári zabraňuje opakovanému alertu pre ten istý víkend.
+- `src/email.ts` – zostaví a odošle e-mail cez Resend API s porovnaním modelov; nadpis a farba
+  hlavičky sa líšia podľa toho, či je najbližší termín vhodný, alebo nie.
 - `src/index.ts` – orchestrácia celého behu; spúšťa ho `.github/workflows/watchdog.yml` denne
-  cez GitHub Actions cron (aj ručne cez `workflow_dispatch`).
+  cez GitHub Actions cron (aj ručne cez `workflow_dispatch`). E-mail sa posiela pri každom behu.
 
 ## Dashboard
 
@@ -50,5 +51,5 @@ V nastaveniach repozitára (Settings → Secrets and variables → Actions) treb
 - `ALERT_EMAIL_TO` – e-mail, na ktorý má prísť alert
 - `ALERT_EMAIL_FROM` – odosielajúca adresa overená v Resend
 
-Workflow beží denne (cron) a dá sa spustiť aj ručne cez záložku *Actions → Terrace Painting
-Watchdog → Run workflow*.
+Workflow beží denne o 9:00 (Europe/Vienna) a dá sa spustiť aj ručne cez záložku *Actions →
+Terrace Painting Watchdog → Run workflow* – vtedy tiež pošle aktuálny e-mail.

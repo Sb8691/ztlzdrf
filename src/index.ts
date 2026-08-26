@@ -2,9 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fetchModelForecasts } from "./openMeteo.js";
 import { findPaintWindows, pickCandidateStarts } from "./analyze.js";
-import { WINDOW, ALERT_LOOKAHEAD_DAYS, LOCATION } from "./config.js";
+import { WINDOW, LOCATION } from "./config.js";
 import { sendAlert } from "./email.js";
-import { readState, writeState } from "./state.js";
 import { renderDashboardHtml } from "./dashboard.js";
 import type { WindowResult } from "./types.js";
 
@@ -52,34 +51,21 @@ async function main() {
   writeFileSync(`${DASHBOARD_DIR}/index.html`, renderDashboardHtml(hourlyByModel, results, new Date()));
   console.log("Dashboard vygenerovaný do docs/index.html.");
 
-  // FORCE_ALERT=true bypasses the "ok" / lookahead gate and the state dedup so you can
-  // see what the alert e-mail actually looks like, regardless of whether the forecast is
-  // currently suitable. Testing-only: never writes state.json.
-  const forceAlert = process.env.FORCE_ALERT === "true";
-
-  // candidateStart is a naive Vienna wall-clock string (no UTC offset), so this
-  // comparison against Date.now() can be off by Vienna's UTC offset (1-2h) -
-  // negligible next to the multi-day ALERT_LOOKAHEAD_DAYS threshold.
-  const lookaheadMs = ALERT_LOOKAHEAD_DAYS * 24 * 3600_000;
-  const best = forceAlert
-    ? results[0]
-    : results.find((r) => r.ok && new Date(r.candidateStart).getTime() - Date.now() <= lookaheadMs);
+  // Always reports on the nearest upcoming candidate weekend - preferring one that's fully
+  // dry (ok) if any exists, otherwise the earliest one - so a daily e-mail goes out every
+  // morning regardless of whether painting is actually advisable right now.
+  const best = results.find((r) => r.ok) ?? results[0];
 
   if (!best) {
-    console.log("Žiadne vhodné okno na najbližšie víkendy.");
+    console.log("Žiadny kandidátsky termín v dosahu predpovede.");
     return;
   }
 
-  if (forceAlert) {
-    console.log(`FORCE_ALERT=true – posielam testovací e-mail pre ${best.candidateStart} (ok=${best.ok}), bez zápisu do state.json.`);
-  } else {
-    const state = readState();
-    if (state.lastAlertedStart === best.candidateStart) {
-      console.log(`Už bol odoslaný alert pre ${best.candidateStart}, preskakujem.`);
-      return;
-    }
-    console.log(`Nájdené vhodné okno: ${best.candidateStart}`);
-  }
+  console.log(
+    best.ok
+      ? `Vhodné okno: ${best.candidateStart}`
+      : `Zatiaľ nevhodné, najbližší sledovaný termín: ${best.candidateStart}`
+  );
 
   if (sendEmail) {
     const apiKey = process.env.RESEND_API_KEY;
@@ -89,13 +75,9 @@ async function main() {
       throw new Error("Chýbajú env premenné RESEND_API_KEY / ALERT_EMAIL_TO / ALERT_EMAIL_FROM");
     }
     await sendAlert(best, { apiKey, to, from });
-    console.log("E-mail alert odoslaný.");
+    console.log("E-mail odoslaný.");
   } else {
     console.log("SEND_EMAIL=false – e-mail sa neposiela (dry-run).");
-  }
-
-  if (!forceAlert) {
-    writeState({ lastAlertedStart: best.candidateStart });
   }
 }
 

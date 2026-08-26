@@ -44,5 +44,3 @@ export const CANDIDATE_STARTS = [
   { weekday: 0, hour: 8 }, // Sunday 08:00
 ];
 
-/** Only send an alert if the suitable start is within this many days from now. */
-export const ALERT_LOOKAHEAD_DAYS = 5;
