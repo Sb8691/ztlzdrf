@@ -1,33 +1,35 @@
 # ztlzdrf
 
-Predpoved pocasia na vhodny termin natierania terasy.
+Predpoveď počasia pre **Zedlitzdorf 74 (Gnesau, Feldkirchen, Kärnten, Rakúsko)**.
 
-Terasu v **Zedlitzdorf (Gnesau, Feldkirchen, Kärnten, Rakúsko)** je vhodné natrieť iba ak nastane
-súvislé suché okno: **24 h bez dažďa pred štartom**, **6 h maľovania**, **12 h bez dažďa po
-maľovaní (schnutie)**. Projekt každé ráno o 9:00 (Europe/Vienna) porovná predpoveď z piatich
-meteorologických modelov (ICON, GFS, ECMWF, GEM, Météo-France cez [Open-Meteo](https://open-meteo.com/),
-bez API kľúča) a pošle e-mail cez [Resend](https://resend.com/) – **vždy**, bez ohľadu na to, či je
-najbližší víkend vhodný na maľovanie, aby si mal denný prehľad o stave predpovede.
+Projekt každé ráno o 9:00 (Europe/Vienna) vygeneruje jeden graf počasia – **zrážky** (stĺpce),
+**slnečné žiarenie** (plocha) a **teplotu** (čiara) – v okne od **24 hodín dozadu** po **24 hodín
+dopredu** od aktuálneho času, a pošle ho e-mailom cez [Resend](https://resend.com/). Rovnaký graf
+je vidieť aj na dashboarde. Minulá časť okna pochádza z [GeoSphere Austria](https://www.geosphere.at/)
+INCA analýzy (skutočne namerané/analyzované dáta, nie predpoveď), budúca časť z ich AROME
+predpovede (1 km, hodinová) – oboje cez ich verejné Data Hub API, bez API kľúča.
 
 ## Ako to funguje
 
-- `src/openMeteo.ts` – stiahne hodinovú predpoveď zrážok pre 5 modelov naraz.
-- `src/analyze.ts` – čistá funkcia, ktorá pre kandidátske štarty (piatok/sobota/nedeľa 08:00) overí,
-  či je celé 42-hodinové okno suché vo všetkých modeloch naraz (konzervatívny prienik).
-- `src/dashboard.ts` – vygeneruje `docs/index.html`: jednoduchý prehľad (odznak + jedna veta)
-  pre každý kandidátsky víkend, so skrytou sekciou "Viac info" s grafom zrážok (pás = rozptyl
-  5 modelov, čiara = medián) po 3-hodinových úsekoch. Sekcia "Dážď" ukazuje rovnaký typ grafu
-  za posledné/najbližšie dni (s vyznačeným "teraz") pre rýchly odhad, ako rýchlo uschnú
-  borovicové dosky.
-- `src/email.ts` – zostaví a odošle e-mail cez Resend API s porovnaním modelov; nadpis a farba
-  hlavičky sa líšia podľa toho, či je najbližší termín vhodný, alebo nie.
-- `src/index.ts` – orchestrácia celého behu; spúšťa ho `.github/workflows/watchdog.yml` denne
-  cez GitHub Actions cron (aj ručne cez `workflow_dispatch`). E-mail sa posiela pri každom behu.
+- `src/geosphere.ts` – `fetchWeatherWindow()` stiahne minulú časť okna z INCA
+  (`timeseries/historical/inca-v1-1h-1km`, parametre `RR`/`T2M`/`GL`) a budúcu časť z AROME
+  (`timeseries/forecast/nwp-v2-1h-1km`, parametre `tp`/`2t`/`ssrd`), zlúči ich do jedného hodinového
+  radu a UTC časy prevedie na miestny (Europe/Vienna) čas. Slnečné žiarenie (W/m²) je spoločný
+  parameter oboch datasetov a slúži ako priebežná náhrada za "slnečné svetlo".
+- `src/dashboard.ts` – `buildWeatherChart()` vykreslí jeden SVG graf (zrážky = stĺpce na ľavej osi
+  v mm, teplota = čiara na pravej osi v °C, slnečné žiarenie = jemná vyplnená plocha bez vlastnej
+  číselnej osi, so skutočnou hodnotou vo W/m² dostupnou po prejdení myšou) so zvislou čiarou
+  označujúcou "teraz". Táto funkcia sa používa nezmenená aj v e-maile aj na dashboarde, aby mali
+  presne rovnaký vizuál (v e-maile bez interaktívnej vrstvy – hover tooltip funguje iba na
+  dashboarde).
+- `src/email.ts` – zostaví a odošle e-mail cez Resend API s tým istým grafom vloženým ako inline
+  SVG, plus krátky súhrn (súčet zrážok, rozsah teploty za celé okno).
+- `src/index.ts` – orchestrácia celého behu; spúšťa ho `.github/workflows/watchdog.yml` denne cez
+  GitHub Actions cron (aj ručne cez `workflow_dispatch`). E-mail sa posiela pri každom behu.
 
 ## Dashboard
 
-Každý beh vygeneruje `docs/index.html` – jednoduchý prehľad stavu (vhodné/nevhodné + jedna veta
-vysvetlenia) pre najbližšie kandidátske víkendy, s grafom zrážok schovaným v sekcii "Viac info".
+Každý beh vygeneruje `docs/index.html` s grafom počasia za posledných/najbližších 24 hodín.
 Lokálne si ho vieš pozrieť cez `open docs/index.html` po `npm run dev`.
 
 Na GitHub ho sprístupníš cez **Settings → Pages → Source: Deploy from a branch → Branch: `main`,
@@ -39,7 +41,6 @@ pri každom behu workflow.
 ```bash
 npm install
 cp .env.example .env   # doplň RESEND_API_KEY, ALERT_EMAIL_TO, ALERT_EMAIL_FROM
-npm test                # unit testy analyze.ts
 SEND_EMAIL=false npm run dev   # vypíše výsledok do konzoly bez odoslania e-mailu
 ```
 

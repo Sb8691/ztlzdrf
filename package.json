@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Weather watchdog na urcenie vhodneho vikendu na malovanie terasy v Zedlitzdorf, Rakusko",
+  "description": "Graf predpovede pocasia (-24h/+24h: zrazky, slnecne ziarenie, teplota) pre Zedlitzdorf 74, Rakusko",
   "scripts": {
     "build": "tsc",
     "start": "node --env-file=.env dist/index.js",

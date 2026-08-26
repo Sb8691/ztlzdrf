@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Terasa – watchdog počasia</title>
+<title>Zedlitzdorf 74 – predpoveď počasia</title>
 <style>
   :root {
     color-scheme: light;
@@ -14,11 +14,12 @@
     --muted: #898781;
     --gridline: #e1e0d9;
     --baseline: #c3c2b7;
-    --good: #0ca30c;
     --critical: #d03b3b;
     --border: rgba(11,11,11,0.10);
-    --series-icon_seamless: #2a78d6; --series-gfs_seamless: #eb6834; --series-ecmwf_ifs025: #1baf7a; --series-gem_seamless: #eda100; --series-meteofrance_seamless: #e87ba4;
-    --metric-rain: var(--series-icon_seamless);
+    --series-precip: #2a78d6;
+    --series-temp: #d9622a;
+    --series-radiation: #e0b430;
+    --series-humidity: #1f9e89;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -30,11 +31,12 @@
       --muted: #898781;
       --gridline: #2c2c2a;
       --baseline: #383835;
-      --good: #0ca30c;
       --critical: #e66767;
       --border: rgba(255,255,255,0.10);
-      --series-icon_seamless: #3987e5; --series-gfs_seamless: #d95926; --series-ecmwf_ifs025: #199e70; --series-gem_seamless: #c98500; --series-meteofrance_seamless: #d55181;
-      --metric-rain: var(--series-icon_seamless);
+      --series-precip: #5b9be0;
+      --series-temp: #e58a54;
+      --series-radiation: #e0b430;
+      --series-humidity: #3fc2ab;
     }
   }
   * { box-sizing: border-box; }
@@ -45,9 +47,8 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     padding: 24px 16px 64px;
   }
-  .wrap { max-width: 1400px; margin: 0 auto; }
-  h1 { font-size: 1.3rem; margin: 0 0 8px; }
-  .hero { font-size: 1.15rem; font-weight: 600; margin: 0 0 20px; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
   .muted { color: var(--text-secondary); font-size: 0.85rem; }
   .card {
     background: var(--surface-1);
@@ -57,40 +58,17 @@
     margin: 16px 0;
     position: relative;
   }
-  .simple-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .simple-date { font-size: 1.05rem; font-weight: 600; }
-  .reason { margin: 8px 0 0; color: var(--text-secondary); font-size: 0.95rem; }
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-  .badge-good { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
-  .badge-critical { color: var(--critical); background: color-mix(in srgb, var(--critical) 14%, transparent); }
-  details.more-info { margin-top: 14px; border-top: 1px solid var(--gridline); padding-top: 10px; }
-  details.more-info > summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; }
-  details.more-info h3 { font-size: 0.9rem; margin: 18px 0 4px; }
-  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  
   .chart-svg { width: 100%; height: auto; overflow: visible; }
-  .phase-band-0 { fill: var(--gridline); opacity: 0.35; }
-  .phase-band-1 { fill: var(--gridline); opacity: 0.6; }
-  .phase-band-2 { fill: var(--gridline); opacity: 0.35; }
-  .phase-label { fill: var(--muted); font-size: 10px; }
-  .gridline { stroke: var(--gridline); stroke-width: 1; }
-  .axis-label { fill: var(--muted); font-size: 10px; }
-  .threshold-line { stroke: var(--baseline); stroke-width: 1; stroke-dasharray: 4 3; }
-  .now-marker { stroke: var(--critical); stroke-width: 1.5; stroke-dasharray: 3 3; opacity: 0.85; }
-  .now-marker-label { fill: var(--critical); font-size: 10px; font-weight: 600; }
-  .section-title { font-size: 1.05rem; margin: 0 0 4px; }
-  .envelope-band { opacity: 0.18; }
-  .median-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .crosshair { stroke: var(--baseline); stroke-width: 1; opacity: 0; pointer-events: none; }
   .hover-capture { fill: transparent; cursor: crosshair; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 4px; font-size: 0.85rem; color: var(--text-secondary); }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .legend-swatch-precip { background: var(--series-precip); }
+  .legend-swatch-temp { background: var(--series-temp); }
+  .legend-swatch-radiation { background: var(--series-radiation); }
+  .legend-swatch-humidity { background: var(--series-humidity); }
   .tooltip {
     position: absolute;
     display: none;
@@ -107,1017 +85,65 @@
   .tooltip-time { color: var(--text-secondary); margin-bottom: 4px; }
   .tooltip-row { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
   .tooltip-key { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); }
-  .tooltip-line { width: 10px; height: 2px; display: inline-block; }
   .tooltip-value { font-weight: 600; }
-  .summary-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.85rem; }
-  .summary-table th, .summary-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--gridline); }
-  .summary-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-  details.failures { margin-top: 12px; }
-  details.failures summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; }
+
 </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Terasa – watchdog počasia</h1>
-    <p class="hero">Momentálne nie je nájdené vhodné okno na najbližšie víkendy.</p>
-    <p class="muted">Zedlitzdorf, Gnesau (Feldkirchen, Kärnten, Rakúsko) &middot; vygenerované 26.08.2026 09:50</p>
+    <h1>Zedlitzdorf 74 – predpoveď počasia</h1>
+    <p class="muted">Zedlitzdorf 74, Gnesau (Feldkirchen, Kärnten, Rakúsko) &middot; vygenerované 26.08.2026 22:18</p>
+    <section class="card">
+      
+    <div class="legend">
+      <span class="legend-item"><span class="legend-swatch legend-swatch-precip"></span>Zrážky (mm)</span>
+      <span class="legend-item"><span class="legend-swatch legend-swatch-temp"></span>Teplota (°C)</span>
+      <span class="legend-item"><span class="legend-swatch legend-swatch-radiation"></span>Slnečné žiarenie (W/m²)</span>
+      <span class="legend-item"><span class="legend-swatch legend-swatch-humidity"></span>Vlhkosť (%)</span>
+    </div>
+  
+      
+    <svg viewBox="0 0 900 320" class="chart-svg" role="img" aria-label="Graf predpovede počasia">
+      
+        <line x1="44" y1="286.0" x2="856" y2="286.0" style="stroke:#d8d6cd;stroke-width:1" />
+        <text x="36" y="289.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">0.0</text>
+      
+        <line x1="44" y1="222.0" x2="856" y2="222.0" style="stroke:#d8d6cd;stroke-width:1" />
+        <text x="36" y="225.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">0.3</text>
+      
+        <line x1="44" y1="158.0" x2="856" y2="158.0" style="stroke:#d8d6cd;stroke-width:1" />
+        <text x="36" y="161.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">0.6</text>
+      
+        <line x1="44" y1="94.0" x2="856" y2="94.0" style="stroke:#d8d6cd;stroke-width:1" />
+        <text x="36" y="97.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">0.9</text>
+      
+        <line x1="44" y1="30.0" x2="856" y2="30.0" style="stroke:#d8d6cd;stroke-width:1" />
+        <text x="36" y="33.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">1.3</text>
+      
+      <text x="44.0" y="302" style="fill:#8a8880;font-size:10px" text-anchor="middle">25.08. 23:00</text><text x="222.9" y="302" style="fill:#8a8880;font-size:10px" text-anchor="middle">26.08. 12:00</text><text x="388.1" y="302" style="fill:#8a8880;font-size:10px" text-anchor="middle">27.08. 00:00</text><text x="553.2" y="302" style="fill:#8a8880;font-size:10px" text-anchor="middle">27.08. 12:00</text><text x="718.4" y="302" style="fill:#8a8880;font-size:10px" text-anchor="middle">28.08. 00:00</text>
+      <path d="M 44.0 286.0 L 57.8 286.0 L 71.5 286.0 L 85.3 286.0 L 99.1 286.0 L 112.8 286.0 L 126.6 286.0 L 140.3 286.0 L 154.1 281.4 L 167.9 226.4 L 181.6 176.3 L 195.4 132.6 L 209.2 96.2 L 222.9 76.0 L 236.7 66.0 L 250.4 70.7 L 264.2 89.7 L 278.0 142.4 L 291.7 208.8 L 305.5 231.5 L 319.3 273.1 L 333.0 286.0 L 346.8 286.0 L 360.5 286.0 L 374.3 286.0 L 388.1 286.0 L 401.8 286.0 L 415.6 286.0 L 429.4 286.0 L 443.1 286.0 L 456.9 286.0 L 470.6 286.0 L 484.4 281.6 L 498.2 248.1 L 511.9 194.0 L 525.7 137.8 L 539.5 88.8 L 553.2 53.2 L 567.0 31.9 L 580.7 30.0 L 594.5 46.3 L 608.3 79.1 L 622.0 125.2 L 635.8 179.8 L 649.6 236.5 L 663.3 278.7 L 677.1 286.0 L 690.8 286.0 L 704.6 286.0 L 718.4 286.0 L 732.1 286.0 L 745.9 286.0 L 759.7 286.0 L 773.4 286.0 L 787.2 286.0 L 800.9 286.0 L 814.7 281.9 L 828.5 248.9 L 842.2 195.3 L 856.0 140.0 L 856.0 286 L 44.0 286 Z" style="fill:#e0b430;opacity:0.12" />
+      
+      <path d="M 44.0 286.0 L 57.8 286.0 L 71.5 286.0 L 85.3 286.0 L 99.1 286.0 L 112.8 286.0 L 126.6 286.0 L 140.3 286.0 L 154.1 281.4 L 167.9 226.4 L 181.6 176.3 L 195.4 132.6 L 209.2 96.2 L 222.9 76.0 L 236.7 66.0 L 250.4 70.7 L 264.2 89.7 L 278.0 142.4 L 291.7 208.8 L 305.5 231.5 L 319.3 273.1 L 333.0 286.0 L 346.8 286.0 L 360.5 286.0 L 374.3 286.0 L 388.1 286.0 L 401.8 286.0 L 415.6 286.0 L 429.4 286.0 L 443.1 286.0 L 456.9 286.0 L 470.6 286.0 L 484.4 281.6 L 498.2 248.1 L 511.9 194.0 L 525.7 137.8 L 539.5 88.8 L 553.2 53.2 L 567.0 31.9 L 580.7 30.0 L 594.5 46.3 L 608.3 79.1 L 622.0 125.2 L 635.8 179.8 L 649.6 236.5 L 663.3 278.7 L 677.1 286.0 L 690.8 286.0 L 704.6 286.0 L 718.4 286.0 L 732.1 286.0 L 745.9 286.0 L 759.7 286.0 L 773.4 286.0 L 787.2 286.0 L 800.9 286.0 L 814.7 281.9 L 828.5 248.9 L 842.2 195.3 L 856.0 140.0" style="fill:none;stroke:#e0b430;stroke-width:1.5;stroke-linecap:round" />
+      <path d="M 44.0 56.2 L 57.8 53.8 L 71.5 58.3 L 85.3 56.3 L 99.1 52.2 L 112.8 59.0 L 126.6 62.3 L 140.3 52.2 L 154.1 53.1 L 167.9 88.1 L 181.6 108.5 L 195.4 126.1 L 209.2 125.7 L 222.9 129.5 L 236.7 136.5 L 250.4 130.5 L 264.2 139.2 L 278.0 140.7 L 291.7 132.7 L 305.5 118.7 L 319.3 89.9 L 333.0 63.0 L 346.8 44.8 L 360.5 63.7 L 374.3 59.6 L 388.1 60.2 L 401.8 58.6 L 415.6 58.5 L 429.4 56.0 L 443.1 51.7 L 456.9 49.7 L 470.6 52.0 L 484.4 61.7 L 498.2 84.3 L 511.9 134.0 L 525.7 159.3 L 539.5 166.7 L 553.2 175.6 L 567.0 185.8 L 580.7 188.7 L 594.5 186.7 L 608.3 185.2 L 622.0 181.5 L 635.8 172.5 L 649.6 146.4 L 663.3 139.6 L 677.1 128.9 L 690.8 115.2 L 704.6 105.9 L 718.4 101.8 L 732.1 107.9 L 745.9 114.2 L 759.7 127.6 L 773.4 144.5 L 787.2 154.6 L 800.9 164.6 L 814.7 169.1 L 828.5 175.0 L 842.2 183.7 L 856.0 189.1" style="fill:none;stroke:#1f9e89;stroke-width:1.5;stroke-dasharray:4 3;stroke-linecap:round" />
+      <path d="M 44.0 221.4 L 57.8 225.4 L 71.5 230.1 L 85.3 237.3 L 99.1 245.6 L 112.8 248.1 L 126.6 251.6 L 140.3 257.4 L 154.1 256.3 L 167.9 214.3 L 181.6 180.0 L 195.4 141.7 L 209.2 121.1 L 222.9 105.1 L 236.7 87.0 L 250.4 88.7 L 264.2 79.9 L 278.0 83.1 L 291.7 94.7 L 305.5 111.7 L 319.3 139.0 L 333.0 167.1 L 346.8 188.9 L 360.5 215.7 L 374.3 227.1 L 388.1 231.4 L 401.8 238.6 L 415.6 242.9 L 429.4 247.1 L 443.1 250.0 L 456.9 252.9 L 470.6 257.1 L 484.4 252.9 L 498.2 212.9 L 511.9 157.1 L 525.7 130.0 L 539.5 111.4 L 553.2 92.9 L 567.0 77.1 L 580.7 68.6 L 594.5 62.9 L 608.3 58.6 L 622.0 61.4 L 635.8 72.9 L 649.6 102.9 L 663.3 138.6 L 677.1 165.7 L 690.8 181.4 L 704.6 188.6 L 718.4 195.7 L 732.1 192.9 L 745.9 195.7 L 759.7 198.6 L 773.4 197.1 L 787.2 191.4 L 800.9 178.6 L 814.7 160.0 L 828.5 130.0 L 842.2 98.6 L 856.0 78.6" style="fill:none;stroke:#d9622a;stroke-width:2;stroke-linecap:round;stroke-linejoin:round" />
+      <text x="864" y="289.0" style="fill:#d9622a;font-size:10px" text-anchor="start">11°</text><text x="864" y="225.0" style="fill:#d9622a;font-size:10px" text-anchor="start">15°</text><text x="864" y="161.0" style="fill:#d9622a;font-size:10px" text-anchor="start">20°</text><text x="864" y="97.0" style="fill:#d9622a;font-size:10px" text-anchor="start">24°</text><text x="864" y="33.0" style="fill:#d9622a;font-size:10px" text-anchor="start">29°</text>
+      
+    <line x1="364.7" y1="30" x2="364.7" y2="286" style="stroke:#d03b3b;stroke-width:1.5;stroke-dasharray:3 3;opacity:0.85" />
+    <text x="364.7" y="42" style="fill:#d03b3b;font-size:10px;font-weight:600" text-anchor="middle">teraz</text>
+  
+      
+      <line class="crosshair" x1="0" y1="30" x2="0" y2="286" data-chart="weather" />
+      <rect class="hover-capture" x="44" y="30" width="812" height="256" data-chart="weather" />
     
-    <section class="card">
-      <h2 class="section-title">Dážď (posledné 2 / najbližšie 2 dni)</h2>
-      <p class="muted">
-        Na vlastné posúdenie vlhkosti podkladu (borovicové dosky): koľko pršalo predtým a koľko
-        suchých hodín je pred nami. Zvislá čiarkovaná čiara označuje "teraz".
-      </p>
-      <p class="muted">Pás = rozptyl 5 modelov (min&ndash;max), čiara = medián.</p>
-      
-    <svg viewBox="0 0 900 260" class="chart-svg" role="img" aria-label="Graf rolling-rain">
-      
-      
-        <line x1="40" y1="226.0" x2="884" y2="226.0" class="gridline" />
-        <text x="32" y="229.0" class="axis-label" text-anchor="end">0.0</text>
-      
-        <line x1="40" y1="177.0" x2="884" y2="177.0" class="gridline" />
-        <text x="32" y="180.0" class="axis-label" text-anchor="end">1.8</text>
-      
-        <line x1="40" y1="128.0" x2="884" y2="128.0" class="gridline" />
-        <text x="32" y="131.0" class="axis-label" text-anchor="end">3.5</text>
-      
-        <line x1="40" y1="79.0" x2="884" y2="79.0" class="gridline" />
-        <text x="32" y="82.0" class="axis-label" text-anchor="end">5.3</text>
-      
-        <line x1="40" y1="30.0" x2="884" y2="30.0" class="gridline" />
-        <text x="32" y="33.0" class="axis-label" text-anchor="end">7.0</text>
-      
-      
-      <text x="40.0" y="242" class="axis-label" text-anchor="middle">24.08. 08:00</text><text x="198.3" y="242" class="axis-label" text-anchor="middle">25.08. 02:00</text><text x="409.3" y="242" class="axis-label" text-anchor="middle">26.08. 02:00</text><text x="620.3" y="242" class="axis-label" text-anchor="middle">27.08. 02:00</text><text x="831.3" y="242" class="axis-label" text-anchor="middle">28.08. 02:00</text>
-      <path d="M 40.0 226.0 L 66.4 226.0 L 92.8 220.4 L 119.1 217.6 L 145.5 226.0 L 171.9 226.0 L 198.3 226.0 L 224.6 203.6 L 251.0 69.2 L 277.4 186.8 L 303.8 186.8 L 330.1 203.6 L 356.5 206.4 L 382.9 223.2 L 409.3 226.0 L 435.6 226.0 L 462.0 226.0 L 488.4 220.4 L 514.8 200.8 L 541.1 203.6 L 567.5 220.4 L 593.9 226.0 L 620.3 226.0 L 646.6 226.0 L 673.0 226.0 L 699.4 226.0 L 725.8 226.0 L 752.1 226.0 L 778.5 226.0 L 804.9 226.0 L 831.3 226.0 L 857.6 226.0 L 857.6 226.0 L 831.3 226.0 L 804.9 226.0 L 778.5 226.0 L 752.1 226.0 L 725.8 226.0 L 699.4 226.0 L 673.0 226.0 L 646.6 226.0 L 620.3 226.0 L 593.9 226.0 L 567.5 226.0 L 541.1 226.0 L 514.8 226.0 L 488.4 226.0 L 462.0 226.0 L 435.6 226.0 L 409.3 226.0 L 382.9 226.0 L 356.5 226.0 L 330.1 226.0 L 303.8 226.0 L 277.4 226.0 L 251.0 189.6 L 224.6 226.0 L 198.3 226.0 L 171.9 226.0 L 145.5 226.0 L 119.1 226.0 L 92.8 226.0 L 66.4 226.0 L 40.0 226.0 Z" class="envelope-band" style="fill: var(--metric-rain)" />
-      <path d="M 40.0 226.0 L 66.4 226.0 L 92.8 226.0 L 119.1 226.0 L 145.5 226.0 L 171.9 226.0 L 198.3 226.0 L 224.6 226.0 L 251.0 147.6 L 277.4 214.8 L 303.8 217.6 L 330.1 220.4 L 356.5 223.2 L 382.9 226.0 L 409.3 226.0 L 435.6 226.0 L 462.0 226.0 L 488.4 226.0 L 514.8 226.0 L 541.1 226.0 L 567.5 226.0 L 593.9 226.0 L 620.3 226.0 L 646.6 226.0 L 673.0 226.0 L 699.4 226.0 L 725.8 226.0 L 752.1 226.0 L 778.5 226.0 L 804.9 226.0 L 831.3 226.0 L 857.6 226.0" class="median-line" style="stroke: var(--metric-rain)" />
-      
-        <line x1="462.0" y1="30" x2="462.0" y2="226" class="now-marker" />
-        <text x="462.0" y="42" class="now-marker-label" text-anchor="middle">teraz</text>
-      
-      <line class="crosshair" x1="0" y1="30" x2="0" y2="226" data-chart="rolling-rain" />
-      <rect class="hover-capture" x="40" y="30" width="844" height="196" data-chart="rolling-rain" />
     </svg>
-    <div class="tooltip" data-chart-tooltip="rolling-rain"></div>
+    <div class="tooltip" data-chart-tooltip="weather" style="display:none"></div>
   
-      <p class="muted">
-        Najviac zrážok spomedzi modelov za posledné 2 dni: 6.3 mm.
-        Suché hodiny (pod prahom 0.1 mm/h) v najbližších 2 dňoch
-        podľa najprísnejšieho modelu: 39 h.
-      </p>
+      <p class="muted">Súčet zrážok za celé okno: 0.0 mm &middot; teplota 12.6–26.5 °C &middot; priemerná vlhkosť 68 %.</p>
     </section>
-  
-    
-    <section class="card">
-      <div class="simple-row">
-        <span class="simple-date">Na piatok 28.8. o 08:00</span>
-        <span class="badge badge-critical">NEVHODNÉ</span>
-      </div>
-      <p class="reason">3 z 5 modelov hlási dážď, najmä po maľovaní, počas schnutia.</p>
-      <details class="more-info">
-        <summary>Viac info</summary>
-        <p class="muted">Okno (pred-maľovaním + maľovanie + schnutie): 2026-08-27T08:00:00.000Z &ndash; 2026-08-29T02:00:00.000Z</p>
-        <p class="muted">Pás = rozptyl 5 modelov (min&ndash;max), čiara = medián.</p>
-        <h3>Zrážky</h3>
-        
-    <svg viewBox="0 0 900 260" class="chart-svg" role="img" aria-label="Graf rain-0">
-      
-        <rect x="40.0" y="30" width="482.3" height="196" class="phase-band phase-band-0" />
-        <text x="281.1" y="20" class="phase-label" text-anchor="middle">pred maľovaním</text>
-      
-        <rect x="522.3" y="30" width="120.6" height="196" class="phase-band phase-band-1" />
-        <text x="582.6" y="20" class="phase-label" text-anchor="middle">maľovanie</text>
-      
-        <rect x="642.9" y="30" width="241.1" height="196" class="phase-band phase-band-2" />
-        <text x="763.4" y="20" class="phase-label" text-anchor="middle">schnutie</text>
-      
-      
-        <line x1="40" y1="226.0" x2="884" y2="226.0" class="gridline" />
-        <text x="32" y="229.0" class="axis-label" text-anchor="end">0.0</text>
-      
-        <line x1="40" y1="177.0" x2="884" y2="177.0" class="gridline" />
-        <text x="32" y="180.0" class="axis-label" text-anchor="end">0.6</text>
-      
-        <line x1="40" y1="128.0" x2="884" y2="128.0" class="gridline" />
-        <text x="32" y="131.0" class="axis-label" text-anchor="end">1.2</text>
-      
-        <line x1="40" y1="79.0" x2="884" y2="79.0" class="gridline" />
-        <text x="32" y="82.0" class="axis-label" text-anchor="end">1.8</text>
-      
-        <line x1="40" y1="30.0" x2="884" y2="30.0" class="gridline" />
-        <text x="32" y="33.0" class="axis-label" text-anchor="end">2.4</text>
-      
-      
-      <text x="40.0" y="242" class="axis-label" text-anchor="middle">27.08. 08:00</text><text x="401.7" y="242" class="axis-label" text-anchor="middle">28.08. 02:00</text><text x="522.3" y="242" class="axis-label" text-anchor="middle">28.08. 08:00</text>
-      <path d="M 40.0 226.0 L 100.3 226.0 L 160.6 226.0 L 220.9 226.0 L 281.1 226.0 L 341.4 226.0 L 401.7 226.0 L 462.0 226.0 L 522.3 226.0 L 582.6 226.0 L 642.9 226.0 L 703.1 226.0 L 763.4 209.5 L 823.7 69.2 L 823.7 226.0 L 763.4 226.0 L 703.1 226.0 L 642.9 226.0 L 582.6 226.0 L 522.3 226.0 L 462.0 226.0 L 401.7 226.0 L 341.4 226.0 L 281.1 226.0 L 220.9 226.0 L 160.6 226.0 L 100.3 226.0 L 40.0 226.0 Z" class="envelope-band" style="fill: var(--metric-rain)" />
-      <path d="M 40.0 226.0 L 100.3 226.0 L 160.6 226.0 L 220.9 226.0 L 281.1 226.0 L 341.4 226.0 L 401.7 226.0 L 462.0 226.0 L 522.3 226.0 L 582.6 226.0 L 642.9 226.0 L 703.1 226.0 L 763.4 226.0 L 823.7 184.7" class="median-line" style="stroke: var(--metric-rain)" />
-      
-      <line class="crosshair" x1="0" y1="30" x2="0" y2="226" data-chart="rain-0" />
-      <rect class="hover-capture" x="40" y="30" width="844" height="196" data-chart="rain-0" />
-    </svg>
-    <div class="tooltip" data-chart-tooltip="rain-0"></div>
-  
-        <table class="summary-table">
-          <thead><tr><th>Model</th><th>Max mm/h</th><th>Súčet mm</th><th>Pokrytie</th><th>Stav</th></tr></thead>
-          <tbody>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-icon_seamless)"></span>ICON (DWD)</td>
-          <td class="num">0.00</td>
-          <td class="num">0.00</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-good">OK</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-gfs_seamless)"></span>GFS (NOAA)</td>
-          <td class="num">0.30</td>
-          <td class="num">0.50</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-ecmwf_ifs025)"></span>ECMWF</td>
-          <td class="num">0.30</td>
-          <td class="num">0.90</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-gem_seamless)"></span>GEM (Kanada)</td>
-          <td class="num">1.80</td>
-          <td class="num">1.90</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-meteofrance_seamless)"></span>Météo-France</td>
-          <td class="num">0.00</td>
-          <td class="num">0.00</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-good">OK</span></td>
-        </tr></tbody>
-        </table>
-        <details class="failures">
-                 <summary>Dôvody zlyhania (10)</summary>
-                 <table class="summary-table">
-                   <thead><tr><th>Čas</th><th>Model</th><th>Fáza</th><th>mm/h</th></tr></thead>
-                   <tbody>
-        <tr>
-          <td>28.08. 21:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>28.08. 22:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>28.08. 23:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>28.08. 23:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>28.08. 23:00</td>
-          <td>GEM (Kanada)</td>
-          <td>schnutie</td>
-          <td class="num">1.80</td>
-        </tr>
-        <tr>
-          <td>29.08. 00:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 00:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 00:00</td>
-          <td>GEM (Kanada)</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 01:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 01:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr></tbody>
-                 </table>
-               </details>
-      </details>
-    </section>
-  
-    <section class="card">
-      <div class="simple-row">
-        <span class="simple-date">Na sobotu 29.8. o 08:00</span>
-        <span class="badge badge-critical">NEVHODNÉ</span>
-      </div>
-      <p class="reason">5 z 5 modelov hlási dážď, najmä pred maľovaním.</p>
-      <details class="more-info">
-        <summary>Viac info</summary>
-        <p class="muted">Okno (pred-maľovaním + maľovanie + schnutie): 2026-08-28T08:00:00.000Z &ndash; 2026-08-30T02:00:00.000Z</p>
-        <p class="muted">Pás = rozptyl 5 modelov (min&ndash;max), čiara = medián.</p>
-        <h3>Zrážky</h3>
-        
-    <svg viewBox="0 0 900 260" class="chart-svg" role="img" aria-label="Graf rain-1">
-      
-        <rect x="40.0" y="30" width="482.3" height="196" class="phase-band phase-band-0" />
-        <text x="281.1" y="20" class="phase-label" text-anchor="middle">pred maľovaním</text>
-      
-        <rect x="522.3" y="30" width="120.6" height="196" class="phase-band phase-band-1" />
-        <text x="582.6" y="20" class="phase-label" text-anchor="middle">maľovanie</text>
-      
-        <rect x="642.9" y="30" width="241.1" height="196" class="phase-band phase-band-2" />
-        <text x="763.4" y="20" class="phase-label" text-anchor="middle">schnutie</text>
-      
-      
-        <line x1="40" y1="226.0" x2="884" y2="226.0" class="gridline" />
-        <text x="32" y="229.0" class="axis-label" text-anchor="end">0.0</text>
-      
-        <line x1="40" y1="177.0" x2="884" y2="177.0" class="gridline" />
-        <text x="32" y="180.0" class="axis-label" text-anchor="end">1.2</text>
-      
-        <line x1="40" y1="128.0" x2="884" y2="128.0" class="gridline" />
-        <text x="32" y="131.0" class="axis-label" text-anchor="end">2.4</text>
-      
-        <line x1="40" y1="79.0" x2="884" y2="79.0" class="gridline" />
-        <text x="32" y="82.0" class="axis-label" text-anchor="end">3.7</text>
-      
-        <line x1="40" y1="30.0" x2="884" y2="30.0" class="gridline" />
-        <text x="32" y="33.0" class="axis-label" text-anchor="end">4.9</text>
-      
-      
-      <text x="40.0" y="242" class="axis-label" text-anchor="middle">28.08. 08:00</text><text x="401.7" y="242" class="axis-label" text-anchor="middle">29.08. 02:00</text><text x="522.3" y="242" class="axis-label" text-anchor="middle">29.08. 08:00</text>
-      <path d="M 40.0 226.0 L 100.3 226.0 L 160.6 226.0 L 220.9 226.0 L 281.1 218.0 L 341.4 149.6 L 401.7 185.8 L 462.0 177.8 L 522.3 137.5 L 582.6 69.2 L 642.9 85.3 L 703.1 181.8 L 763.4 189.8 L 823.7 213.9 L 823.7 226.0 L 763.4 226.0 L 703.1 226.0 L 642.9 226.0 L 582.6 226.0 L 522.3 222.0 L 462.0 222.0 L 401.7 226.0 L 341.4 226.0 L 281.1 226.0 L 220.9 226.0 L 160.6 226.0 L 100.3 226.0 L 40.0 226.0 Z" class="envelope-band" style="fill: var(--metric-rain)" />
-      <path d="M 40.0 226.0 L 100.3 226.0 L 160.6 226.0 L 220.9 226.0 L 281.1 226.0 L 341.4 205.9 L 401.7 213.9 L 462.0 218.0 L 522.3 213.9 L 582.6 226.0 L 642.9 226.0 L 703.1 226.0 L 763.4 226.0 L 823.7 226.0" class="median-line" style="stroke: var(--metric-rain)" />
-      
-      <line class="crosshair" x1="0" y1="30" x2="0" y2="226" data-chart="rain-1" />
-      <rect class="hover-capture" x="40" y="30" width="844" height="196" data-chart="rain-1" />
-    </svg>
-    <div class="tooltip" data-chart-tooltip="rain-1"></div>
-  
-        <table class="summary-table">
-          <thead><tr><th>Model</th><th>Max mm/h</th><th>Súčet mm</th><th>Pokrytie</th><th>Stav</th></tr></thead>
-          <tbody>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-icon_seamless)"></span>ICON (DWD)</td>
-          <td class="num">0.10</td>
-          <td class="num">0.20</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-gfs_seamless)"></span>GFS (NOAA)</td>
-          <td class="num">1.50</td>
-          <td class="num">12.50</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-ecmwf_ifs025)"></span>ECMWF</td>
-          <td class="num">0.50</td>
-          <td class="num">5.10</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-gem_seamless)"></span>GEM (Kanada)</td>
-          <td class="num">1.80</td>
-          <td class="num">3.70</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-meteofrance_seamless)"></span>Météo-France</td>
-          <td class="num">0.90</td>
-          <td class="num">1.50</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr></tbody>
-        </table>
-        <details class="failures">
-                 <summary>Dôvody zlyhania (54)</summary>
-                 <table class="summary-table">
-                   <thead><tr><th>Čas</th><th>Model</th><th>Fáza</th><th>mm/h</th></tr></thead>
-                   <tbody>
-        <tr>
-          <td>28.08. 21:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>28.08. 22:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>28.08. 23:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>28.08. 23:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>28.08. 23:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">1.80</td>
-        </tr>
-        <tr>
-          <td>29.08. 00:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 00:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 00:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 01:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 01:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 02:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 02:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 03:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 04:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 04:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.80</td>
-        </tr>
-        <tr>
-          <td>29.08. 05:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 05:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 06:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 06:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 06:00</td>
-          <td>Météo-France</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 07:00</td>
-          <td>ICON (DWD)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 07:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 07:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 07:00</td>
-          <td>Météo-France</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.90</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>ICON (DWD)</td>
-          <td>maľovanie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>GFS (NOAA)</td>
-          <td>maľovanie</td>
-          <td class="num">0.70</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>ECMWF</td>
-          <td>maľovanie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>GEM (Kanada)</td>
-          <td>maľovanie</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>Météo-France</td>
-          <td>maľovanie</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 09:00</td>
-          <td>GFS (NOAA)</td>
-          <td>maľovanie</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 09:00</td>
-          <td>GEM (Kanada)</td>
-          <td>maľovanie</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 10:00</td>
-          <td>GFS (NOAA)</td>
-          <td>maľovanie</td>
-          <td class="num">1.00</td>
-        </tr>
-        <tr>
-          <td>29.08. 10:00</td>
-          <td>GEM (Kanada)</td>
-          <td>maľovanie</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 11:00</td>
-          <td>GFS (NOAA)</td>
-          <td>maľovanie</td>
-          <td class="num">1.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 12:00</td>
-          <td>GFS (NOAA)</td>
-          <td>maľovanie</td>
-          <td class="num">1.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 12:00</td>
-          <td>ECMWF</td>
-          <td>maľovanie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 13:00</td>
-          <td>GFS (NOAA)</td>
-          <td>maľovanie</td>
-          <td class="num">1.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 13:00</td>
-          <td>ECMWF</td>
-          <td>maľovanie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 14:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">1.40</td>
-        </tr>
-        <tr>
-          <td>29.08. 14:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 15:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">1.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 15:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 16:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.90</td>
-        </tr>
-        <tr>
-          <td>29.08. 16:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 17:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 17:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 18:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 18:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 19:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 19:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 20:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 21:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 22:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 23:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.30</td>
-        </tr></tbody>
-                 </table>
-               </details>
-      </details>
-    </section>
-  
-    <section class="card">
-      <div class="simple-row">
-        <span class="simple-date">Na nedeľu 30.8. o 08:00</span>
-        <span class="badge badge-critical">NEVHODNÉ</span>
-      </div>
-      <p class="reason">5 z 5 modelov hlási dážď, najmä pred maľovaním. Predpoveď zatiaľ nepokrýva celé okno pre: Météo-France.</p>
-      <details class="more-info">
-        <summary>Viac info</summary>
-        <p class="muted">Okno (pred-maľovaním + maľovanie + schnutie): 2026-08-29T08:00:00.000Z &ndash; 2026-08-31T02:00:00.000Z</p>
-        <p class="muted">Pás = rozptyl 5 modelov (min&ndash;max), čiara = medián.</p>
-        <h3>Zrážky</h3>
-        
-    <svg viewBox="0 0 900 260" class="chart-svg" role="img" aria-label="Graf rain-2">
-      
-        <rect x="40.0" y="30" width="482.3" height="196" class="phase-band phase-band-0" />
-        <text x="281.1" y="20" class="phase-label" text-anchor="middle">pred maľovaním</text>
-      
-        <rect x="522.3" y="30" width="120.6" height="196" class="phase-band phase-band-1" />
-        <text x="582.6" y="20" class="phase-label" text-anchor="middle">maľovanie</text>
-      
-        <rect x="642.9" y="30" width="241.1" height="196" class="phase-band phase-band-2" />
-        <text x="763.4" y="20" class="phase-label" text-anchor="middle">schnutie</text>
-      
-      
-        <line x1="40" y1="226.0" x2="884" y2="226.0" class="gridline" />
-        <text x="32" y="229.0" class="axis-label" text-anchor="end">0.0</text>
-      
-        <line x1="40" y1="177.0" x2="884" y2="177.0" class="gridline" />
-        <text x="32" y="180.0" class="axis-label" text-anchor="end">1.2</text>
-      
-        <line x1="40" y1="128.0" x2="884" y2="128.0" class="gridline" />
-        <text x="32" y="131.0" class="axis-label" text-anchor="end">2.4</text>
-      
-        <line x1="40" y1="79.0" x2="884" y2="79.0" class="gridline" />
-        <text x="32" y="82.0" class="axis-label" text-anchor="end">3.7</text>
-      
-        <line x1="40" y1="30.0" x2="884" y2="30.0" class="gridline" />
-        <text x="32" y="33.0" class="axis-label" text-anchor="end">4.9</text>
-      
-      
-      <text x="40.0" y="242" class="axis-label" text-anchor="middle">29.08. 08:00</text><text x="401.7" y="242" class="axis-label" text-anchor="middle">30.08. 02:00</text><text x="522.3" y="242" class="axis-label" text-anchor="middle">30.08. 08:00</text>
-      <path d="M 40.0 137.5 L 100.3 69.2 L 160.6 85.3 L 220.9 181.8 L 281.1 189.8 L 341.4 213.9 L 401.7 218.0 L 462.0 222.0 L 522.3 209.9 L 582.6 209.9 L 642.9 213.9 L 703.1 218.0 L 763.4 226.0 L 823.7 226.0 L 823.7 226.0 L 763.4 226.0 L 703.1 226.0 L 642.9 226.0 L 582.6 226.0 L 522.3 226.0 L 462.0 226.0 L 401.7 226.0 L 341.4 226.0 L 281.1 226.0 L 220.9 226.0 L 160.6 226.0 L 100.3 226.0 L 40.0 222.0 Z" class="envelope-band" style="fill: var(--metric-rain)" />
-      <path d="M 40.0 213.9 L 100.3 226.0 L 160.6 226.0 L 220.9 226.0 L 281.1 226.0 L 341.4 226.0 L 401.7 226.0 L 462.0 226.0 L 522.3 226.0 L 582.6 226.0 L 642.9 226.0 L 703.1 224.0 L 763.4 226.0 L 823.7 226.0" class="median-line" style="stroke: var(--metric-rain)" />
-      
-      <line class="crosshair" x1="0" y1="30" x2="0" y2="226" data-chart="rain-2" />
-      <rect class="hover-capture" x="40" y="30" width="844" height="196" data-chart="rain-2" />
-    </svg>
-    <div class="tooltip" data-chart-tooltip="rain-2"></div>
-  
-        <table class="summary-table">
-          <thead><tr><th>Model</th><th>Max mm/h</th><th>Súčet mm</th><th>Pokrytie</th><th>Stav</th></tr></thead>
-          <tbody>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-icon_seamless)"></span>ICON (DWD)</td>
-          <td class="num">0.10</td>
-          <td class="num">0.10</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-gfs_seamless)"></span>GFS (NOAA)</td>
-          <td class="num">1.50</td>
-          <td class="num">10.50</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-ecmwf_ifs025)"></span>ECMWF</td>
-          <td class="num">0.50</td>
-          <td class="num">4.90</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-gem_seamless)"></span>GEM (Kanada)</td>
-          <td class="num">0.20</td>
-          <td class="num">0.90</td>
-          <td class="num">42/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr>
-        <tr>
-          <td><span class="legend-swatch" style="background: var(--series-meteofrance_seamless)"></span>Météo-France</td>
-          <td class="num">0.30</td>
-          <td class="num">0.30</td>
-          <td class="num">25/42</td>
-          <td><span class="badge badge-critical">ZLYHAL</span></td>
-        </tr></tbody>
-        </table>
-        <details class="failures">
-                 <summary>Dôvody zlyhania (44)</summary>
-                 <table class="summary-table">
-                   <thead><tr><th>Čas</th><th>Model</th><th>Fáza</th><th>mm/h</th></tr></thead>
-                   <tbody>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>ICON (DWD)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.70</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 08:00</td>
-          <td>Météo-France</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 09:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 09:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 10:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">1.00</td>
-        </tr>
-        <tr>
-          <td>29.08. 10:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 11:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">1.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 12:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">1.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 12:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 13:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">1.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 13:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 14:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">1.40</td>
-        </tr>
-        <tr>
-          <td>29.08. 14:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 15:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">1.20</td>
-        </tr>
-        <tr>
-          <td>29.08. 15:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 16:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.90</td>
-        </tr>
-        <tr>
-          <td>29.08. 16:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 17:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 17:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.50</td>
-        </tr>
-        <tr>
-          <td>29.08. 18:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 18:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 19:00</td>
-          <td>GFS (NOAA)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>29.08. 19:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 20:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 21:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 22:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>29.08. 23:00</td>
-          <td>ECMWF</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.30</td>
-        </tr>
-        <tr>
-          <td>30.08. 03:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 04:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 05:00</td>
-          <td>GEM (Kanada)</td>
-          <td>pred maľovaním</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 09:00</td>
-          <td>ECMWF</td>
-          <td>maľovanie</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>30.08. 10:00</td>
-          <td>ECMWF</td>
-          <td>maľovanie</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>30.08. 11:00</td>
-          <td>ECMWF</td>
-          <td>maľovanie</td>
-          <td class="num">0.20</td>
-        </tr>
-        <tr>
-          <td>30.08. 12:00</td>
-          <td>ECMWF</td>
-          <td>maľovanie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 13:00</td>
-          <td>ECMWF</td>
-          <td>maľovanie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 14:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 15:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 16:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 17:00</td>
-          <td>ECMWF</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 18:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr>
-        <tr>
-          <td>30.08. 19:00</td>
-          <td>GFS (NOAA)</td>
-          <td>schnutie</td>
-          <td class="num">0.10</td>
-        </tr></tbody>
-                 </table>
-               </details>
-      </details>
-    </section>
-  
   </div>
   <script>
     const CHART_DATA = {};
-    CHART_DATA["rolling-rain"] = {"colorVar":"--metric-rain","points":[{"x":40,"label":"24.08. 08:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":66.4,"label":"24.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":92.8,"label":"24.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.2 mm"},{"x":119.1,"label":"24.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.3 mm"},{"x":145.5,"label":"24.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":171.9,"label":"24.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":198.3,"label":"25.08. 02:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":224.6,"label":"25.08. 05:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.8 mm"},{"x":251,"label":"25.08. 08:00","minLabel":"1.3 mm","medianLabel":"2.8 mm","maxLabel":"5.6 mm"},{"x":277.4,"label":"25.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.4 mm","maxLabel":"1.4 mm"},{"x":303.8,"label":"25.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.3 mm","maxLabel":"1.4 mm"},{"x":330.1,"label":"25.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.2 mm","maxLabel":"0.8 mm"},{"x":356.5,"label":"25.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.1 mm","maxLabel":"0.7 mm"},{"x":382.9,"label":"25.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.1 mm"},{"x":409.3,"label":"26.08. 02:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":435.6,"label":"26.08. 05:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":462,"label":"26.08. 08:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":488.4,"label":"26.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.2 mm"},{"x":514.8,"label":"26.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.9 mm"},{"x":541.1,"label":"26.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.8 mm"},{"x":567.5,"label":"26.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.2 mm"},{"x":593.9,"label":"26.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":620.3,"label":"27.08. 02:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":646.6,"label":"27.08. 05:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":673,"label":"27.08. 08:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":699.4,"label":"27.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":725.8,"label":"27.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":752.1,"label":"27.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":778.5,"label":"27.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":804.9,"label":"27.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":831.3,"label":"28.08. 02:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":857.6,"label":"28.08. 05:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"}]};
-    CHART_DATA["rain-0"] = {"colorVar":"--metric-rain","points":[{"x":40,"label":"27.08. 08:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":100.3,"label":"27.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":160.6,"label":"27.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":220.9,"label":"27.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":281.1,"label":"27.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":341.4,"label":"27.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":401.7,"label":"28.08. 02:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":462,"label":"28.08. 05:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":522.3,"label":"28.08. 08:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":582.6,"label":"28.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":642.9,"label":"28.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":703.1,"label":"28.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":763.4,"label":"28.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.2 mm"},{"x":823.7,"label":"28.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.5 mm","maxLabel":"1.9 mm"}]};
-CHART_DATA["rain-1"] = {"colorVar":"--metric-rain","points":[{"x":40,"label":"28.08. 08:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":100.3,"label":"28.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":160.6,"label":"28.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":220.9,"label":"28.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":281.1,"label":"28.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.2 mm"},{"x":341.4,"label":"28.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.5 mm","maxLabel":"1.9 mm"},{"x":401.7,"label":"29.08. 02:00","minLabel":"0.0 mm","medianLabel":"0.3 mm","maxLabel":"1.0 mm"},{"x":462,"label":"29.08. 05:00","minLabel":"0.1 mm","medianLabel":"0.2 mm","maxLabel":"1.2 mm"},{"x":522.3,"label":"29.08. 08:00","minLabel":"0.1 mm","medianLabel":"0.3 mm","maxLabel":"2.2 mm"},{"x":582.6,"label":"29.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"3.9 mm"},{"x":642.9,"label":"29.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"3.5 mm"},{"x":703.1,"label":"29.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"1.1 mm"},{"x":763.4,"label":"29.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.9 mm"},{"x":823.7,"label":"29.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.3 mm"}]};
-CHART_DATA["rain-2"] = {"colorVar":"--metric-rain","points":[{"x":40,"label":"29.08. 08:00","minLabel":"0.1 mm","medianLabel":"0.3 mm","maxLabel":"2.2 mm"},{"x":100.3,"label":"29.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"3.9 mm"},{"x":160.6,"label":"29.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"3.5 mm"},{"x":220.9,"label":"29.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"1.1 mm"},{"x":281.1,"label":"29.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.9 mm"},{"x":341.4,"label":"29.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.3 mm"},{"x":401.7,"label":"30.08. 02:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.2 mm"},{"x":462,"label":"30.08. 05:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.1 mm"},{"x":522.3,"label":"30.08. 08:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.4 mm"},{"x":582.6,"label":"30.08. 11:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.4 mm"},{"x":642.9,"label":"30.08. 14:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.3 mm"},{"x":703.1,"label":"30.08. 17:00","minLabel":"0.0 mm","medianLabel":"0.1 mm","maxLabel":"0.2 mm"},{"x":763.4,"label":"30.08. 20:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"},{"x":823.7,"label":"30.08. 23:00","minLabel":"0.0 mm","medianLabel":"0.0 mm","maxLabel":"0.0 mm"}]};
+    CHART_DATA["weather"] = {"points":[{"x":44,"label":"25.08. 23:00","precipLabel":"0.0 mm","tempLabel":"15.1 °C","radiationLabel":"0 W/m²","humidityLabel":"90 %"},{"x":57.8,"label":"26.08. 00:00","precipLabel":"0.0 mm","tempLabel":"14.8 °C","radiationLabel":"0 W/m²","humidityLabel":"91 %"},{"x":71.5,"label":"26.08. 01:00","precipLabel":"0.0 mm","tempLabel":"14.5 °C","radiationLabel":"0 W/m²","humidityLabel":"89 %"},{"x":85.3,"label":"26.08. 02:00","precipLabel":"0.0 mm","tempLabel":"14.0 °C","radiationLabel":"0 W/m²","humidityLabel":"90 %"},{"x":99.1,"label":"26.08. 03:00","precipLabel":"0.0 mm","tempLabel":"13.4 °C","radiationLabel":"0 W/m²","humidityLabel":"91 %"},{"x":112.8,"label":"26.08. 04:00","precipLabel":"0.0 mm","tempLabel":"13.2 °C","radiationLabel":"0 W/m²","humidityLabel":"89 %"},{"x":126.6,"label":"26.08. 05:00","precipLabel":"0.0 mm","tempLabel":"13.0 °C","radiationLabel":"0 W/m²","humidityLabel":"87 %"},{"x":140.3,"label":"26.08. 06:00","precipLabel":"0.0 mm","tempLabel":"12.6 °C","radiationLabel":"0 W/m²","humidityLabel":"91 %"},{"x":154.1,"label":"26.08. 07:00","precipLabel":"0.0 mm","tempLabel":"12.7 °C","radiationLabel":"17 W/m²","humidityLabel":"91 %"},{"x":167.9,"label":"26.08. 08:00","precipLabel":"0.0 mm","tempLabel":"15.6 °C","radiationLabel":"214 W/m²","humidityLabel":"77 %"},{"x":181.6,"label":"26.08. 09:00","precipLabel":"0.0 mm","tempLabel":"18.0 °C","radiationLabel":"395 W/m²","humidityLabel":"69 %"},{"x":195.4,"label":"26.08. 10:00","precipLabel":"0.0 mm","tempLabel":"20.7 °C","radiationLabel":"552 W/m²","humidityLabel":"62 %"},{"x":209.2,"label":"26.08. 11:00","precipLabel":"0.0 mm","tempLabel":"22.1 °C","radiationLabel":"683 W/m²","humidityLabel":"63 %"},{"x":222.9,"label":"26.08. 12:00","precipLabel":"0.0 mm","tempLabel":"23.2 °C","radiationLabel":"756 W/m²","humidityLabel":"61 %"},{"x":236.7,"label":"26.08. 13:00","precipLabel":"0.0 mm","tempLabel":"24.5 °C","radiationLabel":"792 W/m²","humidityLabel":"58 %"},{"x":250.4,"label":"26.08. 14:00","precipLabel":"0.0 mm","tempLabel":"24.4 °C","radiationLabel":"775 W/m²","humidityLabel":"61 %"},{"x":264.2,"label":"26.08. 15:00","precipLabel":"0.0 mm","tempLabel":"25.0 °C","radiationLabel":"707 W/m²","humidityLabel":"57 %"},{"x":278,"label":"26.08. 16:00","precipLabel":"0.0 mm","tempLabel":"24.8 °C","radiationLabel":"517 W/m²","humidityLabel":"57 %"},{"x":291.7,"label":"26.08. 17:00","precipLabel":"0.0 mm","tempLabel":"24.0 °C","radiationLabel":"278 W/m²","humidityLabel":"60 %"},{"x":305.5,"label":"26.08. 18:00","precipLabel":"0.0 mm","tempLabel":"22.8 °C","radiationLabel":"196 W/m²","humidityLabel":"65 %"},{"x":319.3,"label":"26.08. 19:00","precipLabel":"0.0 mm","tempLabel":"20.9 °C","radiationLabel":"46 W/m²","humidityLabel":"77 %"},{"x":333,"label":"26.08. 20:00","precipLabel":"0.0 mm","tempLabel":"18.9 °C","radiationLabel":"0 W/m²","humidityLabel":"87 %"},{"x":346.8,"label":"26.08. 21:00","precipLabel":"0.0 mm","tempLabel":"17.4 °C","radiationLabel":"0 W/m²","humidityLabel":"94 %"},{"x":360.5,"label":"26.08. 22:00","precipLabel":"0.0 mm","tempLabel":"15.5 °C","radiationLabel":"0 W/m²","humidityLabel":"87 %"},{"x":374.3,"label":"26.08. 23:00","precipLabel":"0.0 mm","tempLabel":"14.7 °C","radiationLabel":"0 W/m²","humidityLabel":"88 %"},{"x":388.1,"label":"27.08. 00:00","precipLabel":"0.0 mm","tempLabel":"14.4 °C","radiationLabel":"0 W/m²","humidityLabel":"88 %"},{"x":401.8,"label":"27.08. 01:00","precipLabel":"0.0 mm","tempLabel":"13.9 °C","radiationLabel":"0 W/m²","humidityLabel":"89 %"},{"x":415.6,"label":"27.08. 02:00","precipLabel":"0.0 mm","tempLabel":"13.6 °C","radiationLabel":"0 W/m²","humidityLabel":"89 %"},{"x":429.4,"label":"27.08. 03:00","precipLabel":"0.0 mm","tempLabel":"13.3 °C","radiationLabel":"0 W/m²","humidityLabel":"90 %"},{"x":443.1,"label":"27.08. 04:00","precipLabel":"0.0 mm","tempLabel":"13.1 °C","radiationLabel":"0 W/m²","humidityLabel":"92 %"},{"x":456.9,"label":"27.08. 05:00","precipLabel":"0.0 mm","tempLabel":"12.9 °C","radiationLabel":"0 W/m²","humidityLabel":"92 %"},{"x":470.6,"label":"27.08. 06:00","precipLabel":"0.0 mm","tempLabel":"12.6 °C","radiationLabel":"0 W/m²","humidityLabel":"91 %"},{"x":484.4,"label":"27.08. 07:00","precipLabel":"0.0 mm","tempLabel":"12.9 °C","radiationLabel":"16 W/m²","humidityLabel":"88 %"},{"x":498.2,"label":"27.08. 08:00","precipLabel":"0.0 mm","tempLabel":"15.7 °C","radiationLabel":"137 W/m²","humidityLabel":"79 %"},{"x":511.9,"label":"27.08. 09:00","precipLabel":"0.0 mm","tempLabel":"19.6 °C","radiationLabel":"331 W/m²","humidityLabel":"59 %"},{"x":525.7,"label":"27.08. 10:00","precipLabel":"0.0 mm","tempLabel":"21.5 °C","radiationLabel":"533 W/m²","humidityLabel":"50 %"},{"x":539.5,"label":"27.08. 11:00","precipLabel":"0.0 mm","tempLabel":"22.8 °C","radiationLabel":"710 W/m²","humidityLabel":"47 %"},{"x":553.2,"label":"27.08. 12:00","precipLabel":"0.0 mm","tempLabel":"24.1 °C","radiationLabel":"838 W/m²","humidityLabel":"43 %"},{"x":567,"label":"27.08. 13:00","precipLabel":"0.0 mm","tempLabel":"25.2 °C","radiationLabel":"915 W/m²","humidityLabel":"39 %"},{"x":580.7,"label":"27.08. 14:00","precipLabel":"0.0 mm","tempLabel":"25.8 °C","radiationLabel":"922 W/m²","humidityLabel":"38 %"},{"x":594.5,"label":"27.08. 15:00","precipLabel":"0.0 mm","tempLabel":"26.2 °C","radiationLabel":"863 W/m²","humidityLabel":"39 %"},{"x":608.3,"label":"27.08. 16:00","precipLabel":"0.0 mm","tempLabel":"26.5 °C","radiationLabel":"745 W/m²","humidityLabel":"39 %"},{"x":622,"label":"27.08. 17:00","precipLabel":"0.0 mm","tempLabel":"26.3 °C","radiationLabel":"579 W/m²","humidityLabel":"41 %"},{"x":635.8,"label":"27.08. 18:00","precipLabel":"0.0 mm","tempLabel":"25.5 °C","radiationLabel":"382 W/m²","humidityLabel":"44 %"},{"x":649.6,"label":"27.08. 19:00","precipLabel":"0.0 mm","tempLabel":"23.4 °C","radiationLabel":"178 W/m²","humidityLabel":"55 %"},{"x":663.3,"label":"27.08. 20:00","precipLabel":"0.0 mm","tempLabel":"20.9 °C","radiationLabel":"26 W/m²","humidityLabel":"57 %"},{"x":677.1,"label":"27.08. 21:00","precipLabel":"0.0 mm","tempLabel":"19.0 °C","radiationLabel":"0 W/m²","humidityLabel":"61 %"},{"x":690.8,"label":"27.08. 22:00","precipLabel":"0.0 mm","tempLabel":"17.9 °C","radiationLabel":"0 W/m²","humidityLabel":"67 %"},{"x":704.6,"label":"27.08. 23:00","precipLabel":"0.0 mm","tempLabel":"17.4 °C","radiationLabel":"0 W/m²","humidityLabel":"70 %"},{"x":718.4,"label":"28.08. 00:00","precipLabel":"0.0 mm","tempLabel":"16.9 °C","radiationLabel":"0 W/m²","humidityLabel":"72 %"},{"x":732.1,"label":"28.08. 01:00","precipLabel":"0.0 mm","tempLabel":"17.1 °C","radiationLabel":"0 W/m²","humidityLabel":"70 %"},{"x":745.9,"label":"28.08. 02:00","precipLabel":"0.0 mm","tempLabel":"16.9 °C","radiationLabel":"0 W/m²","humidityLabel":"67 %"},{"x":759.7,"label":"28.08. 03:00","precipLabel":"0.0 mm","tempLabel":"16.7 °C","radiationLabel":"0 W/m²","humidityLabel":"62 %"},{"x":773.4,"label":"28.08. 04:00","precipLabel":"0.0 mm","tempLabel":"16.8 °C","radiationLabel":"0 W/m²","humidityLabel":"55 %"},{"x":787.2,"label":"28.08. 05:00","precipLabel":"0.0 mm","tempLabel":"17.2 °C","radiationLabel":"0 W/m²","humidityLabel":"51 %"},{"x":800.9,"label":"28.08. 06:00","precipLabel":"0.0 mm","tempLabel":"18.1 °C","radiationLabel":"0 W/m²","humidityLabel":"47 %"},{"x":814.7,"label":"28.08. 07:00","precipLabel":"0.0 mm","tempLabel":"19.4 °C","radiationLabel":"15 W/m²","humidityLabel":"46 %"},{"x":828.5,"label":"28.08. 08:00","precipLabel":"0.0 mm","tempLabel":"21.5 °C","radiationLabel":"133 W/m²","humidityLabel":"43 %"},{"x":842.2,"label":"28.08. 09:00","precipLabel":"0.0 mm","tempLabel":"23.7 °C","radiationLabel":"327 W/m²","humidityLabel":"40 %"},{"x":856,"label":"28.08. 10:00","precipLabel":"0.0 mm","tempLabel":"25.1 °C","radiationLabel":"525 W/m²","humidityLabel":"38 %"}]};
 
     document.querySelectorAll(".hover-capture").forEach((rect) => {
       const chartId = rect.getAttribute("data-chart");
@@ -1125,6 +151,7 @@ CHART_DATA["rain-2"] = {"colorVar":"--metric-rain","points":[{"x":40,"label":"29
       const crosshair = svg.querySelector(`.crosshair[data-chart="${chartId}"]`);
       const tooltip = document.querySelector(`[data-chart-tooltip="${chartId}"]`);
       const chart = CHART_DATA[chartId];
+      if (!chart) return;
       const data = chart.points;
 
       function nearestPoint(mouseX) {
@@ -1153,16 +180,19 @@ CHART_DATA["rain-2"] = {"colorVar":"--metric-rain","points":[{"x":40,"label":"29
         timeEl.className = "tooltip-time";
         timeEl.textContent = point.label;
         tooltip.appendChild(timeEl);
-        const swatchColor = getComputedStyle(document.documentElement).getPropertyValue(chart.colorVar);
-        for (const [rowLabel, valueLabel] of [["Min", point.minLabel], ["Medián", point.medianLabel], ["Max", point.maxLabel]]) {
+        for (const [rowLabel, valueLabel, swatchClass] of [
+          ["Zrážky", point.precipLabel, "legend-swatch-precip"],
+          ["Teplota", point.tempLabel, "legend-swatch-temp"],
+          ["Slnko", point.radiationLabel, "legend-swatch-radiation"],
+          ["Vlhkosť", point.humidityLabel, "legend-swatch-humidity"],
+        ]) {
           const row = document.createElement("div");
           row.className = "tooltip-row";
           const key = document.createElement("span");
           key.className = "tooltip-key";
-          const line = document.createElement("span");
-          line.className = "tooltip-line";
-          line.style.background = swatchColor;
-          key.appendChild(line);
+          const swatch = document.createElement("span");
+          swatch.className = "legend-swatch " + swatchClass;
+          key.appendChild(swatch);
           key.appendChild(document.createTextNode(rowLabel));
           const value = document.createElement("span");
           value.className = "tooltip-value";
@@ -1172,10 +202,11 @@ CHART_DATA["rain-2"] = {"colorVar":"--metric-rain","points":[{"x":40,"label":"29
           tooltip.appendChild(row);
         }
 
-        const cardBox = rect.closest(".card").getBoundingClientRect();
+        const container = rect.closest(".card") || document.body;
+        const containerBox = container.getBoundingClientRect();
         tooltip.style.display = "block";
-        tooltip.style.left = (evt.clientX - cardBox.left + 12) + "px";
-        tooltip.style.top = (evt.clientY - cardBox.top + 12) + "px";
+        tooltip.style.left = (evt.clientX - containerBox.left + 12) + "px";
+        tooltip.style.top = (evt.clientY - containerBox.top + 12) + "px";
       });
 
       rect.addEventListener("pointerleave", () => {
@@ -1183,6 +214,7 @@ CHART_DATA["rain-2"] = {"colorVar":"--metric-rain","points":[{"x":40,"label":"29
         tooltip.style.display = "none";
       });
     });
+
   </script>
 </body>
 </html>
