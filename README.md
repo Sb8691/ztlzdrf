@@ -1,35 +1,48 @@
 # ztlzdrf
 
-Predpoveď počasia pre **Zedlitzdorf 74 (Gnesau, Feldkirchen, Kärnten, Rakúsko)**.
+Rozhodovacia pomôcka pre maľovanie/moridlovanie drevenej terasy na **Zedlitzdorf 74 (Gnesau,
+Feldkirchen, Kärnten, Rakúsko)**: nie je to všeobecný predpovedný dashboard, ale odpoveď na otázku
+*"dá sa dnes maľovať terasa a kedy presne"*.
 
-Projekt každé ráno o 9:00 (Europe/Vienna) vygeneruje jeden graf počasia – **zrážky** (stĺpce),
-**slnečné žiarenie** (plocha) a **teplotu** (čiara) – v okne od **24 hodín dozadu** po **24 hodín
-dopredu** od aktuálneho času, a pošle ho e-mailom cez [Resend](https://resend.com/). Rovnaký graf
-je vidieť aj na dashboarde. Minulá časť okna pochádza z [GeoSphere Austria](https://www.geosphere.at/)
-INCA analýzy (skutočne namerané/analyzované dáta, nie predpoveď), budúca časť z ich AROME
-predpovede (1 km, hodinová) – oboje cez ich verejné Data Hub API, bez API kľúča.
+Projekt každé ráno o 9:00 (Europe/Vienna) stiahne počasie za okno **−24 h / +60 h** okolo
+aktuálneho času z [GeoSphere Austria](https://www.geosphere.at/) (INCA analýza pre minulosť, AROME
++ ensemble predpoveď pre budúcnosť – pozri `src/geosphere.ts` pre presné endpointy/parametre),
+vyhodnotí vhodnosť na maľovanie (`src/painting.ts`) a pošle rozhodnutie e-mailom cez
+[Resend](https://resend.com/) aj na dashboard. Rozhodnutie je vždy na prvom mieste – graf počasia
+je až pod ním, pre tých, čo chcú vidieť prečo.
 
 ## Ako to funguje
 
-- `src/geosphere.ts` – `fetchWeatherWindow()` stiahne minulú časť okna z INCA
-  (`timeseries/historical/inca-v1-1h-1km`, parametre `RR`/`T2M`/`GL`) a budúcu časť z AROME
-  (`timeseries/forecast/nwp-v2-1h-1km`, parametre `tp`/`2t`/`ssrd`), zlúči ich do jedného hodinového
-  radu a UTC časy prevedie na miestny (Europe/Vienna) čas. Slnečné žiarenie (W/m²) je spoločný
-  parameter oboch datasetov a slúži ako priebežná náhrada za "slnečné svetlo".
-- `src/dashboard.ts` – `buildWeatherChart()` vykreslí jeden SVG graf (zrážky = stĺpce na ľavej osi
-  v mm, teplota = čiara na pravej osi v °C, slnečné žiarenie = jemná vyplnená plocha bez vlastnej
-  číselnej osi, so skutočnou hodnotou vo W/m² dostupnou po prejdení myšou) so zvislou čiarou
-  označujúcou "teraz". Táto funkcia sa používa nezmenená aj v e-maile aj na dashboarde, aby mali
-  presne rovnaký vizuál (v e-maile bez interaktívnej vrstvy – hover tooltip funguje iba na
-  dashboarde).
-- `src/email.ts` – zostaví a odošle e-mail cez Resend API s tým istým grafom vloženým ako inline
-  SVG, plus krátky súhrn (súčet zrážok, rozsah teploty za celé okno).
-- `src/index.ts` – orchestrácia celého behu; spúšťa ho `.github/workflows/watchdog.yml` denne cez
-  GitHub Actions cron (aj ručne cez `workflow_dispatch`). E-mail sa posiela pri každom behu.
+- `src/geosphere.ts` – `fetchWeatherWindow()` stiahne minulú časť z INCA (zrážky, teplota,
+  vlhkosť, žiarenie, rosný bod, vietor), budúcu z AROME (to isté okrem rosného bodu, ten sa
+  dopočítava) a obohatí budúcu časť o percentily zrážok z ensemble predpovede
+  (`ensemble-v2-1h-1km`, GeoSphere-in C-LAEF-triedy AlpeAdria produkt). Horizont AROME/ensemble je
+  61 h od každého referenčného času (nový cyklus každé 3 h), takže reálne dostupných je z "teraz"
+  typicky ~52-58 h – o pár hodín menej než požadovaných 60 h tesne pred novým cyklom. Toto sa nič
+  neopravuje: chýbajúce hodiny sa jednoducho nevracajú (nikdy sa nevymýšľajú).
+- `src/astronomy.ts` – čisto matematický výpočet východu/západu slnka (bez externého API),
+  používaný na zatienenie noci v grafoch a na vylúčenie maľovania v tme.
+- `src/painting.ts` – **jadro rozhodovania**: `evaluatePaintingConditions()` je jediný vstupný bod;
+  všetko ostatné (rosný bod, potenciál vysychania, najlepšie okno, odhad stavu terasy,
+  pravdepodobnosť zrážok z ensemble percentilov) sú čisté funkcie, ktoré skladá dohromady. Pravidlá
+  (teplota/vlhkosť/rosný bod/vietor/potrebný bezdažďový čas) sú konfigurovateľné konštanty v
+  `src/config.ts` (`PAINTING_RULES`) – nie sú to certifikované požiadavky výrobcu náteru, len
+  rozumný predvolený odhad.
+- `src/dashboard.ts` – rozdelené grafy (zrážky / teplota+rosný bod / vlhkosť / žiarenie+vietor,
+  každý s vlastnou osou), časová os vhodnosti na maľovanie, karta s rozhodnutím a panely s
+  detailmi. Rovnaké komponenty (okrem interaktivity) sa používajú aj pri rasterizácii
+  `docs/chart.png` pre e-mail.
+- `src/email.ts` – rozhodnutie na prvom mieste (do ~5 sekúnd čítania), potom kompaktný súhrn a
+  jeden hosťovaný obrázok so všetkými štyrmi grafmi (Gmail a väčšina klientov odmieta inline SVG aj
+  `data:` URI, takže obrázok musí byť skutočne hosťovaný na `docs/chart.png`).
+- `src/index.ts` – orchestrácia behu; spúšťa ho `.github/workflows/watchdog.yml` denne cez GitHub
+  Actions cron (aj ručne cez `workflow_dispatch`). Voliteľne prijme ručne nameranú vlhkosť dreva
+  cez `WOOD_MOISTURE_PCT` (a `WOOD_MOISTURE_MEASURED_AT`) – ak je nastavená, prepíše
+  meteorologický odhad stavu terasy.
 
 ## Dashboard
 
-Každý beh vygeneruje `docs/index.html` s grafom počasia za posledných/najbližších 24 hodín.
+Každý beh vygeneruje `docs/index.html` s rozhodnutím, časovou osou a podrobnými grafmi počasia.
 Lokálne si ho vieš pozrieť cez `open docs/index.html` po `npm run dev`.
 
 Na GitHub ho sprístupníš cez **Settings → Pages → Source: Deploy from a branch → Branch: `main`,
