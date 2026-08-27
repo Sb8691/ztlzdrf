@@ -2,16 +2,26 @@ name: Terrace Painting Watchdog
 
 on:
   schedule:
-    # 09:00 Europe/Vienna, split into two cron entries since a single UTC
-    # time can't track the CEST/CET switch: 07:00 UTC during CEST (Apr-Oct),
-    # 08:00 UTC during CET (Nov-Mar). Off by up to an hour in the DST
-    # switchover week, which is fine for a daily weather digest.
-    - cron: "0 7 * 4-10 *"
-    - cron: "0 8 * 11,12,1,2,3 *"
+    # ~09:00 Europe/Vienna, split into two cron entries since a single UTC time can't track the
+    # CEST/CET switch: 07:xx UTC during CEST (Apr-Oct), 08:xx UTC during CET (Nov-Mar). Off by up
+    # to an hour in the DST switchover week, which is fine for a daily weather digest.
+    #
+    # Deliberately NOT running at the top of the hour (:00): GitHub's own docs warn that scheduled
+    # workflows are queued and can be delayed or silently dropped under load, "especially at the
+    # start of the hour" - the busiest moment across all of GitHub Actions. :13 avoids that peak.
+    - cron: "13 7 * 4-10 *"
+    - cron: "13 8 * 11,12,1,2,3 *"
   workflow_dispatch: {}
 
 permissions:
   contents: write
+
+# Serializes runs so two overlapping triggers (e.g. a manual dispatch landing seconds apart from
+# another) never race on the git push in the steps below - queued runs wait their turn instead of
+# one of them failing outright and (previously) skipping the e-mail entirely as a result.
+concurrency:
+  group: watchdog
+  cancel-in-progress: false
 
 jobs:
   check-weather:
@@ -36,6 +46,12 @@ jobs:
         env:
           SEND_EMAIL: "false"
 
+      # If this push is rejected (another run's commit landed first, despite the concurrency
+      # group above - e.g. a commit pushed outside this workflow), we retry by re-basing our
+      # already-generated docs/ output onto the new tip with `reset --soft` rather than giving up:
+      # a hard failure here must never skip sending the e-mail below, which is the whole point of
+      # this workflow. Regenerating isn't needed - the content we already produced is still this
+      # run's correct output regardless of which commit it lands on top of.
       - name: Publish dashboard so the chart image is live before the e-mail links to it
         id: publish
         run: |
@@ -44,8 +60,21 @@ jobs:
             git config user.email "actions@users.noreply.github.com"
             git add docs/index.html docs/chart.png
             git commit -m "chore: update watchdog dashboard"
-            git push
-            echo "published=true" >> "$GITHUB_OUTPUT"
+            for i in 1 2 3 4 5; do
+              if git push; then
+                echo "published=true" >> "$GITHUB_OUTPUT"
+                break
+              fi
+              if [ "$i" = "5" ]; then
+                echo "::warning::Could not push dashboard update after 5 attempts - continuing without publishing this run's chart."
+                break
+              fi
+              echo "Push rejected (attempt $i/5) - rebasing our commit onto the latest main and retrying..."
+              git fetch origin
+              git reset --soft origin/main
+              git add docs/index.html docs/chart.png
+              git commit -m "chore: update watchdog dashboard"
+            done
           fi
 
       - name: Wait for GitHub Pages to actually serve the new chart
@@ -70,6 +99,9 @@ jobs:
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
           ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
 
+      # Same non-fatal retry as the publish step above - by this point the e-mail has already been
+      # sent, so a push failure here must only ever cost a slightly stale published dashboard until
+      # the next run, never fail the whole job.
       - name: Commit any dashboard drift from the final run
         run: |
           if ! git diff --quiet -- docs/index.html docs/chart.png; then
@@ -77,5 +109,18 @@ jobs:
             git config user.email "actions@users.noreply.github.com"
             git add docs/index.html docs/chart.png
             git commit -m "chore: update watchdog dashboard"
-            git push
+            for i in 1 2 3 4 5; do
+              if git push; then
+                break
+              fi
+              if [ "$i" = "5" ]; then
+                echo "::warning::Could not push final dashboard drift after 5 attempts."
+                break
+              fi
+              echo "Push rejected (attempt $i/5) - rebasing our commit onto the latest main and retrying..."
+              git fetch origin
+              git reset --soft origin/main
+              git add docs/index.html docs/chart.png
+              git commit -m "chore: update watchdog dashboard"
+            done
           fi
