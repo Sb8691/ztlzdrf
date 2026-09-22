@@ -1,11 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { OutlookHistory } from "./types.js";
 
 /** The only persistence in the project: the outlook run history, committed to docs/ by CI. */
 
-export const DOCS_DIR = fileURLToPath(new URL("../docs", import.meta.url));
+/** Where history.json, outlook.html and outlook.png live. OUTLOOK_DOCS_DIR points a local
+ * experiment (a shifted window, a design preview) at a scratch copy so the live history in docs/
+ * is never archived, emptied or overwritten by accident. */
+export const DOCS_DIR = process.env.OUTLOOK_DOCS_DIR ? resolve(process.env.OUTLOOK_DOCS_DIR) : fileURLToPath(new URL("../docs", import.meta.url));
 export const OUTLOOK_DIR = join(DOCS_DIR, "outlook");
 export const HISTORY_PATH = join(OUTLOOK_DIR, "history.json");
 

@@ -347,6 +347,124 @@ export function buildLineChart(spec: LineChartSpec): ChartResult {
   return { svg, script };
 }
 
+// ---------------------------------------------------------------------------
+// Chance sparkline (plain layer of the outlook): one value per calendar day on
+// a 0..10 scale, drawn over three faint status bands so the *position* says
+// "áno / neisté / nie" and the colour is only redundant. No axis, no ticks -
+// the first and last dates and the newest value are labelled directly.
+// ---------------------------------------------------------------------------
+
+export interface SparkPoint {
+  /** Short x label, shown only for the first and the last point ("22.9.", "dnes"). */
+  label: string;
+  /** 0..10 */
+  value: number;
+  status: PaintingStatus;
+  /** Marks a change of the model behind the numbers (thin vertical guide at this point). */
+  changed?: boolean;
+}
+
+export interface SparklineSpec {
+  ariaLabel: string;
+  points: SparkPoint[];
+  /** Band edges in the same 0..10 units: >= good is the top band, >= marginal the middle one. */
+  thresholds: { good: number; marginal: number };
+  /** Direct label of the newest point, e.g. "6 z 10". */
+  valueLabel: string;
+  bandLabels?: { good: string; marginal: string; bad: string };
+  /** Inline (page: CSS classes, theme aware) vs. rasterized (fixed hex colours). */
+  inline: boolean;
+  width?: number;
+  height?: number;
+}
+
+/** Sized for a day card in the four-column grid (~200 CSS px of content width), so the 9-10 px
+ * labels render about 1:1 there and only grow on narrower layouts where the card is wider. */
+export const SPARK_WIDTH = 200;
+export const SPARK_HEIGHT = 64;
+
+export function buildChanceSparkline(spec: SparklineSpec): string {
+  const W = spec.width ?? SPARK_WIDTH;
+  const H = spec.height ?? SPARK_HEIGHT;
+  const m = { left: 4, right: 38, top: 12, bottom: 13 };
+  const plotW = W - m.left - m.right;
+  const plotH = H - m.top - m.bottom;
+  const y = (v: number) => m.top + (1 - Math.max(0, Math.min(10, v)) / 10) * plotH;
+  const n = spec.points.length;
+  const x = (i: number) => (n <= 1 ? m.left + plotW / 2 : m.left + (i * plotW) / (n - 1));
+  const labels = spec.bandLabels ?? { good: "áno", marginal: "neisté", bad: "nie" };
+  const inline = spec.inline;
+
+  // Theme-aware classes on the page (bands brighten in dark mode, see CHART_STYLES), fixed hex in the PNG.
+  const labelStyle = inline ? `class="spark-label"` : `style="fill:${PALETTE.axis}"`;
+  const bands = [
+    { from: 10, to: spec.thresholds.good, color: PALETTE.statusGood, label: labels.good },
+    { from: spec.thresholds.good, to: spec.thresholds.marginal, color: PALETTE.statusMarginal, label: labels.marginal },
+    { from: spec.thresholds.marginal, to: 0, color: PALETTE.statusBad, label: labels.bad },
+  ]
+    .map((b) => {
+      const top = y(b.from);
+      const h = y(b.to) - top;
+      const rectAttrs = inline ? `class="spark-band" fill="${b.color}"` : `style="fill:${b.color};opacity:0.12"`;
+      return (
+        `<rect x="${m.left}" y="${top.toFixed(1)}" width="${plotW}" height="${h.toFixed(1)}" ${rectAttrs} />` +
+        `<text x="${W - m.right + 6}" y="${(top + h / 2 + 3).toFixed(1)}" ${labelStyle} font-size="10">${esc(b.label)}</text>`
+      );
+    })
+    .join("");
+
+  const pts = spec.points.map((p, i) => ({ ...p, cx: x(i), cy: y(p.value) }));
+  const path =
+    pts.length > 1
+      ? `<path d="${pts.map((p, i) => `${i ? "L" : "M"} ${p.cx.toFixed(1)} ${p.cy.toFixed(1)}`).join(" ")}"${inline ? ` class="spark-line"` : ""} style="fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round${inline ? "" : `;stroke:${PALETTE.axis}`}" />`
+      : "";
+
+  const guides = pts
+    .filter((p) => p.changed)
+    .map(
+      (p) =>
+        `<line x1="${p.cx.toFixed(1)}" y1="${m.top}" x2="${p.cx.toFixed(1)}" y2="${m.top + plotH}"${inline ? ` class="spark-guide"` : ""} style="stroke-width:1;stroke-dasharray:2 2;opacity:0.7${inline ? "" : `;stroke:${PALETTE.axis}`}" />`
+    )
+    .join("");
+
+  // Only the newest point is a real mark; earlier days get a tiny dot while there are few of them
+  // and none once the series is long, so the line - not a string of beads - carries the shape.
+  const dots = pts
+    .map((p, i) => {
+      if (i === n - 1) {
+        const ring = inline ? `class="chart-marker"` : `style="stroke:${PALETTE.surface};stroke-width:2"`;
+        return `<circle cx="${p.cx.toFixed(1)}" cy="${p.cy.toFixed(1)}" r="5" fill="${statusColor(p.status)}" ${ring} />`;
+      }
+      if (n > 8) return "";
+      return `<circle cx="${p.cx.toFixed(1)}" cy="${p.cy.toFixed(1)}" r="1.5" ${inline ? `class="spark-dot"` : `fill="${PALETTE.axis}"`} />`;
+    })
+    .join("");
+
+  let valueLabel = "";
+  let dateLabels = "";
+  if (n > 0) {
+    const last = pts[n - 1];
+    const above = last.cy - 9 >= 9;
+    const vy = above ? last.cy - 9 : last.cy + 16;
+    // Left of the newest dot, so it never runs into the band labels right of the plot; a surface
+    // halo (paint-order) keeps it legible where the line or an earlier dot passes underneath.
+    const anchor = n <= 1 ? "middle" : "end";
+    const vx = n <= 1 ? last.cx : last.cx - 3;
+    const valueStyle = inline
+      ? `class="spark-value"`
+      : `style="fill:#22201b" paint-order="stroke" stroke="${PALETTE.surface}" stroke-width="3" stroke-linejoin="round"`;
+    valueLabel = `<text x="${vx.toFixed(1)}" y="${vy.toFixed(1)}" text-anchor="${anchor}" ${valueStyle} font-size="11" font-weight="700">${esc(spec.valueLabel)}</text>`;
+    const first = pts[0];
+    dateLabels =
+      n <= 1
+        ? `<text x="${last.cx.toFixed(1)}" y="${H - 3}" text-anchor="middle" ${labelStyle} font-size="9">${esc(last.label)}</text>`
+        : `<text x="${first.cx.toFixed(1)}" y="${H - 3}" text-anchor="start" ${labelStyle} font-size="9">${esc(first.label)}</text>` +
+          `<text x="${last.cx.toFixed(1)}" y="${H - 3}" text-anchor="end" ${labelStyle} font-size="9">${esc(last.label)}</text>`;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" class="spark-svg" role="img" aria-label="${esc(spec.ariaLabel)}">${bands}${guides}${path}${dots}${valueLabel}${dateLabels}</svg>`;
+}
+
 /** In-SVG legend row (for rasterized output, where no HTML legend exists). Returns the markup and
  * its height so callers can stack it. */
 export function buildSvgLegend(items: { label: string; color: string; dash?: string }[]): { svg: string; height: number } {
@@ -484,6 +602,14 @@ export const CHART_STYLES = `
   .chart-svg { width: 100%; height: auto; overflow: visible; }
   .chart-title { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 4px; }
   .chart-marker { stroke: var(--surface-1); stroke-width: 2; }
+  .spark-svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .spark-band { opacity: 0.12; }
+  @media (prefers-color-scheme: dark) { .spark-band { opacity: 0.22; } }
+  .spark-guide { stroke: var(--baseline); }
+  .spark-line { stroke: var(--text-secondary); }
+  .spark-dot { fill: var(--text-secondary); }
+  .spark-label { fill: var(--text-secondary); }
+  .spark-value { fill: var(--text-primary); paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; stroke-linejoin: round; }
   .crosshair { stroke: var(--baseline); stroke-width: 1; opacity: 0; pointer-events: none; }
   .hover-capture { fill: transparent; cursor: crosshair; }
   .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 4px; font-size: 0.85rem; color: var(--text-secondary); }

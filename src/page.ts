@@ -93,7 +93,7 @@ export const PAGE_STYLES = `
   @media (max-width: 420px) { .outlook-grid { grid-template-columns: 1fr; } }
   .day-card { border: 1px solid var(--border); border-left: 4px solid var(--status-color); border-radius: 10px; padding: 12px 14px; background: var(--surface-1); }
   .day-card-date { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
-  .day-card-status { font-size: 0.95rem; font-weight: 700; color: var(--status-color); margin: 2px 0 6px; }
+  .day-card-status { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 2px 0 6px; }
   .day-card-prob { font-size: 1.9rem; font-weight: 600; line-height: 1.1; }
   .day-card-prob small { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-left: 4px; }
   .day-card-trend { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; }
@@ -108,6 +108,30 @@ export const PAGE_STYLES = `
   .data-table th:first-child, .data-table td:first-child { text-align: left; }
   .data-table th { color: var(--text-secondary); font-weight: 600; }
   details summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; }
+  /* Plain-language layer of the outlook: the reader's five seconds. Colour never carries meaning
+     alone - the verdict word is in ink, the traffic light and the left border are redundant. */
+  /* Own breakpoints: a plain card must never get narrower than ~200 px of content (4 columns only on
+     a desktop-wide page, 2 down to 560 px, then 1), so the verdict stays on one line and the
+     sparkline labels stay legible on an iPad or a large phone. */
+  .plain-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 999px) { .plain-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 559px) { .plain-grid { grid-template-columns: 1fr; } }
+  .plain-card { border: 1px solid var(--border); border-left: 6px solid var(--status-color); border-radius: 10px; padding: 12px 14px; background: var(--surface-1); display: flex; flex-direction: column; gap: 3px; }
+  /* Past days are greyed by colour, never by opacity - faded text would fail the contrast minimum. */
+  .plain-card.past { border-left-color: var(--baseline); background: transparent; }
+  .plain-card.past .plain-day, .plain-card.past .plain-verdict { color: var(--text-secondary); }
+  .plain-day { font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); }
+  .plain-verdict { display: flex; gap: 6px; align-items: flex-start; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+  .plain-weather, .plain-chance { font-size: 0.95rem; }
+  .plain-trend { font-size: 0.95rem; color: var(--text-secondary); }
+  .plain-source { font-size: 0.78rem; color: var(--muted); }
+  .plain-spark { margin-top: 6px; }
+  .how-to-read { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.45; margin: 12px 0 0; }
+  details.technical > summary { font-weight: 600; font-size: 0.95rem; color: var(--text-primary); padding: 2px 0; }
+  details.technical[open] > summary { margin-bottom: 12px; }
+  .plain-list { list-style: none; padding: 0; margin: 6px 0 0; }
+  .plain-list li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+  .plain-list li:last-child { border-bottom: none; }
 `;
 
 export function renderPageShell(o: { title: string; heading: string; subtitle: string; body: string; scripts: string[] }): string {

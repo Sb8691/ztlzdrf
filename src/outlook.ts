@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { LOCATION, OUTLOOK } from "./config.js";
-import type { OutlookRunEntry } from "./types.js";
+import { LOCATION, OUTLOOK, type OutlookConfig, type OutlookModel } from "./config.js";
+import type { OutlookDigest, OutlookHistory, OutlookRunEntry } from "./types.js";
 import { addDays, daysBetween, formatDayLabel, formatRunLabel, localDateOf, localMidnightMs } from "./time.js";
 import { effectiveRunAt, fetchEnsembleMembers, fetchRunMeta, type EnsembleFetch, type RunMeta } from "./openmeteo.js";
 import {
@@ -30,6 +30,11 @@ import { DOCS_DIR, HISTORY_PATH, readOutlookHistory, writeIfChanged, writeOutloo
  * docs/outlook.html + docs/outlook.png. Run once per CI job before the dashboard/e-mail run, which
  * only reads the history. Exit code 1 only when the primary model fails - the workflow step is
  * `continue-on-error`, so the daily e-mail never depends on this.
+ *
+ * Env knobs for local work: OUTLOOK_DOCS_DIR (write everything into a scratch copy, never into
+ * docs/), OUTLOOK_RENDER_ONLY=true (no network - re-render the page/PNG from the stored history;
+ * the meteogram, which needs the freshly fetched members, is then absent), OUTLOOK_FORCE_RENDER=true
+ * (render even when no new run landed).
  */
 
 interface ModelFetch {
@@ -37,32 +42,12 @@ interface ModelFetch {
   meta: RunMeta | null;
 }
 
-async function main(): Promise<void> {
-  const cfg = OUTLOOK;
-  const window = resolveOutlookWindow(cfg, process.env);
-  const primary = primaryModel(cfg);
-  const now = new Date();
-  const today = localDateOf(now.getTime(), LOCATION.timezone);
+interface Snapshots {
+  entries: OutlookRunEntry[];
+  latestView: LatestRunView | null;
+}
 
-  console.log(`Výhľad na maľovanie: okno ${window.start} – ${window.end} (${LOCATION.name}).`);
-  if (daysBetween(today, window.end) < 0) {
-    console.log(`Okno skončilo ${window.end} – výhľad sa už neaktualizuje. Posuň OUTLOOK.window (alebo OUTLOOK_START/OUTLOOK_END) na ďalšie maľovanie.`);
-    return;
-  }
-
-  let history = readOutlookHistory() ?? emptyHistory(cfg, window);
-  if (history.window.start !== window.start || history.window.end !== window.end) {
-    const archive = join(DOCS_DIR, "outlook", `history-${history.window.start}_${history.window.end}.json`);
-    writeOutlookHistory(history, archive);
-    console.log(`Okno sa zmenilo (${history.window.start} – ${history.window.end} → ${window.start} – ${window.end}); stará história odložená do ${archive}.`);
-    history = emptyHistory(cfg, window);
-  }
-
-  const dates = windowDates(window);
-  const startDate = addDays(window.start, -cfg.paddingDays);
-  const endDate = addDays(window.end, cfg.paddingDays);
-  const windowEndMs = localMidnightMs(addDays(window.end, 1), LOCATION.timezone);
-
+async function fetchSnapshots(cfg: OutlookConfig, dates: string[], startDate: string, endDate: string, windowEndMs: number): Promise<Snapshots> {
   const settled = await Promise.allSettled(
     cfg.models.map(async (model): Promise<ModelFetch> => {
       const [fetch, meta] = await Promise.all([fetchEnsembleMembers(model, startDate, endDate), fetchRunMeta(model.metaDomain)]);
@@ -74,7 +59,7 @@ async function main(): Promise<void> {
   let latestView: LatestRunView | null = null;
 
   for (let i = 0; i < cfg.models.length; i++) {
-    const model = cfg.models[i];
+    const model: OutlookModel = cfg.models[i];
     const result = settled[i];
     if (result.status === "rejected") {
       const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
@@ -130,12 +115,73 @@ async function main(): Promise<void> {
       };
     }
   }
+  return { entries, latestView };
+}
 
-  if (!entries.some((e) => e.model === primary.id)) {
+function logDigest(digest: OutlookDigest, cfg: OutlookConfig): void {
+  for (const d of digest.days) {
+    const trend = d.trend ? ` (${d.trend.deltaPct >= 0 ? "+" : ""}${d.trend.deltaPct} p. b. za 24 h)` : "";
+    console.log(
+      `  ${statusIcon(d.status)} ${formatDayLabel(d.date)}: maľovateľný ${pct(d.pPaintable)}${trend}, aspoň hraničný ${pct(d.pPossible)}, ` +
+        `dážď ≥ ${cfg.rainDayThresholdMm} mm ${pct(d.pRain)}, zrážky p50/p90 ${d.precipP50.toFixed(1)}/${d.precipP90.toFixed(1)} mm, Tmax/Tmin ${d.tMaxP50.toFixed(0)}/${d.tMinP50.toFixed(0)} °C`
+    );
+  }
+}
+
+/** Writes docs/outlook.html and docs/outlook.png only when their bytes changed. */
+function renderOutputs(history: OutlookHistory, digest: OutlookDigest | null, latestView: LatestRunView | null, now: Date, cfg: OutlookConfig): void {
+  const htmlPath = join(DOCS_DIR, "outlook.html");
+  const pngPath = join(DOCS_DIR, "outlook.png");
+  const html = renderOutlookHtml(history, digest, latestView, now, cfg);
+  const htmlChanged = writeIfChanged(htmlPath, html);
+  const png = renderOutlookPng(history, cfg);
+  const pngChanged = png ? writeIfChanged(pngPath, png) : false;
+  console.log(`${htmlPath} ${htmlChanged ? "aktualizovaný" : "bez zmeny"}, ${pngPath} ${png ? (pngChanged ? "aktualizovaný" : "bez zmeny") : "nevygenerovaný (bez histórie)"}.`);
+}
+
+async function main(): Promise<void> {
+  const cfg = OUTLOOK;
+  const window = resolveOutlookWindow(cfg, process.env);
+  const primary = primaryModel(cfg);
+  const now = new Date();
+  const today = localDateOf(now.getTime(), LOCATION.timezone);
+  const renderOnly = process.env.OUTLOOK_RENDER_ONLY === "true";
+  const forceRender = renderOnly || process.env.OUTLOOK_FORCE_RENDER === "true";
+
+  console.log(`Výhľad na maľovanie: okno ${window.start} – ${window.end} (${LOCATION.name})${process.env.OUTLOOK_DOCS_DIR ? ` – výstupy do ${DOCS_DIR}` : ""}.`);
+  if (daysBetween(today, window.end) < 0) {
+    console.log(`Okno skončilo ${window.end} – výhľad sa už neaktualizuje. Posuň OUTLOOK.window (alebo OUTLOOK_START/OUTLOOK_END) na ďalšie maľovanie.`);
+    // Still render the "window over" state (digest = null) so the page never keeps showing the past
+    // days as a forecast. Rendered "as of" the midnight that closed the window - a fixed instant, so
+    // the bytes are identical run after run and writeIfChanged really makes later runs a no-op.
+    const history = readOutlookHistory();
+    const closedAt = new Date(localMidnightMs(addDays(window.end, 1), LOCATION.timezone));
+    if (history && history.window.start === window.start && history.window.end === window.end) renderOutputs(history, null, null, closedAt, cfg);
+    return;
+  }
+
+  let history = readOutlookHistory() ?? emptyHistory(cfg, window);
+  if (history.window.start !== window.start || history.window.end !== window.end) {
+    const archive = join(DOCS_DIR, "outlook", `history-${history.window.start}_${history.window.end}.json`);
+    writeOutlookHistory(history, archive);
+    console.log(`Okno sa zmenilo (${history.window.start} – ${history.window.end} → ${window.start} – ${window.end}); stará história odložená do ${archive}.`);
+    history = emptyHistory(cfg, window);
+  }
+
+  const dates = windowDates(window);
+  const startDate = addDays(window.start, -cfg.paddingDays);
+  const endDate = addDays(window.end, cfg.paddingDays);
+  const windowEndMs = localMidnightMs(addDays(window.end, 1), LOCATION.timezone);
+
+  let snapshots: Snapshots = { entries: [], latestView: null };
+  if (renderOnly) console.log("OUTLOOK_RENDER_ONLY=true – nič sa nesťahuje, renderujem z uloženej histórie (meteogram posledného behu chýba).");
+  else snapshots = await fetchSnapshots(cfg, dates, startDate, endDate, windowEndMs);
+
+  if (!renderOnly && !snapshots.entries.some((e) => e.model === primary.id)) {
     console.log(`Primárny model ${primary.label} zatiaľ nepokrýva okno – snímka sa neukladá.`);
   }
 
-  const merged = mergeHistory(history, entries);
+  const merged = mergeHistory(history, snapshots.entries);
   history = merged.history;
   if (merged.added > 0) {
     writeOutlookHistory(history);
@@ -144,31 +190,21 @@ async function main(): Promise<void> {
     console.log(`História: žiadny nový beh (spolu ${history.runs.length}).`);
   }
 
-  const digest = buildDigest(history, cfg, now.getTime());
-  if (digest) {
-    for (const d of digest.days) {
-      const trend = d.trend ? ` (${d.trend.deltaPct >= 0 ? "+" : ""}${d.trend.deltaPct} p. b. za 24 h)` : "";
-      console.log(
-        `  ${statusIcon(d.status)} ${formatDayLabel(d.date)}: maľovateľný ${pct(d.pPaintable)}${trend}, aspoň hraničný ${pct(d.pPossible)}, ` +
-          `dážď ≥ ${cfg.rainDayThresholdMm} mm ${pct(d.pRain)}, zrážky p50/p90 ${d.precipP50.toFixed(1)}/${d.precipP90.toFixed(1)} mm, Tmax/Tmin ${d.tMaxP50.toFixed(0)}/${d.tMinP50.toFixed(0)} °C`
-      );
-    }
-  }
+  // Taken after the fetch: the runs just stored carry a fetchedAt later than `now`, and the digest
+  // must see them as "already shown" (today's sparkline point) - never build it with an instant
+  // older than the newest run.
+  const renderedAt = new Date();
+  const digest = buildDigest(history, cfg, renderedAt.getTime());
+  if (digest) logDigest(digest, cfg);
 
   // The page carries a "generated at" stamp, so it is re-rendered only when the data changed (or the
   // files are missing) - otherwise every outlook-only CI run would commit a timestamp-only change.
-  const htmlPath = join(DOCS_DIR, "outlook.html");
-  const pngPath = join(DOCS_DIR, "outlook.png");
-  const mustRender = merged.added > 0 || !existsSync(htmlPath) || !existsSync(pngPath) || process.env.OUTLOOK_FORCE_RENDER === "true";
+  const mustRender = merged.added > 0 || !existsSync(join(DOCS_DIR, "outlook.html")) || !existsSync(join(DOCS_DIR, "outlook.png")) || forceRender;
   if (!mustRender) {
     console.log("Bez nových behov – docs/outlook.html a docs/outlook.png ostávajú nezmenené.");
     return;
   }
-  const html = renderOutlookHtml(history, digest, latestView, now, cfg);
-  const htmlChanged = writeIfChanged(htmlPath, html);
-  const png = renderOutlookPng(history, cfg);
-  const pngChanged = png ? writeIfChanged(pngPath, png) : false;
-  console.log(`docs/outlook.html ${htmlChanged ? "aktualizovaný" : "bez zmeny"}, docs/outlook.png ${png ? (pngChanged ? "aktualizovaný" : "bez zmeny") : "nevygenerovaný (bez histórie)"}.`);
+  renderOutputs(history, digest, snapshots.latestView, renderedAt, cfg);
 }
 
 main().catch((err) => {

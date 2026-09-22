@@ -127,8 +127,22 @@ export interface OutlookTrend {
   vsRunAt: string;
 }
 
+/** What the day card showed at the end of one local calendar day - the plain layer's "how did the
+ * chance change day by day" series. Reconstructed from the history, so it is identical on every
+ * surface and never depends on when a page happened to be rendered. */
+export interface OutlookSnapshot {
+  /** Local calendar date of the snapshot (the day the reader looked at the page). */
+  date: string;
+  status: PaintingStatus;
+  pPaintable: number;
+  /** Model whose run was on the card that day. */
+  model: string;
+}
+
 export interface OutlookDigestDay {
   date: string;
+  /** True once the day is behind `today` - shown greyed out, never as a forecast. */
+  past: boolean;
   status: PaintingStatus;
   pPaintable: number;
   pPossible: number;
@@ -138,7 +152,13 @@ export interface OutlookDigestDay {
   tMaxP50: number;
   tMinP50: number;
   goodRunP50: number;
+  /** Median of the members' afternoon (12-18 h) humidity minimum, %. */
+  rhMinP50: number;
+  /** Median of the members' daily wind-speed maximum, km/h. */
+  windMaxP50: number;
   trend: OutlookTrend | null;
+  /** One entry per local day since the first run that covered this date, oldest first. */
+  snapshots: OutlookSnapshot[];
   /** Latest P(paintable) of every model that currently covers this day, primary first. */
   byModel: { model: string; label: string; pPaintable: number; runAt: string }[];
 }
@@ -146,6 +166,8 @@ export interface OutlookDigestDay {
 /** What the dashboard card and the e-mail block need - derived from the history, never stored. */
 export interface OutlookDigest {
   window: { start: string; end: string };
+  /** Local calendar date the digest was built for. */
+  today: string;
   primaryModel: string;
   primaryLabel: string;
   latestRunAt: string;

@@ -123,6 +123,10 @@ export const OUTLOOK = {
   /** Trend arrow: compare with the newest run at least minAgeHours older; below minDeltaPct
    * (percentage points) the trend is flat. */
   trend: { minDeltaPct: 10, minAgeHours: 24 },
+  /** Plain-language layer (src/outlook-plain.ts): P(rain day) at or above `rainLikely` reads as
+   * "dážď", at or above `rainPossible` as "možno prehánky", below as "sucho". The cold/humid
+   * qualifiers reuse PAINTING_RULES.temperature.preferredMin and humidity.preferredMax. */
+  plain: { rainLikely: 0.5, rainPossible: 0.3 },
 };
 
 export type OutlookConfig = typeof OUTLOOK;

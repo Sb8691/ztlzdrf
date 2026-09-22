@@ -92,3 +92,16 @@ export function formatDayLabel(isoDate: string): string {
   const weekday = new Intl.DateTimeFormat("sk-SK", { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
   return `${weekday} ${d}.${m}.`;
 }
+
+/** "štvrtok 1.10." - full Slovak weekday + day.month, for the plain-language layer. */
+export function formatDayLabelLong(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const weekday = new Intl.DateTimeFormat("sk-SK", { weekday: "long", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
+  return `${weekday} ${d}.${m}.`;
+}
+
+/** "22.9." for an ISO date. */
+export function formatShortDate(isoDate: string): string {
+  const [, m, d] = isoDate.split("-").map(Number);
+  return `${d}.${m}.`;
+}

@@ -1,7 +1,7 @@
 import { LOCATION, PAINTING_RULES, type OutlookConfig, type OutlookModel } from "./config.js";
 import { sunTimesForRange, type SunTimes } from "./astronomy.js";
 import { evaluateHourForPainting, longestRun } from "./painting.js";
-import { addDays, daysBetween, isIsoDate, localDateOf } from "./time.js";
+import { addDays, daysBetween, isIsoDate, localDateOf, localMidnightMs } from "./time.js";
 import type {
   HourEvaluation,
   OutlookDaySummary,
@@ -9,6 +9,7 @@ import type {
   OutlookDigestDay,
   OutlookHistory,
   OutlookRunEntry,
+  OutlookSnapshot,
   OutlookTrend,
   PaintingStatus,
   Quantiles,
@@ -337,6 +338,36 @@ export function mergeHistory(history: OutlookHistory, entries: OutlookRunEntry[]
   return { history: { ...history, runs }, added };
 }
 
+/** The run whose numbers the card showed for `date` at instant `atMs`: the newest primary run
+ * fetched by then. (The per-day "speaker" selection of the model relay plugs in here.) */
+function shownRunAt(history: OutlookHistory, cfg: OutlookConfig, date: string, atMs: number): OutlookRunEntry | null {
+  const primary = primaryModel(cfg);
+  const candidates = runsOf(history, primary.id).filter((r) => Date.parse(r.fetchedAt) < atMs && r.days.some((d) => d.date === date));
+  return candidates.length ? candidates[candidates.length - 1] : null;
+}
+
+/** What the card showed for `date` at the end of every local day from the first covering run up to
+ * `nowMs` (today included, as of now) - the plain layer's day-by-day chance series. */
+export function snapshotsFor(history: OutlookHistory, cfg: OutlookConfig, date: string, nowMs: number): OutlookSnapshot[] {
+  const tz = LOCATION.timezone;
+  const covering = history.runs.filter((r) => r.days.some((d) => d.date === date));
+  if (covering.length === 0) return [];
+  const firstDay = localDateOf(Math.min(...covering.map((r) => Date.parse(r.fetchedAt))), tz);
+  const today = localDateOf(nowMs, tz);
+  const out: OutlookSnapshot[] = [];
+  for (let d = firstDay; daysBetween(d, today) >= 0; d = addDays(d, 1)) {
+    // Today's point is whatever the card shows right now, i.e. the newest stored run - not filtered by
+    // nowMs, because outlook.ts stamps fetchedAt after it captured "now" and would otherwise drop the
+    // run it just stored.
+    const atMs = d === today ? Number.POSITIVE_INFINITY : localMidnightMs(addDays(d, 1), tz);
+    const run = shownRunAt(history, cfg, date, atMs);
+    if (!run) continue;
+    const day = run.days.find((x) => x.date === date)!;
+    out.push({ date: d, status: dayStatus(day, cfg.dayStatus), pPaintable: day.pPaintable, model: run.model });
+  }
+  return out;
+}
+
 /** Everything the dashboard card and e-mail block show; null before the first snapshot or once
  * the window is over (the day after `window.end`). */
 export function buildDigest(history: OutlookHistory, cfg: OutlookConfig, nowMs: number): OutlookDigest | null {
@@ -358,6 +389,7 @@ export function buildDigest(history: OutlookHistory, cfg: OutlookConfig, nowMs: 
     }
     days.push({
       date,
+      past: daysBetween(today, date) < 0,
       status: dayStatus(day, cfg.dayStatus),
       pPaintable: day.pPaintable,
       pPossible: day.pPossible,
@@ -367,13 +399,17 @@ export function buildDigest(history: OutlookHistory, cfg: OutlookConfig, nowMs: 
       tMaxP50: day.tMax.p50,
       tMinP50: day.tMin.p50,
       goodRunP50: day.goodRun.p50,
+      rhMinP50: day.rhMin.p50,
+      windMaxP50: day.windMax.p50,
       trend: trendFor(history, primary.id, date, latest.runAt, cfg.trend),
+      snapshots: snapshotsFor(history, cfg, date, nowMs),
       byModel,
     });
   }
   if (days.length === 0) return null;
   return {
     window: { ...history.window },
+    today,
     primaryModel: primary.id,
     primaryLabel: primary.label,
     latestRunAt: latest.runAt,

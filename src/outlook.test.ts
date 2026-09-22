@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { OUTLOOK } from "./config.js";
-import { addDays, daysBetween, formatRunTick, isIsoDate, localDateOf, localMidnightMs, toLocalWallClock } from "./time.js";
+import { addDays, daysBetween, formatDayLabelLong, formatRunTick, formatShortDate, isIsoDate, localDateOf, localMidnightMs, toLocalWallClock } from "./time.js";
 import { effectiveRunAt, responseToMemberPoints, type EnsembleResponse } from "./openmeteo.js";
 import {
   buildDigest,
@@ -15,14 +20,23 @@ import {
   quantile,
   quantiles,
   resolveOutlookWindow,
+  snapshotsFor,
   summarizeDay,
   sunTimesFor,
   trendFor,
   windowDates,
   type MemberDayStats,
 } from "./outlook-core.js";
+import { chanceOf10, horizonWords, plainDay, trendWords, weatherWords } from "./outlook-plain.js";
+import { PALETTE, buildChanceSparkline } from "./charts.js";
 import { buildEvolutionPanels, renderOutlookHtml, renderOutlookPng } from "./outlook-dashboard.js";
-import type { HourEvaluation, OutlookDaySummary, OutlookHistory, OutlookRunEntry, WeatherPoint } from "./types.js";
+import type { HourEvaluation, OutlookDaySummary, OutlookDigestDay, OutlookHistory, OutlookRunEntry, WeatherPoint } from "./types.js";
+
+/** Words the plain layer must never use - they belong to the technical details only. */
+const PLAIN_BANNED = ["beh", "p50", "p90", "ensembl", "UTC", "p. b.", "%", "členov", "GOOD", "ECMWF", "GEFS", "ICON", "AIFS"];
+/** Non-breaking space the plain layer puts between a number and its unit / "z 10". */
+const NB = " ";
+const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 const TZ = "Europe/Vienna";
 const HOUR = 3600_000;
@@ -77,6 +91,9 @@ test("time helpers pin the local-midnight boundary of the window", () => {
   assert.equal(isIsoDate("2026-10-01"), true);
   assert.equal(formatRunTick(Date.UTC(2026, 8, 22, 0)), "22.9.");
   assert.equal(formatRunTick(Date.UTC(2026, 8, 22, 12)), "22.9. 12Z");
+  assert.equal(formatDayLabelLong("2026-10-01"), "štvrtok 1.10.");
+  assert.equal(formatDayLabelLong("2026-10-04"), "nedeľa 4.10.");
+  assert.equal(formatShortDate("2026-09-22"), "22.9.");
 });
 
 test("resolveOutlookWindow honours env overrides and rejects nonsense", () => {
@@ -277,12 +294,12 @@ function daySummary(date: string, pPaintable: number, extra: Partial<OutlookDayS
   };
 }
 
-function mkRun(model: string, runAt: string, p: Record<string, number>): OutlookRunEntry {
+function mkRun(model: string, runAt: string, p: Record<string, number>, fetchedAt = runAt): OutlookRunEntry {
   return {
     model,
     runAt,
     runAtSource: "meta",
-    fetchedAt: runAt,
+    fetchedAt,
     members: 51,
     grid: null,
     days: Object.entries(p).map(([date, v]) => daySummary(date, v)),
@@ -339,9 +356,13 @@ test("buildDigest: verdicts, model agreement and null once the window is over", 
   const digest = buildDigest(history, OUTLOOK, now)!;
   assert.equal(digest.latestRunAt, R2);
   assert.equal(digest.runCount, 3);
+  assert.equal(digest.today, "2026-09-23");
   assert.equal(digest.days.length, 4);
   assert.equal(digest.days[0].status, "GOOD");
+  assert.equal(digest.days[0].past, false);
   assert.equal(digest.days[0].trend?.deltaPct, 35);
+  assert.equal(digest.days[0].rhMinP50, 60);
+  assert.equal(digest.days[0].windMaxP50, 12);
   assert.deepEqual(
     digest.days[0].byModel.map((m) => [m.model, m.pPaintable]),
     [
@@ -350,8 +371,176 @@ test("buildDigest: verdicts, model agreement and null once the window is over", 
     ]
   );
   assert.equal(digest.days[3].status, "BAD");
+  // A day behind "today" is flagged, never shown as a forecast.
+  const later = buildDigest(history, OUTLOOK, Date.UTC(2026, 9, 2, 8))!;
+  assert.deepEqual(later.days.map((d) => d.past), [true, false, false, false]);
   assert.equal(buildDigest(history, OUTLOOK, Date.UTC(2026, 9, 5, 12)), null);
   assert.equal(buildDigest(emptyHistory(OUTLOOK, WINDOW), OUTLOOK, now), null);
+});
+
+test("snapshotsFor: what the card showed at the end of each local day", () => {
+  const history = syntheticHistory();
+  // 22.9. ends with R1 (12Z) on the card, 23.9. (today, 08Z) already shows R2.
+  const snaps = snapshotsFor(history, OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 23, 8));
+  assert.deepEqual(
+    snaps.map((s) => [s.date, s.status, s.pPaintable, s.model]),
+    [
+      ["2026-09-22", "MARGINAL", 0.4, "ecmwf_ifs025"],
+      ["2026-09-23", "GOOD", 0.65, "ecmwf_ifs025"],
+    ]
+  );
+  assert.deepEqual(
+    snapshotsFor(history, OUTLOOK, "2026-10-04", Date.UTC(2026, 8, 23, 8)).map((s) => s.status),
+    ["BAD", "BAD"]
+  );
+  // "Today" is always the newest stored run (what the card shows via latestRunFor), whatever its
+  // fetchedAt says - outlook.ts stores runs stamped later than the instant it captured as "now".
+  // (A real history never holds a run fetched after "now"; the fixture does, hence 0.65 = R2.)
+  assert.deepEqual(
+    snapshotsFor(history, OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 22, 6)).map((s) => [s.date, s.pPaintable]),
+    [["2026-09-22", 0.65]]
+  );
+  const justFetched = mergeHistory(history, [mkRun("ecmwf_ifs025", "2026-09-23T12:00:00.000Z", { "2026-10-01": 0.72 }, "2026-09-23T23:13:20.000Z")]).history;
+  const nowBeforeStamp = Date.UTC(2026, 8, 23, 23, 13, 19);
+  const digest = buildDigest(justFetched, OUTLOOK, nowBeforeStamp)!;
+  assert.equal(digest.days[0].snapshots.at(-1)?.pPaintable, digest.days[0].pPaintable);
+
+  // CI timing: the 00z run lands at 11:13Z, the 12z run at 23:13Z = 01:13 local the next day, so the
+  // day's last point must show the 00z run and the 12z run belongs to the following day.
+  const ci = mergeHistory(emptyHistory(OUTLOOK, WINDOW), [
+    mkRun("ecmwf_ifs025", R0, { "2026-10-01": 0.3 }, "2026-09-22T11:13:00.000Z"),
+    mkRun("ecmwf_ifs025", R1, { "2026-10-01": 0.65 }, "2026-09-22T23:13:00.000Z"),
+    mkRun("ecmwf_ifs025", R2, { "2026-10-01": 0.5 }, "2026-09-23T11:13:00.000Z"),
+  ]).history;
+  assert.deepEqual(
+    snapshotsFor(ci, OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 23, 8)).map((s) => [s.date, s.pPaintable]),
+    [
+      ["2026-09-22", 0.3],
+      ["2026-09-23", 0.65],
+    ]
+  );
+  assert.deepEqual(
+    snapshotsFor(ci, OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 23, 12)).map((s) => s.pPaintable),
+    [0.3, 0.5]
+  );
+  assert.deepEqual(snapshotsFor(emptyHistory(OUTLOOK, WINDOW), OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 23, 8)), []);
+});
+
+function digestDay(o: Partial<OutlookDigestDay> = {}): OutlookDigestDay {
+  return {
+    date: "2026-10-01",
+    past: false,
+    status: "GOOD",
+    pPaintable: 0.627,
+    pPossible: 0.745,
+    pRain: 0.235,
+    precipP50: 0,
+    precipP90: 6.9,
+    tMaxP50: 18.3,
+    tMinP50: 11,
+    goodRunP50: 4,
+    rhMinP50: 57,
+    windMaxP50: 6,
+    trend: null,
+    snapshots: [],
+    byModel: [],
+    ...o,
+  };
+}
+
+test("plainDay: the mother-readable mapping of a day", () => {
+  const day = plainDay(digestDay(), OUTLOOK);
+  assert.equal(day.dayLabel, "štvrtok 1.10.");
+  assert.equal(day.verdict, "Pravdepodobne áno");
+  assert.equal(day.icon, "🟢");
+  assert.equal(day.glyph, "sun");
+  assert.equal(day.weather, "sucho");
+  assert.equal(day.temp, `cez deň okolo 18${NB}°C`);
+  assert.equal(day.chance, `áno v 6${NB}z${NB}10 predpovedí`);
+  assert.equal(day.trend, "zatiaľ nie je s čím porovnať");
+  assert.equal(day.trendArrow, "");
+  assert.equal(day.sentence, `štvrtok 1.10.: pravdepodobne áno; sucho; cez deň okolo 18${NB}°C; áno v 6${NB}z${NB}10 predpovedí; zatiaľ nie je s čím porovnať.`);
+  for (const token of PLAIN_BANNED) assert.ok(!day.sentence.includes(token), `sentence contains banned "${token}"`);
+
+  const marginal = plainDay(digestDay({ status: "MARGINAL", pPaintable: 0.49, trend: { deltaPct: -12, direction: "down", vsRunAt: R0 } }), OUTLOOK);
+  assert.deepEqual([marginal.icon, marginal.verdict, marginal.chance, marginal.trendArrow, marginal.trend], ["🟡", "Neisté", `áno v 4${NB}z${NB}10 predpovedí`, "↓", "od včera horšie"]);
+  const bad = plainDay(digestDay({ status: "BAD", pPaintable: 0.255, pRain: 0.35 }), OUTLOOK);
+  assert.deepEqual([bad.icon, bad.verdict, bad.weather, bad.glyphEmoji], ["🔴", "Skôr nie", "možno prehánky", "🌦️"]);
+  for (const d of [marginal, bad]) for (const token of PLAIN_BANNED) assert.ok(!d.sentence.includes(token), `sentence contains banned "${token}"`);
+
+  // 🟡 owed to the "at least marginal" share says so, otherwise "1 z 10" next to a yellow light reads as a contradiction.
+  const possible = plainDay(digestDay({ status: "MARGINAL", pPaintable: 0.1, pPossible: 0.7 }), OUTLOOK);
+  assert.equal(possible.chance, `áno v 1${NB}z${NB}10 predpovedí, aspoň čiastočne v 7${NB}z${NB}10`);
+  assert.equal(plainDay(digestDay({ status: "BAD", pPaintable: 0.05, pPossible: 0.3 }), OUTLOOK).chance, `áno v žiadnej z${NB}10 predpovedí`);
+
+  assert.equal(plainDay(digestDay({ past: true }), OUTLOOK).sentence, "štvrtok 1.10.: už je za nami.");
+  assert.equal(plainDay(digestDay({ pRain: 0.35 }), OUTLOOK).weather, "možno prehánky");
+  assert.equal(plainDay(digestDay({ pRain: 0.5 }), OUTLOOK).glyph, "rain");
+  assert.equal(plainDay(digestDay({ pRain: 0.5 }), OUTLOOK).weather, "skôr dážď");
+  assert.equal(weatherWords(digestDay({ goodRunP50: 2, tMaxP50: 12 }), OUTLOOK), "sucho, ale chladno");
+  assert.equal(weatherWords(digestDay({ goodRunP50: 2, rhMinP50: 80 }), OUTLOOK), "sucho, ale vlhko");
+  assert.equal(weatherWords(digestDay({ goodRunP50: 2, tMaxP50: 12, rhMinP50: 80 }), OUTLOOK), "sucho, ale chladno a vlhko");
+  assert.equal(weatherWords(digestDay({ goodRunP50: 2 }), OUTLOOK), "sucho, ale nie ideálne");
+  assert.equal(plainDay(digestDay({ goodRunP50: 2 }), OUTLOOK).glyphEmoji, "🌤️");
+});
+
+test("chanceOf10 floors so the count never contradicts the traffic light", () => {
+  assert.equal(chanceOf10(0.6), 6);
+  assert.equal(chanceOf10(0.59), 5);
+  assert.equal(chanceOf10(0.3), 3);
+  assert.equal(chanceOf10(0.29), 2);
+  assert.equal(chanceOf10(0.96), 9);
+  assert.equal(chanceOf10(1), 10);
+  assert.equal(chanceOf10(0), 0);
+  // The guarantee must hold for whatever thresholds the config carries.
+  assert.ok(Number.isInteger(OUTLOOK.dayStatus.good * 10) && Number.isInteger(OUTLOOK.dayStatus.marginal * 10));
+  for (let i = 0; i <= 100; i++) {
+    const p = i / 100;
+    const s = dayStatus({ pPaintable: p, pPossible: 0 }, OUTLOOK.dayStatus);
+    assert.equal(chanceOf10(p) >= OUTLOOK.dayStatus.good * 10, s === "GOOD", `p=${p}`);
+    assert.equal(chanceOf10(p) >= OUTLOOK.dayStatus.marginal * 10, s !== "BAD", `p=${p}`);
+  }
+});
+
+test("trendWords and horizonWords", () => {
+  const t = (direction: "up" | "down" | "flat") => trendWords({ deltaPct: 0, direction, vsRunAt: R0 });
+  assert.deepEqual(t("up"), { arrow: "↑", text: "od včera lepšie", direction: "up" });
+  assert.deepEqual(t("down"), { arrow: "↓", text: "od včera horšie", direction: "down" });
+  assert.deepEqual(t("flat"), { arrow: "→", text: "od včera bez zmeny", direction: "flat" });
+  assert.equal(trendWords(null).text, "zatiaľ nie je s čím porovnať");
+  assert.equal(horizonWords({ today: "2026-09-22", window: WINDOW }), "výhľad na 9–12 dní dopredu – ešte sa môže zmeniť");
+  assert.equal(horizonWords({ today: "2026-09-30", window: WINDOW }), "výhľad na 1–4 dni dopredu – ešte sa môže zmeniť");
+  assert.equal(horizonWords({ today: "2026-10-01", window: WINDOW }), "výhľad na najbližšie dni – ešte sa môže zmeniť");
+  assert.equal(horizonWords({ today: "2026-10-04", window: WINDOW }), "výhľad na dnes – ešte sa môže zmeniť");
+  assert.equal(horizonWords({ today: "2026-09-30", window: { start: "2026-10-01", end: "2026-10-01" } }), "výhľad na 1 deň dopredu – ešte sa môže zmeniť");
+});
+
+test("buildChanceSparkline: bands, dots, direct labels, inline vs. rasterized styling", () => {
+  const points = [
+    { label: "22.9.", value: 3, status: "MARGINAL" as const },
+    { label: "23.9.", value: 4, status: "MARGINAL" as const },
+    { label: "dnes", value: 6.5, status: "GOOD" as const, changed: true },
+  ];
+  const svg = buildChanceSparkline({ ariaLabel: "Vývoj šance", points, thresholds: { good: 6, marginal: 3 }, valueLabel: "6 z 10", inline: true });
+  assert.equal((svg.match(/<circle /g) ?? []).length, 3);
+  assert.equal((svg.match(/<rect /g) ?? []).length, 3);
+  assert.ok(svg.includes('role="img"') && svg.includes('aria-label="Vývoj šance"'));
+  assert.ok(svg.includes(">22.9.<") && svg.includes(">dnes<") && svg.includes(">6 z 10<"));
+  assert.ok(svg.includes(">áno<") && svg.includes(">neisté<") && svg.includes(">nie<"));
+  assert.match(svg, /<path [^>]*class="spark-line"/);
+  assert.doesNotMatch(svg, /<path [^>]*stroke:#8a8880/);
+  assert.ok(svg.includes('class="chart-marker"'));
+  assert.ok(svg.includes(`fill="${PALETTE.statusGood}"`), "newest dot carries the status colour");
+  assert.ok(svg.includes("stroke-dasharray:2 2"), "model change is marked with a guide");
+
+  const raster = buildChanceSparkline({ ariaLabel: "x", points, thresholds: { good: 6, marginal: 3 }, valueLabel: "6 z 10", inline: false });
+  assert.doesNotMatch(raster, /class="spark-line"/);
+  assert.match(raster, new RegExp(`<path [^>]*stroke:${PALETTE.axis}`));
+
+  const single = buildChanceSparkline({ ariaLabel: "x", points: points.slice(2), thresholds: { good: 6, marginal: 3 }, valueLabel: "6 z 10", inline: true });
+  assert.equal((single.match(/<circle /g) ?? []).length, 1);
+  assert.ok(!single.includes("<path"));
+  assert.ok(single.includes(">dnes<"));
 });
 
 test("outlook page and PNG render from a synthetic history", () => {
@@ -369,10 +558,89 @@ test("outlook page and PNG render from a synthetic history", () => {
   assert.ok(html.includes("GEFS"));
   assert.ok(html.includes("<table class=\"data-table\">"));
 
+  // Plain layer first, everything technical under one <details>.
+  assert.ok(html.includes("štvrtok 1.10."));
+  assert.ok(html.includes(`áno v 6${NB}z${NB}10 predpovedí`));
+  assert.ok(html.includes("od včera lepšie"));
+  assert.ok(html.includes("Ako to čítať:"));
+  assert.ok(html.includes("Výhľad na 8–11 dní dopredu – ešte sa môže zmeniť."));
+  assert.ok(html.includes("Podrobnosti pre technika"));
+  const plain = html.slice(html.indexOf('<div class="wrap">'), html.indexOf("<details"));
+  assert.ok(plain.includes('class="plain-card"') && plain.includes('class="spark-svg"'));
+  for (const token of PLAIN_BANNED) assert.ok(!plain.includes(token), `plain layer contains banned "${token}"`);
+
+  // A past day is greyed out without a chance or sparkline; the other three stay forecasts.
+  const later = renderOutlookHtml(history, buildDigest(history, OUTLOOK, Date.UTC(2026, 9, 2, 8)), null, new Date(Date.UTC(2026, 9, 2, 8)), OUTLOOK);
+  const pastStart = later.indexOf('class="plain-card past"');
+  const pastCard = later.slice(pastStart, later.indexOf('class="plain-card"', pastStart));
+  assert.ok(pastCard.includes("už je za nami") && !pastCard.includes("z 10") && !pastCard.includes("spark-svg"));
+  assert.equal((later.match(/class="plain-card"/g) ?? []).length, 3);
+
+  // The "window over" state names it, keeps the technical details and is stable byte for byte when
+  // rendered as of the instant the window closed (outlook.ts does exactly that).
+  const closedAt = new Date(localMidnightMs("2026-10-05", TZ));
+  const over = renderOutlookHtml(history, null, null, closedAt, OUTLOOK);
+  assert.ok(over.includes("už uplynulo") && !over.includes("zatiaľ nie je k dispozícii"));
+  assert.ok(over.includes("Podrobnosti pre technika") && over.includes('data-chart="evo-2026-10-01"'));
+  assert.ok(over.includes("stav k 05.10.2026 00:00"));
+  assert.equal(over, renderOutlookHtml(history, null, null, closedAt, OUTLOOK));
+
   const png = renderOutlookPng(history, OUTLOOK)!;
   assert.deepEqual([...png.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
 
   const empty = renderOutlookHtml(emptyHistory(OUTLOOK, WINDOW), null, null, now, OUTLOOK);
-  assert.ok(empty.includes("zatiaľ nie je k dispozícii"));
+  assert.ok(empty.includes("zatiaľ nie je k dispozícii") && !empty.includes("<details"));
   assert.equal(renderOutlookPng(emptyHistory(OUTLOOK, WINDOW), OUTLOOK), null);
+});
+
+function runOutlookCli(env: Record<string, string>): { status: number | null; stdout: string; stderr: string } {
+  const r = spawnSync(process.execPath, ["--import", "tsx", "src/outlook.ts"], {
+    cwd: REPO_ROOT,
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+}
+
+test("outlook.ts: OUTLOOK_DOCS_DIR + OUTLOOK_RENDER_ONLY render a closed window once, into the scratch dir only", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ztlzdrf-outlook-"));
+  mkdirSync(join(dir, "outlook"));
+  const window = { start: "2026-09-01", end: "2026-09-04" };
+  const past = mergeHistory(emptyHistory(OUTLOOK, window), [
+    mkRun("ecmwf_ifs025", "2026-08-25T00:00:00.000Z", { "2026-09-01": 0.5, "2026-09-02": 0.6, "2026-09-03": 0.2, "2026-09-04": 0.1 }),
+    mkRun("ecmwf_ifs025", "2026-08-26T00:00:00.000Z", { "2026-09-01": 0.7, "2026-09-02": 0.4, "2026-09-03": 0.3, "2026-09-04": 0.2 }),
+  ]).history;
+  writeFileSync(join(dir, "outlook", "history.json"), JSON.stringify(past));
+  const env = { OUTLOOK_DOCS_DIR: dir, OUTLOOK_RENDER_ONLY: "true", OUTLOOK_START: window.start, OUTLOOK_END: window.end };
+
+  const first = runOutlookCli(env);
+  assert.equal(first.status, 0, first.stderr);
+  assert.ok(first.stdout.includes("Okno skončilo 2026-09-04"), first.stdout);
+  const html = readFileSync(join(dir, "outlook.html"), "utf8");
+  assert.ok(html.includes("už uplynulo") && html.includes("Podrobnosti pre technika") && html.includes("stav k 05.09.2026 00:00"));
+  assert.ok(existsSync(join(dir, "outlook.png")));
+  assert.ok(!existsSync(join(dir, "outlook", "history-2026-09-01_2026-09-04.json")), "a matching window must not be archived");
+
+  const second = runOutlookCli(env);
+  assert.equal(second.status, 0, second.stderr);
+  assert.match(second.stdout, /outlook\.html bez zmeny/, "the closed-window page must be byte-stable across runs");
+  assert.equal(readFileSync(join(REPO_ROOT, "docs", "outlook", "history.json"), "utf8").includes('"start": "2026-09-01"'), false, "live docs/ must stay untouched");
+});
+
+test("outlook.ts: OUTLOOK_RENDER_ONLY renders the plain layer for an open window without any network", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ztlzdrf-outlook-"));
+  mkdirSync(join(dir, "outlook"));
+  const window = { start: "2030-10-01", end: "2030-10-04" };
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+  const future = mergeHistory(emptyHistory(OUTLOOK, window), [
+    mkRun("ecmwf_ifs025", yesterday, { "2030-10-01": 0.65, "2030-10-02": 0.4, "2030-10-03": 0.3, "2030-10-04": 0.1 }),
+  ]).history;
+  writeFileSync(join(dir, "outlook", "history.json"), JSON.stringify(future));
+  const r = runOutlookCli({ OUTLOOK_DOCS_DIR: dir, OUTLOOK_RENDER_ONLY: "true", OUTLOOK_START: window.start, OUTLOOK_END: window.end });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.stdout.includes("nič sa nesťahuje"), r.stdout);
+  const html = readFileSync(join(dir, "outlook.html"), "utf8");
+  assert.ok(html.includes('class="plain-card"') && html.includes("Pravdepodobne áno") && html.includes("Podrobnosti pre technika"));
+  assert.ok(existsSync(join(dir, "outlook.png")));
 });

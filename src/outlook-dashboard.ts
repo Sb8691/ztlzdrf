@@ -2,6 +2,7 @@ import type { HourEvaluation, OutlookDigest, OutlookDigestDay, OutlookHistory, O
 import { LOCATION, type OutlookConfig, type OutlookModel } from "./config.js";
 import {
   PALETTE,
+  buildChanceSparkline,
   buildLineChart,
   buildSvgLegend,
   chartPanel,
@@ -10,18 +11,21 @@ import {
   statusColor,
   type ChartResult,
   type LineSeries,
+  type SparkPoint,
   type TooltipRow,
 } from "./charts.js";
 import { renderPageShell } from "./page.js";
 import { buildWeatherCharts, buildPaintingTimeline, renderLegend, renderDisclaimer, WEATHER_CHART_ORDER, WEATHER_CHART_TITLES } from "./dashboard.js";
-import { formatDayLabel, formatRunLabel, formatRunTick, localMidnightMs } from "./time.js";
+import { daysBetween, formatDayLabel, formatRunLabel, formatRunTick, formatShortDate, localDateOf, localMidnightMs } from "./time.js";
 import { latestRunFor, pct, primaryModel, runsOf, statusIcon, statusLabelSk, trendArrow, windowDates } from "./outlook-core.js";
+import { PAST_WORDS, chanceOf10, howToRead, plainContext, plainDays, type PlainDay } from "./outlook-plain.js";
 
 /*
  * Outlook page (docs/outlook.html), its e-mail PNG (docs/outlook.png), the link card on the main
- * dashboard and the block inside the daily e-mail. Decision first (day cards), then how the
- * forecast evolved run by run, then the latest run's ensemble meteogram for anyone who wants to
- * see why.
+ * dashboard and the block inside the daily e-mail. The page has two layers: the plain one on top
+ * (four day cards a non-technical reader understands in a few seconds - see outlook-plain.ts) and,
+ * folded under one <details>, everything technical: member shares, how the forecast evolved run by
+ * run, the table of runs and the latest run's ensemble meteogram.
  */
 
 export interface LatestRunView {
@@ -67,19 +71,75 @@ function shortDate(isoDate: string): string {
   return `${d}.${m}.`;
 }
 
-function windowLabel(window: { start: string; end: string }): string {
+function windowLabel(window: { start: string; end: string }, withYear = true): string {
   const [ys, ms, ds] = window.start.split("-").map(Number);
   const [ye, me, de] = window.end.split("-").map(Number);
-  if (ys === ye && ms === me) return `${ds}.–${de}.${me}.${ye}`;
-  return `${ds}.${ms}.–${de}.${me}.${ye}`;
+  const year = withYear ? String(ye) : "";
+  if (ys === ye && ms === me) return `${ds}.–${de}.${me}.${year}`;
+  return `${ds}.${ms}.–${de}.${me}.${year}`;
 }
 
 function runLabel(runAt: string): string {
   return formatRunLabel(Date.parse(runAt), LOCATION.timezone);
 }
 
-function fmtQ(q: { p10: number; p50: number; p90: number }, unit: string, dp = 1): string {
-  return `${q.p50.toFixed(dp)} ${unit} <span class="muted">(${q.p10.toFixed(dp)}–${q.p90.toFixed(dp)})</span>`;
+// ---------------------------------------------------------------------------
+// Plain layer: four day cards + one "how to read" line
+// ---------------------------------------------------------------------------
+
+/** The day's chance, one point per calendar day, over the three status bands. Inline on the page
+ * (theme-aware classes), fixed colours in the PNG. */
+function sparklineFor(day: PlainDay, cfg: OutlookConfig, inline: boolean): string {
+  const snaps = day.snapshots;
+  const points: SparkPoint[] = snaps.map((s, i) => ({
+    label: i === snaps.length - 1 ? "dnes" : formatShortDate(s.date),
+    value: s.pPaintable * 10,
+    status: s.status,
+    changed: i > 0 && s.model !== snaps[i - 1].model,
+  }));
+  const last = snaps[snaps.length - 1];
+  return buildChanceSparkline({
+    ariaLabel: `Ako sa menila šanca – ${day.dayLabel}: ${snaps.map((s) => `${chanceOf10(s.pPaintable)} z 10`).join(", ")}`,
+    points,
+    thresholds: { good: cfg.dayStatus.good * 10, marginal: cfg.dayStatus.marginal * 10 },
+    valueLabel: last ? `${chanceOf10(last.pPaintable)} z 10` : "",
+    inline,
+  });
+}
+
+function renderPlainCard(day: PlainDay, cfg: OutlookConfig): string {
+  // role="group": a plain <div> may not carry an aria-label (generic role), a group may - the
+  // sentence becomes the group's name and the visible children stay readable.
+  if (day.past) {
+    return `
+    <div class="plain-card past" role="group" style="--status-color:${statusColor(day.status)}" aria-label="${esc(day.sentence)}">
+      <div class="plain-day">${esc(day.dayLabel)}</div>
+      <div class="plain-verdict">${PAST_WORDS}</div>
+    </div>`;
+  }
+  const trendClass = day.trendDirection === "up" ? "trend-up" : day.trendDirection === "down" ? "trend-down" : "";
+  return `
+    <div class="plain-card" role="group" style="--status-color:${statusColor(day.status)}" aria-label="${esc(day.sentence)}">
+      <div class="plain-day">${esc(day.dayLabel)}</div>
+      <div class="plain-verdict"><span aria-hidden="true">${day.icon}</span><span>${esc(day.verdict)}</span></div>
+      <div class="plain-weather"><span aria-hidden="true">${day.glyphEmoji}</span> ${esc(day.weather)} &middot; ${esc(day.temp)}</div>
+      <div class="plain-chance">${esc(day.chance)}</div>
+      <div class="plain-trend">${day.trendArrow ? `<span class="${trendClass}" aria-hidden="true">${day.trendArrow}</span> ` : ""}${esc(day.trend)}</div>
+      <div class="plain-spark">${sparklineFor(day, cfg, true)}</div>
+    </div>`;
+}
+
+export function renderPlainSection(digest: OutlookDigest, cfg: OutlookConfig): string {
+  const days = plainDays(digest, cfg);
+  return `
+    <section class="card">
+      <h2 class="panel-title">Maľovanie terasy ${esc(windowLabel(digest.window, false))} – deň po dni</h2>
+      <div class="plain-grid">
+        ${days.map((d) => renderPlainCard(d, cfg)).join("")}
+      </div>
+      <p class="how-to-read">${esc(howToRead(plainContext(digest)))}</p>
+    </section>
+  `;
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +353,7 @@ function renderMeteogram(latest: LatestRunView, generatedAt: Date): { html: stri
   const charts = buildWeatherCharts(latest.median, nowMs, latest.consensus, { interactive: true, showNow: false });
   const timeline = buildPaintingTimeline(latest.consensus, nowMs, null, { showNow: false });
   const html = `
-    <h1 style="margin-top:32px;font-size:1.05rem;">Posledný beh ${esc(latest.model.label)} v okne – mediánový scenár</h1>
+    <h2 class="panel-title" style="margin-top:32px;font-size:1.05rem;">Posledný beh ${esc(latest.model.label)} v okne – mediánový scenár</h2>
     <p class="muted">Beh ${esc(formatRunLabel(latest.runAtMs, LOCATION.timezone))}, ${latest.members} členov. Čiary sú mediány členov po hodinách (zrážky: priemer členov, v tooltipe aj p50/p90); farebný pás je konsenzus členov o vhodnosti danej hodiny. Hodinové hodnoty sú interpolované z 3–6 h krokov modelu, preto ide o orientačný priebeh, nie presný rozvrh.</p>
     <section class="card">
       <h2 class="panel-title">Konsenzus vhodnosti po hodinách</h2>
@@ -306,18 +366,18 @@ function renderMeteogram(latest: LatestRunView, generatedAt: Date): { html: stri
 }
 
 function renderOutlookDisclaimer(cfg: OutlookConfig): string {
-  return `<p class="disclaimer">Výhľad na 9–12 dní má nízku spoľahlivosť: sleduj trend a zhodu modelov, nie jednotlivé čísla. Pravdepodobnosti sú podiely členov ensemblu, ktorým vyšlo aspoň ${cfg.minGoodHours} h súvisle vhodných podmienok podľa rovnakých pravidiel ako denné rozhodnutie (teplota, vlhkosť, rosný bod, vietor, 12 h sucha pred a 12 h bez dažďa po). Globálne modely majú rozlíšenie ~25 km – teplota je prepočítaná na 1055 m n. m., zrážky a vlhkosť v alpskom údolí ostávajú hrubé. Keď sa okno dostane do horizontu +60 h, rozhoduje hlavný dashboard (AROME/INCA).</p>`;
+  return `<p class="disclaimer">Strednodobý výhľad (dni až týždne dopredu) má nízku spoľahlivosť: sleduj trend a zhodu modelov, nie jednotlivé čísla. Pravdepodobnosti sú podiely členov ensemblu, ktorým vyšlo aspoň ${cfg.minGoodHours} h súvisle vhodných podmienok podľa rovnakých pravidiel ako denné rozhodnutie (teplota, vlhkosť, rosný bod, vietor, 12 h sucha pred a 12 h bez dažďa po). Globálne modely majú rozlíšenie ~25 km – teplota je prepočítaná na 1055 m n. m., zrážky a vlhkosť v alpskom údolí ostávajú hrubé. Keď sa okno dostane do horizontu +60 h, rozhoduje hlavný dashboard (AROME/INCA).</p>`;
 }
 
-export function renderOutlookHtml(
+/** Everything technical, folded under one <details>: latest runs, member-share day cards, the
+ * run-by-run evolution charts with their table, the meteogram and the technical disclaimer. */
+function renderTechnicalDetails(
   history: OutlookHistory,
   digest: OutlookDigest | null,
   latest: LatestRunView | null,
   generatedAt: Date,
   cfg: OutlookConfig
-): string {
-  const label = windowLabel(history.window);
-  const title = `Výhľad na maľovanie ${label}`;
+): { html: string; scripts: string[] } {
   const primary = primaryModel(cfg);
   const runsLine = cfg.models
     .map((m) => {
@@ -327,20 +387,13 @@ export function renderOutlookHtml(
     .filter((x): x is string => x !== null)
     .join(" &middot; ");
 
-  let body = `<p class="muted"><a href="index.html">← Späť na dnešné rozhodnutie</a></p>`;
+  let inner = runsLine ? `<p class="muted">${runsLine}</p>` : "";
   const scripts: string[] = [];
 
-  if (!digest) {
-    body += `
+  if (digest) {
+    inner += `
       <section class="card">
-        <h2 class="panel-title">Výhľad zatiaľ nie je k dispozícii</h2>
-        <p class="muted">${history.runs.length === 0 ? "Ešte nebola uložená žiadna snímka predpovede." : "Okno už uplynulo – história ostáva nižšie."}</p>
-      </section>
-    `;
-  } else {
-    body += `
-      <section class="card">
-        <h2 class="panel-title">Dá sa maľovať? Verdikt po dňoch (${esc(primary.label)}, beh ${esc(runLabel(digest.latestRunAt))})</h2>
+        <h2 class="panel-title">Verdikt po dňoch (${esc(primary.label)}, beh ${esc(runLabel(digest.latestRunAt))})</h2>
         <div class="outlook-grid">
           ${digest.days.map((d) => renderDayCard(d, cfg)).join("")}
         </div>
@@ -351,8 +404,8 @@ export function renderOutlookHtml(
 
   const panels = buildEvolutionPanels(history, cfg, { interactive: true });
   if (panels.length > 0) {
-    body += `
-      <h1 style="margin-top:32px;font-size:1.05rem;">Ako sa predpoveď vyvíja beh po behu</h1>
+    inner += `
+      <h2 class="panel-title" style="margin-top:24px;font-size:1.05rem;">Ako sa predpoveď vyvíja beh po behu</h2>
       <p class="muted">Každý bod je jeden beh modelu (os x = čas behu, os y = podiel členov ensemblu). Stabilne vysoká alebo rastúca čiara je dobrá správa; skoky medzi behmi znamenajú, že model ešte nemá jasno.</p>
       ${renderEvolutionLegend(history, cfg)}
       ${panels.map((p) => chartPanel(p.title, p.chart)).join("")}
@@ -363,17 +416,62 @@ export function renderOutlookHtml(
 
   if (latest) {
     const meteogram = renderMeteogram(latest, generatedAt);
-    body += meteogram.html;
+    inner += meteogram.html;
     scripts.push(...meteogram.scripts);
   }
 
-  body += renderOutlookDisclaimer(cfg);
+  if (inner.trim() === "") return { html: "", scripts };
+  inner += renderOutlookDisclaimer(cfg);
+  return {
+    html: `
+    <details class="technical">
+      <summary>Podrobnosti pre technika – pravdepodobnosti, vývoj po behoch, tabuľka a meteogram</summary>
+      ${inner}
+    </details>
+  `,
+    scripts,
+  };
+}
+
+export function renderOutlookHtml(
+  history: OutlookHistory,
+  digest: OutlookDigest | null,
+  latest: LatestRunView | null,
+  generatedAt: Date,
+  cfg: OutlookConfig
+): string {
+  const title = `Dá sa maľovať ${windowLabel(history.window)}?`;
+  let body = `<p class="muted"><a href="index.html">← Späť na dnešné rozhodnutie</a></p>`;
+  const scripts: string[] = [];
+
+  if (!digest) {
+    const over = daysBetween(localDateOf(generatedAt.getTime(), LOCATION.timezone), history.window.end) < 0;
+    body += over
+      ? `
+      <section class="card">
+        <h2 class="panel-title">Okno maľovania ${esc(windowLabel(history.window, false))} už uplynulo</h2>
+        <p class="muted">Dni maľovania sú za nami – ako sa predpoveď vyvíjala, ostáva v podrobnostiach nižšie.</p>
+      </section>
+    `
+      : `
+      <section class="card">
+        <h2 class="panel-title">Výhľad zatiaľ nie je k dispozícii</h2>
+        <p class="muted">Ešte nebola uložená žiadna snímka predpovede.</p>
+      </section>
+    `;
+  } else {
+    body += renderPlainSection(digest, cfg);
+  }
+
+  const technical = renderTechnicalDetails(history, digest, latest, generatedAt, cfg);
+  body += technical.html;
+  scripts.push(...technical.scripts);
   body += renderDisclaimer();
 
   return renderPageShell({
     title,
-    heading: `Zedlitzdorf 74 – ${title}`,
-    subtitle: `${esc(LOCATION.name)} &middot; vygenerované ${esc(formatGeneratedAt(generatedAt))}${runsLine ? ` &middot; ${runsLine}` : ""}`,
+    heading: `${title} – Zedlitzdorf 74`,
+    subtitle: `${esc(LOCATION.name)} &middot; stav k ${esc(formatGeneratedAt(generatedAt))}`,
     body,
     scripts,
   });

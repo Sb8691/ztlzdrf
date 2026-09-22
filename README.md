@@ -69,12 +69,27 @@ GeoSphere končí pri +60 h, takže na otázku *"dá sa maľovať o desať dní?
 - Každý beh modelu (00z/12z) sa uloží ako malý súhrn do `docs/outlook/history.json` – ukladanie je
   idempotentné (rovnaký beh alebo rovnaké čísla sa nezapíšu dvakrát), surové série členov sa
   neukladajú.
-- `docs/outlook.html` ukazuje rozhodnutie po dňoch, **vývoj predpovede beh po behu** (jeden panel na
-  cieľový deň: pravdepodobnosť maľovateľného dňa, aspoň hraničného dňa, dažďa a názory ostatných
-  modelov), tabuľku všetkých behov a ensemble meteogram posledného behu (mediánový scenár,
-  konsenzuálny pás vhodnosti). `docs/outlook.png` sú tie isté panely pre e-mail.
+- `docs/outlook.html` má dve vrstvy. Navrchu **jednoduchá vrstva** (`src/outlook-plain.ts`): pre
+  každý deň okna semafor so slovom (🟢 Pravdepodobne áno / 🟡 Neisté / 🔴 Skôr nie), piktogram
+  počasia so slovom, teplota cez deň, šanca ako „áno v 6 z 10 predpovedí“, trend slovami a malý graf
+  toho, ako sa šanca menila deň po dni. Je to čistá funkcia `history.json`, bez percent, názvov
+  modelov a čísel behov – aby to pochopil aj netechnický čitateľ. Pod jedným rozbaľovačom
+  „Podrobnosti pre technika“ ostáva všetko ostatné: podiely členov, **vývoj predpovede beh po behu**
+  (jeden panel na cieľový deň: pravdepodobnosť maľovateľného dňa, aspoň hraničného dňa, dažďa a
+  názory ostatných modelov), tabuľka všetkých behov a ensemble meteogram posledného behu (mediánový
+  scenár, konsenzuálny pás vhodnosti). `docs/outlook.png` sú panely vývoja pre e-mail.
+- Mapovanie čísel na slová (`OUTLOOK.plain`): P(dážď ≥ 1 mm) ≥ 0,5 → 🌧️ „skôr dážď“, ≥ 0,3 → 🌦️
+  „možno prehánky“, inak ☀️ „sucho“ (ak medián GOOD okna dosahuje `minGoodHours`) alebo 🌤️
+  „sucho, ale chladno / vlhko / nie ideálne“. Šanca je `floor(P × 10)`, aby „6 z 10“ vždy sedelo
+  so zeleným semaforom (🟢 od 0,6); žltý deň, ktorý za verdikt vďačí podielu „aspoň hraničných“
+  členov, to dopovie („áno v 1 z 10 predpovedí, aspoň čiastočne v 7 z 10“). Trend „od včera lepšie /
+  horšie / bez zmeny“ je ten istý ±10 p. b. výpočet ako šípka v detailoch; bez porovnania (prvá
+  snímka, zmena modelu) sa píše „zatiaľ nie je s čím porovnať“. Piktogram vyjadruje riziko dažďa a
+  vhodnosť, nie oblačnosť.
 - Hlavný dashboard dostane kartu s verdiktmi a odkazom, ranný e-mail kompaktnú tabuľku s obrázkom –
-  oboje len kým okno trvá, potom zmiznú samy.
+  oboje len kým okno trvá, potom zmiznú samy. Prešlé dni okna sú na stránke sivé („už je za nami“);
+  po skončení okna sa stránka ešte raz prerenderuje do stavu „okno už uplynulo“ (história ostáva
+  v detailoch) – s pevnou pečiatkou polnoci po konci okna, takže ďalšie behy už nič nemenia.
 - Workflow beží navyše o 11:13 a 23:13 UTC bez e-mailu, aby zachytil 00z a 12z beh ECMWF.
 
 Výhľad na 9–12 dní je orientačný: sleduj trend a zhodu modelov, nie jednotlivé čísla. Keď sa okno
@@ -89,6 +104,17 @@ SEND_EMAIL=false npm run dev   # vypíše výsledok do konzoly bez odoslania e-m
 npm run outlook                # snímka strednodobého výhľadu -> docs/outlook/history.json, docs/outlook.html
 npm test
 ```
+
+Ladenie vzhľadu výhľadu bez siete a bez dotyku živej histórie v `docs/` (rovnaká štruktúra
+`outlook/history.json` ako v `docs/`):
+
+```bash
+mkdir -p /cesta/scratch/outlook && cp docs/outlook/history.json /cesta/scratch/outlook/
+OUTLOOK_DOCS_DIR=/cesta/scratch OUTLOOK_RENDER_ONLY=true npm run outlook   # -> /cesta/scratch/outlook.html + .png
+```
+
+Meteogram posledného behu vtedy chýba (potrebuje čerstvo stiahnutých členov).
+`OUTLOOK_FORCE_RENDER=true` prerenderuje aj bez nového behu.
 
 ## Nasadenie na GitHub Actions
 
