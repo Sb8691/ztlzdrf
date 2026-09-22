@@ -410,7 +410,6 @@ test("snapshotsFor: what the card showed at the end of each local day", () => {
   const ci = mergeHistory(emptyHistory(OUTLOOK, WINDOW), [
     mkRun("ecmwf_ifs025", R0, { "2026-10-01": 0.3 }, "2026-09-22T11:13:00.000Z"),
     mkRun("ecmwf_ifs025", R1, { "2026-10-01": 0.65 }, "2026-09-22T23:13:00.000Z"),
-    mkRun("ecmwf_ifs025", R2, { "2026-10-01": 0.5 }, "2026-09-23T11:13:00.000Z"),
   ]).history;
   assert.deepEqual(
     snapshotsFor(ci, OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 23, 8)).map((s) => [s.date, s.pPaintable]),
@@ -419,8 +418,10 @@ test("snapshotsFor: what the card showed at the end of each local day", () => {
       ["2026-09-23", 0.65],
     ]
   );
+  // Later that morning the 00z run is stored and takes over today's point.
+  const ciNext = mergeHistory(ci, [mkRun("ecmwf_ifs025", R2, { "2026-10-01": 0.5 }, "2026-09-23T11:13:00.000Z")]).history;
   assert.deepEqual(
-    snapshotsFor(ci, OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 23, 12)).map((s) => s.pPaintable),
+    snapshotsFor(ciNext, OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 23, 12)).map((s) => s.pPaintable),
     [0.3, 0.5]
   );
   assert.deepEqual(snapshotsFor(emptyHistory(OUTLOOK, WINDOW), OUTLOOK, "2026-10-01", Date.UTC(2026, 8, 23, 8)), []);
