@@ -2,6 +2,7 @@ import { PAINTING_RULES, type OutlookConfig } from "./config.js";
 import type { OutlookDigest, OutlookDigestDay, OutlookSnapshot, OutlookTrend, PaintingStatus } from "./types.js";
 import { daysBetween, formatDayLabelLong } from "./time.js";
 import { statusIcon, statusLabelSk } from "./outlook-core.js";
+import type { WeatherGlyphKind } from "./charts.js";
 
 /*
  * The plain-language layer: turns the digest numbers into the few words a non-technical reader
@@ -18,8 +19,10 @@ const NB = " ";
 
 export type RainLevel = "rain" | "showers" | "dry";
 /** The pictogram encodes rain risk + suitability, NOT cloud cover (radiation is not persisted):
- * sun = dry and a usable window, dryish = dry but cold/humid/short, showers, rain. */
-export type WeatherGlyph = "sun" | "dryish" | "showers" | "rain";
+ * sun = dry and a usable window, dryish = dry but cold/humid/short, showers, rain. The emoji is for
+ * HTML, `weatherGlyphSvg` draws the same four for the rasterized strip (type import only - this
+ * module stays free of runtime dependencies). */
+export type WeatherGlyph = WeatherGlyphKind;
 
 export interface PlainDay {
   date: string;
@@ -38,8 +41,11 @@ export interface PlainDay {
   /** "cez deň okolo 18 °C" */
   temp: string;
   chanceOf10: number;
-  /** "áno v 6 z 10 predpovedí" */
+  /** "áno v 6 z 10 predpovedí", plus the "aspoň čiastočne" clause where it is needed. */
   chance: string;
+  /** Always the bare "áno v 6 z 10 predpovedí" - for the narrow rows of the e-mail image, where the
+   * longer form would not fit; the e-mail table beside it still carries the full sentence. */
+  chanceShort: string;
   trendDirection: OutlookTrend["direction"] | null;
   trendArrow: string;
   /** "od včera lepšie" / "zatiaľ nie je s čím porovnať" */
@@ -159,6 +165,7 @@ export function plainDay(day: OutlookDigestDay, cfg: OutlookConfig): PlainDay {
     temp,
     chanceOf10: chanceOf10(day.pPaintable),
     chance,
+    chanceShort: chanceWords(day.pPaintable),
     trendDirection: trend.direction,
     trendArrow: trend.arrow,
     trend: trend.text,
@@ -177,11 +184,17 @@ export function plainContext(digest: OutlookDigest): PlainContext {
 
 export const LEGEND_SHORT = "🟢 asi áno · 🟡 ešte nevieme · 🔴 skôr nie";
 
+/** The horizon caveat as a sentence of its own - the page, the dashboard card, the e-mail and the
+ * e-mail image all carry it, so it is written once. */
+export function horizonSentence(ctx: PlainContext): string {
+  return `${capitalize(horizonWords(ctx))}.`;
+}
+
 export function howToRead(ctx: PlainContext): string {
   return (
     "Ako to čítať: 🟢 Pravdepodobne áno = asi sa bude dať maľovať, 🟡 Neisté = ešte nevieme, 🔴 Skôr nie. " +
     "Šípka hovorí, či sa predpoveď od včera zlepšila, alebo zhoršila; malý graf v každom dni ukazuje, ako sa šanca menila deň po dni (vpravo je dnešok). " +
-    `${capitalize(horizonWords(ctx))}.`
+    horizonSentence(ctx)
   );
 }
 

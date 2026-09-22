@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fetchWeatherWindow } from "./geosphere.js";
 import { CHART_WINDOW, LOCATION, OUTLOOK, PAINTING_RULES } from "./config.js";
-import { sendAlert } from "./email.js";
+import { renderAlertEmail, sendAlert } from "./email.js";
 import { renderDashboardHtml, renderChartPng } from "./dashboard.js";
 import { evaluatePaintingConditions } from "./painting.js";
 import { buildDigest } from "./outlook-core.js";
@@ -82,6 +82,14 @@ async function main() {
   // charts in the e-mail itself.
   writeFileSync(`${DASHBOARD_DIR}/chart.png`, renderChartPng(points, now.getTime(), assessment.hourly));
   console.log("Graf vygenerovaný do docs/chart.png.");
+
+  // Exactly the HTML that would be sent, written to a file for a local look (the hosted images stay
+  // remote, so the preview shows what Gmail shows once the run has published them).
+  const previewPath = process.env.EMAIL_PREVIEW_PATH;
+  if (previewPath) {
+    writeFileSync(previewPath, renderAlertEmail(points, now, assessment, { outlookHtml: outlook.emailHtml }).html);
+    console.log(`Náhľad e-mailu zapísaný do ${previewPath}.`);
+  }
 
   if (sendEmail) {
     const apiKey = process.env.RESEND_API_KEY;

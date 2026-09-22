@@ -1,14 +1,15 @@
 import type { HourEvaluation, OutlookDigest, OutlookDigestDay, OutlookHistory, OutlookRunEntry, WeatherPoint } from "./types.js";
 import { LOCATION, type OutlookConfig, type OutlookModel } from "./config.js";
+import { createHash } from "node:crypto";
 import {
   PALETTE,
   buildChanceSparkline,
   buildLineChart,
-  buildSvgLegend,
   chartPanel,
   esc,
-  stackChartsToPng,
+  rasterizeSvg,
   statusColor,
+  weatherGlyphSvg,
   type ChartResult,
   type LineSeries,
   type SparkPoint,
@@ -18,7 +19,7 @@ import { renderPageShell } from "./page.js";
 import { buildWeatherCharts, buildPaintingTimeline, renderLegend, renderDisclaimer, WEATHER_CHART_ORDER, WEATHER_CHART_TITLES } from "./dashboard.js";
 import { daysBetween, formatDayLabel, formatRunLabel, formatRunTick, formatShortDate, localDateOf, localMidnightMs } from "./time.js";
 import { latestRunFor, pct, primaryModel, runsOf, statusIcon, statusLabelSk, trendArrow, windowDates } from "./outlook-core.js";
-import { PAST_WORDS, chanceOf10, howToRead, plainContext, plainDays, type PlainDay } from "./outlook-plain.js";
+import { LEGEND_SHORT, PAST_WORDS, chanceOf10, horizonSentence, howToRead, plainContext, plainDays, type PlainDay } from "./outlook-plain.js";
 
 /*
  * Outlook page (docs/outlook.html), its e-mail PNG (docs/outlook.png), the link card on the main
@@ -89,7 +90,7 @@ function runLabel(runAt: string): string {
 
 /** The day's chance, one point per calendar day, over the three status bands. Inline on the page
  * (theme-aware classes), fixed colours in the PNG. */
-function sparklineFor(day: PlainDay, cfg: OutlookConfig, inline: boolean): string {
+function sparklineFor(day: PlainDay, cfg: OutlookConfig, inline: boolean, size?: { width: number; height: number }): string {
   const snaps = day.snapshots;
   const points: SparkPoint[] = snaps.map((s, i) => ({
     label: i === snaps.length - 1 ? "dnes" : formatShortDate(s.date),
@@ -104,6 +105,8 @@ function sparklineFor(day: PlainDay, cfg: OutlookConfig, inline: boolean): strin
     thresholds: { good: cfg.dayStatus.good * 10, marginal: cfg.dayStatus.marginal * 10 },
     valueLabel: last ? `${chanceOf10(last.pPaintable)} z 10` : "",
     inline,
+    width: size?.width,
+    height: size?.height,
   });
 }
 
@@ -477,34 +480,115 @@ export function renderOutlookHtml(
   });
 }
 
-/** The four evolution panels stacked with a legend header - the hosted image the e-mail embeds. */
-export function renderOutlookPng(history: OutlookHistory, cfg: OutlookConfig): Buffer | null {
-  const panels = buildEvolutionPanels(history, cfg, { interactive: false });
-  if (panels.length === 0) return null;
-  const legend = buildSvgLegend(legendItems(history, cfg));
-  return stackChartsToPng(
-    panels.map((p) => ({ title: p.title, svg: p.chart.svg })),
-    { scale: 1.5, header: legend }
-  );
+// ---------------------------------------------------------------------------
+// E-mail image (docs/outlook.png): the same four plain days as a narrow strip
+// ---------------------------------------------------------------------------
+
+/** 480 CSS px wide, rasterized at 2x - the width the e-mail shows it at, so text renders sharp on
+ * a retina phone without the mail client having to scale anything down. */
+const STRIP = { width: 480, pad: 14, headerH: 58, rowH: 78, pastRowH: 36, footerH: 34, colARight: 310, sparkX: 324, sparkW: 142, sparkH: 66 };
+/** Fixed ink, like the rest of the rasterized output: a PNG has no theme to follow. */
+const STRIP_INK = { primary: "#22201b", secondary: "#52514e", muted: "#898781", border: "#e6e3dc" };
+
+function stripText(x: number, y: number, size: number, fill: string, content: string, opts: { weight?: number; anchor?: string } = {}): string {
+  const anchor = opts.anchor ? ` text-anchor="${opts.anchor}"` : "";
+  return `<text x="${x}" y="${y}"${anchor} style="fill:${fill};font-size:${size}px;${opts.weight ? `font-weight:${opts.weight};` : ""}">${esc(content)}</text>`;
+}
+
+/**
+ * The plain four-day overview as one SVG document. No emoji anywhere (a test checks): the CI
+ * rasterizer has no emoji font, so the traffic light is a coloured disc, the weather is a drawn
+ * pictogram and the trend is words only - an "↑" would risk a tofu box for no added meaning.
+ */
+export function buildPlainStripSvg(digest: OutlookDigest, cfg: OutlookConfig): { svg: string; width: number; height: number } {
+  const days = plainDays(digest, cfg);
+  const parts: string[] = [
+    stripText(STRIP.pad, 26, 16, STRIP_INK.primary, `Dá sa maľovať ${windowLabel(digest.window)}?`, { weight: 700 }),
+    stripText(STRIP.pad, 45, 11.5, STRIP_INK.secondary, horizonSentence(plainContext(digest))),
+  ];
+  const rule = (at: number) => `<line x1="${STRIP.pad}" y1="${at}" x2="${STRIP.width - STRIP.pad}" y2="${at}" stroke="${STRIP_INK.border}" stroke-width="1" />`;
+
+  let y = STRIP.headerH;
+  for (const day of days) {
+    parts.push(rule(y));
+    if (day.past) {
+      parts.push(stripText(STRIP.pad, y + 23, 12.5, STRIP_INK.secondary, day.dayLabel, { weight: 600 }));
+      parts.push(stripText(STRIP.colARight, y + 23, 11.5, STRIP_INK.muted, PAST_WORDS, { anchor: "end" }));
+      y += STRIP.pastRowH;
+      continue;
+    }
+    parts.push(
+      stripText(STRIP.pad, y + 15, 12.5, STRIP_INK.secondary, day.dayLabel, { weight: 600 }),
+      stripText(STRIP.colARight, y + 15, 10.5, STRIP_INK.muted, day.trend, { anchor: "end" }),
+      `<circle cx="${STRIP.pad + 5.5}" cy="${y + 32.5}" r="5.5" fill="${statusColor(day.status)}" />`,
+      stripText(STRIP.pad + 17, y + 37, 15, STRIP_INK.primary, day.verdict, { weight: 700 }),
+      weatherGlyphSvg(day.glyph, STRIP.pad, y + 43, 18),
+      stripText(STRIP.pad + 23, y + 56, 11.5, STRIP_INK.primary, day.weather),
+      stripText(STRIP.pad, y + 72, 11.5, STRIP_INK.muted, `${day.temp} · ${day.chanceShort}`),
+      `<g transform="translate(${STRIP.sparkX},${y + 6})">${sparklineFor(day, cfg, false, { width: STRIP.sparkW, height: STRIP.sparkH })}</g>`
+    );
+    y += STRIP.rowH;
+  }
+
+  parts.push(rule(y));
+  const legend = [
+    { color: PALETTE.statusGood, label: "asi áno" },
+    { color: PALETTE.statusMarginal, label: "ešte nevieme" },
+    { color: PALETTE.statusBad, label: "skôr nie" },
+  ];
+  legend.forEach((item, i) => {
+    const x = STRIP.pad + i * 160;
+    parts.push(`<circle cx="${x + 5}" cy="${y + 13}" r="4.5" fill="${item.color}" />`, stripText(x + 15, y + 17, 11, STRIP_INK.secondary, item.label));
+  });
+
+  const height = y + STRIP.footerH;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${STRIP.width} ${height}" width="${STRIP.width}" height="${height}">` +
+    `<rect x="0" y="0" width="${STRIP.width}" height="${height}" style="fill:${PALETTE.surface}" />${parts.join("")}</svg>`;
+  return { svg, width: STRIP.width, height };
+}
+
+/** The hosted image the e-mail embeds; null once the window is over (no digest, nothing to show). */
+export function renderOutlookPng(digest: OutlookDigest | null, cfg: OutlookConfig): Buffer | null {
+  if (!digest) return null;
+  const strip = buildPlainStripSvg(digest, cfg);
+  return rasterizeSvg(strip.svg, strip.width, 2);
+}
+
+/** Cache-busting key for the hosted image: a hash of the very source the PNG is rendered from, so
+ * Gmail's image proxy refetches exactly when the picture changes. A run timestamp would not do -
+ * from step B1 on, the speaking model can change without the anchor's run changing. */
+export function outlookImageKey(digest: OutlookDigest, cfg: OutlookConfig): string {
+  return createHash("sha1").update(buildPlainStripSvg(digest, cfg).svg).digest("hex").slice(0, 10);
 }
 
 // ---------------------------------------------------------------------------
 // Embeds: dashboard card + e-mail block
 // ---------------------------------------------------------------------------
 
+/** The plain layer in list form - same words as the outlook page, minus the sparklines (the card is
+ * a glance on the way to outlook.html, not the place to study a trend). */
 export function renderOutlookCard(digest: OutlookDigest, cfg: OutlookConfig): string {
-  const chips = digest.days
-    .map(
-      (d) =>
-        `<span class="chip" style="color:${statusColor(d.status)}">${statusIcon(d.status)} ${esc(formatDayLabel(d.date))} ${pct(d.pPaintable)}${d.trend ? ` ${trendArrow(d.trend)}` : ""}</span>`
+  const items = plainDays(digest, cfg)
+    .map((d) =>
+      d.past
+        ? `<li><span class="plain-head">${esc(d.dayLabel)}</span><span class="plain-sub">${PAST_WORDS}</span></li>`
+        : `<li>
+          <span class="plain-head"><span aria-hidden="true">${d.icon}</span> ${esc(d.dayLabel)} &middot; ${esc(d.verdict)}</span>
+          <span class="plain-sub"><span aria-hidden="true">${d.glyphEmoji}</span> ${esc(d.weather)} &middot; ${esc(d.temp)} &middot; ${esc(d.chance)} &middot; ${esc(d.trend)}</span>
+        </li>`
     )
     .join("");
   return `
     <section class="card">
-      <h2 class="panel-title">Výhľad na maľovanie ${esc(windowLabel(digest.window))}</h2>
-      <div class="outlook-row">${chips}</div>
-      <p class="muted" style="margin:8px 0 0;">${esc(digest.primaryLabel)}, beh ${esc(runLabel(digest.latestRunAt))} &middot; podiel členov ensemblu s aspoň ${cfg.minGoodHours} h súvisle vhodných podmienok; šípka = trend za 24 h.</p>
-      <a class="page-link" href="outlook.html">Podrobný výhľad a vývoj predpovede →</a>
+      <h2 class="panel-title">Dá sa maľovať ${esc(windowLabel(digest.window))}?</h2>
+      <ul class="plain-list">${items}</ul>
+      <p class="how-to-read">${esc(horizonSentence(plainContext(digest)))} ${LEGEND_SHORT}</p>
+      <a class="page-link" href="outlook.html">Podrobný výhľad →</a>
+      <details style="margin-top:10px;">
+        <summary>Zdroj</summary>
+        <p class="muted" style="margin:6px 0 0;">${esc(digest.primaryLabel)}, beh ${esc(runLabel(digest.latestRunAt))} &middot; podiel členov ensemblu s aspoň ${cfg.minGoodHours} h súvisle vhodných podmienok; trend = zmena za 24 h.</p>
+      </details>
     </section>
   `;
 }
@@ -512,38 +596,40 @@ export function renderOutlookCard(digest: OutlookDigest, cfg: OutlookConfig): st
 const EMAIL = { header: "#54606e", muted: "#767268", ink: "#22201b", border: "#e6e3dc" };
 const PAGES_BASE = "https://sb8691.github.io/ztlzdrf";
 
-/** Table-based, inline-styled block for the daily e-mail; the chart is the hosted outlook.png
- * (cache-busted per model run, so a re-sent mail for the same run reuses the cached image). */
+/**
+ * Two columns - the day on the left, the verdict on the right - in the same plain words as the
+ * page. Wrapping is deliberately left on (the old seven-column table forced a horizontal scroll on
+ * a phone), and the verdict is ink, never the status colour, which fails contrast in amber.
+ * The image below repeats it all, so its alt text carries the whole message for a reader who has
+ * images turned off.
+ */
 export function renderOutlookEmailBlock(digest: OutlookDigest, cfg: OutlookConfig): string {
-  const th = (label: string, align = "right") =>
-    `<th style="padding:4px 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.03em;color:${EMAIL.muted};text-align:${align};border-bottom:1px solid ${EMAIL.border};font-weight:600;">${label}</th>`;
-  const td = (value: string, align = "right", color?: string) =>
-    `<td style="padding:5px 6px;font-size:13px;text-align:${align};color:${color ?? EMAIL.ink};border-bottom:1px solid ${EMAIL.border};white-space:nowrap;">${value}</td>`;
-  const rows = digest.days
-    .map(
-      (d) => `
-        <tr>
-          ${td(esc(formatDayLabel(d.date)), "left")}
-          ${td(`${statusIcon(d.status)} ${esc(statusLabelSk(d.status))}`, "left", statusColor(d.status))}
-          ${td(`<strong>${pct(d.pPaintable)}</strong>${d.trend ? ` ${trendArrow(d.trend)}` : ""}`)}
-          ${td(pct(d.pPossible))}
-          ${td(pct(d.pRain))}
-          ${td(`${d.precipP50.toFixed(1)} / ${d.precipP90.toFixed(1)}`)}
-          ${td(`${d.tMaxP50.toFixed(0)} / ${d.tMinP50.toFixed(0)}`)}
-        </tr>`
-    )
+  const days = plainDays(digest, cfg);
+  const cell = (content: string, extra = "") =>
+    `<td valign="top" style="padding:7px 8px 7px 0;border-bottom:1px solid ${EMAIL.border};${extra}">${content}</td>`;
+  const head = (text: string) => `<div style="font-size:14px;font-weight:700;color:${EMAIL.ink};">${text}</div>`;
+  const sub = (text: string) => `<div style="margin-top:2px;font-size:12px;color:${EMAIL.muted};">${text}</div>`;
+  const rows = days
+    .map((d) => {
+      if (d.past) {
+        return `<tr>${cell(head(esc(d.dayLabel)), "width:44%;")}${cell(`<div style="font-size:13px;color:${EMAIL.muted};">${PAST_WORDS}</div>`)}</tr>`;
+      }
+      const left = head(esc(d.dayLabel)) + sub(`${d.glyphEmoji} ${esc(d.weather)} &middot; ${esc(d.temp)}`);
+      const right = head(`${d.icon} ${esc(d.verdict)}`) + sub(`${esc(d.chance)} &middot; ${d.trendArrow ? `${d.trendArrow} ` : ""}${esc(d.trend)}`);
+      return `<tr>${cell(left, "width:44%;")}${cell(right)}</tr>`;
+    })
     .join("");
-  const imgSrc = `${PAGES_BASE}/outlook.png?t=${Date.parse(digest.latestRunAt)}`;
+  const imgSrc = `${PAGES_BASE}/outlook.png?t=${outlookImageKey(digest, cfg)}`;
+  const alt = days.map((d) => d.sentence).join(" ");
   return `
     <div style="margin-top:22px;padding-top:16px;border-top:1px solid ${EMAIL.border};">
-      <div style="font-size:15px;font-weight:700;color:${EMAIL.ink};">Výhľad na maľovanie ${esc(windowLabel(digest.window))}</div>
-      <div style="margin:2px 0 10px;font-size:12px;color:${EMAIL.muted};">${esc(digest.primaryLabel)}, beh ${esc(runLabel(digest.latestRunAt))} &middot; ${digest.runCount}. snímka &middot; podiel členov ensemblu s aspoň ${cfg.minGoodHours} h súvisle vhodných podmienok, šípka = trend za 24 h</div>
+      <div style="font-size:15px;font-weight:700;color:${EMAIL.ink};">Dá sa maľovať ${esc(windowLabel(digest.window))}?</div>
+      <div style="margin:2px 0 10px;font-size:12px;color:${EMAIL.muted};">${esc(horizonSentence(plainContext(digest)))} ${LEGEND_SHORT}</div>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-        <tr>${th("Deň", "left")}${th("Verdikt", "left")}${th("Maľovateľný")}${th("Aspoň hraničný")}${th(`Dážď ≥ ${cfg.rainDayThresholdMm} mm`)}${th("Zrážky p50 / p90 mm")}${th("Tmax / Tmin °C")}</tr>
         ${rows}
       </table>
-      <img src="${imgSrc}" width="900" alt="Vývoj predpovede pre okno maľovania po behoch modelu" style="width:100%;max-width:900px;height:auto;display:block;margin-top:12px;border-radius:8px;border:1px solid ${EMAIL.border};" />
-      <p style="margin:8px 0 0;font-size:12px;color:${EMAIL.muted};">Podrobný výhľad s vývojom po behoch a meteogramom: <a href="${PAGES_BASE}/outlook.html" style="color:${EMAIL.header};font-weight:600;text-decoration:none;">${PAGES_BASE}/outlook.html</a></p>
+      <img src="${imgSrc}" width="480" alt="${esc(alt)}" style="width:100%;max-width:480px;height:auto;display:block;margin-top:12px;border-radius:8px;border:1px solid ${EMAIL.border};" />
+      <p style="margin:8px 0 0;font-size:12px;color:${EMAIL.muted};">Pre technika – pravdepodobnosti, vývoj predpovede a meteogram: <a href="${PAGES_BASE}/outlook.html" style="color:${EMAIL.header};font-weight:600;text-decoration:none;">${PAGES_BASE}/outlook.html</a></p>
     </div>
   `;
 }

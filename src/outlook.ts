@@ -134,9 +134,11 @@ function renderOutputs(history: OutlookHistory, digest: OutlookDigest | null, la
   const pngPath = join(DOCS_DIR, "outlook.png");
   const html = renderOutlookHtml(history, digest, latestView, now, cfg);
   const htmlChanged = writeIfChanged(htmlPath, html);
-  const png = renderOutlookPng(history, cfg);
+  // The image is the plain four-day strip, so it exists only while the window does; after it ends
+  // the e-mail block is gone too and the last PNG may simply stay behind.
+  const png = renderOutlookPng(digest, cfg);
   const pngChanged = png ? writeIfChanged(pngPath, png) : false;
-  console.log(`${htmlPath} ${htmlChanged ? "aktualizovaný" : "bez zmeny"}, ${pngPath} ${png ? (pngChanged ? "aktualizovaný" : "bez zmeny") : "nevygenerovaný (bez histórie)"}.`);
+  console.log(`${htmlPath} ${htmlChanged ? "aktualizovaný" : "bez zmeny"}, ${pngPath} ${png ? (pngChanged ? "aktualizovaný" : "bez zmeny") : "nevygenerovaný (žiadne aktívne okno)"}.`);
 }
 
 async function main(): Promise<void> {

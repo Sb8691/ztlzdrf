@@ -465,31 +465,66 @@ export function buildChanceSparkline(spec: SparklineSpec): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" class="spark-svg" role="img" aria-label="${esc(spec.ariaLabel)}">${bands}${guides}${path}${dots}${valueLabel}${dateLabels}</svg>`;
 }
 
-/** In-SVG legend row (for rasterized output, where no HTML legend exists). Returns the markup and
- * its height so callers can stack it. */
-export function buildSvgLegend(items: { label: string; color: string; dash?: string }[]): { svg: string; height: number } {
-  const rowH = 20;
-  const charW = 6.2; // average glyph width at 11px - only used to wrap rows, so an estimate is fine
-  const gap = 22;
-  const maxX = CHART_WIDTH - MARGIN.right;
-  let x = MARGIN.left;
-  let row = 0;
-  const parts: string[] = [];
-  for (const item of items) {
-    const width = 24 + item.label.length * charW;
-    if (x > MARGIN.left && x + width > maxX) {
-      row++;
-      x = MARGIN.left;
-    }
-    const y = row * rowH + rowH / 2;
-    const dash = item.dash ? `stroke-dasharray:${item.dash};` : "";
-    parts.push(
-      `<line x1="${x}" y1="${y}" x2="${x + 18}" y2="${y}" style="stroke:${item.color};stroke-width:2.5;${dash}stroke-linecap:round" />`,
-      `<text x="${x + 24}" y="${y + 4}" style="fill:#52514e;font-size:11px">${esc(item.label)}</text>`
-    );
-    x += width + gap;
+/** The four pictograms the plain layer uses, in order of decreasing suitability. Owned here (the
+ * leaf module that can draw them); outlook-plain.ts re-exports the type as `WeatherGlyph`. */
+export type WeatherGlyphKind = "sun" | "dryish" | "showers" | "rain";
+
+function sunRays(cx: number, cy: number, from: number, to: number, width: number): string {
+  return Array.from({ length: 8 }, (_, i) => {
+    const a = (i * Math.PI) / 4;
+    const dx = Math.cos(a);
+    const dy = Math.sin(a);
+    return `<line x1="${(cx + dx * from).toFixed(1)}" y1="${(cy + dy * from).toFixed(1)}" x2="${(cx + dx * to).toFixed(1)}" y2="${(cy + dy * to).toFixed(1)}" stroke="${PALETTE.radiation}" stroke-width="${width}" stroke-linecap="round" />`;
+  }).join("");
+}
+
+/** A cloud built from three discs on a rounded slab - obvious geometry that cannot come out
+ * malformed, unlike a hand-written arc path. */
+function cloudShape(cy: number, scale: number): string {
+  const s = (v: number) => (v * scale).toFixed(1);
+  return (
+    `<g fill="${PALETTE.axis}">` +
+    `<circle cx="${s(9)}" cy="${cy.toFixed(1)}" r="${s(4)}" />` +
+    `<circle cx="${s(14.5)}" cy="${(cy - 1.5 * scale).toFixed(1)}" r="${s(5)}" />` +
+    `<circle cx="${s(18.5)}" cy="${(cy + 1 * scale).toFixed(1)}" r="${s(3.6)}" />` +
+    `<rect x="${s(5)}" y="${(cy + 0.5 * scale).toFixed(1)}" width="${s(16)}" height="${s(4.5)}" rx="${s(2.25)}" />` +
+    `</g>`
+  );
+}
+
+function drops(xs: number[], top: number, length: number): string {
+  return xs
+    .map(
+      (x) =>
+        `<line x1="${x}" y1="${top}" x2="${(x - length * 0.3).toFixed(1)}" y2="${(top + length).toFixed(1)}" stroke="${PALETTE.precip}" stroke-width="2" stroke-linecap="round" />`
+    )
+    .join("");
+}
+
+/**
+ * Weather pictogram as plain SVG shapes, drawn in a 24x24 box and placed/scaled by the caller.
+ * Needed because resvg on CI has no emoji font - a literal "☀️" would rasterize as a
+ * "tofu" box. The pictogram encodes rain risk and suitability, not cloud cover (see outlook-plain).
+ */
+export function weatherGlyphSvg(kind: WeatherGlyphKind, x: number, y: number, size = 24): string {
+  let body: string;
+  if (kind === "sun") {
+    body = `${sunRays(12, 12, 7.5, 10.5, 1.8)}<circle cx="12" cy="12" r="5.5" fill="${PALETTE.radiation}" />`;
+  } else if (kind === "dryish") {
+    // Sun peeking out behind the cloud: drawn first, so the cloud overlaps it.
+    body = `${sunRays(9, 8.5, 5.5, 7.8, 1.5)}<circle cx="9" cy="8.5" r="4" fill="${PALETTE.radiation}" />${cloudShape(15.2, 0.86)}`;
+  } else if (kind === "showers") {
+    body = `${cloudShape(10.5, 1)}${drops([11, 16.5], 17.5, 4.5)}`;
+  } else {
+    body = `${cloudShape(10.5, 1)}${drops([8, 12, 16, 19.5], 17.5, 5)}`;
   }
-  return { svg: `<g>${parts.join("")}</g>`, height: (row + 1) * rowH + 6 };
+  return `<g transform="translate(${x},${y}) scale(${(size / 24).toFixed(4)})">${body}</g>`;
+}
+
+/** Rasterizes one SVG document at `scale` times its CSS width. The single place that knows how the
+ * project turns SVG into PNG bytes for e-mail (see stackChartsToPng for why an image at all). */
+export function rasterizeSvg(svg: string, width: number, scale = 2): Buffer {
+  return new Resvg(svg, { fitTo: { mode: "width", value: Math.round(width * scale) } }).render().asPng();
 }
 
 /**
@@ -498,13 +533,9 @@ export function buildSvgLegend(items: { label: string; color: string; dash?: str
  * only reliable way to show charts in the e-mail. Panels stay visually split (own scales/titles)
  * even though they ship as one file.
  */
-export function stackChartsToPng(
-  panels: { title: string; svg: string; height?: number }[],
-  opts: { scale?: number; header?: { svg: string; height: number } } = {}
-): Buffer {
+export function stackChartsToPng(panels: { title: string; svg: string; height?: number }[], opts: { scale?: number } = {}): Buffer {
   const titleH = 22;
-  const headerH = opts.header?.height ?? 0;
-  let yCursor = headerH;
+  let yCursor = 0;
   const rendered = panels
     .map((panel) => {
       const y = yCursor;
@@ -522,12 +553,10 @@ export function stackChartsToPng(
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CHART_WIDTH} ${totalHeight}" width="${CHART_WIDTH}" height="${totalHeight}">
       <rect x="0" y="0" width="${CHART_WIDTH}" height="${totalHeight}" style="fill:${PALETTE.surface}" />
-      ${opts.header ? opts.header.svg : ""}
       ${rendered}
     </svg>
   `;
-  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: CHART_WIDTH * (opts.scale ?? 2) } });
-  return resvg.render().asPng();
+  return rasterizeSvg(svg, CHART_WIDTH, opts.scale ?? 2);
 }
 
 export const HOVER_SCRIPT = `

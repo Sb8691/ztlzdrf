@@ -29,7 +29,15 @@ import {
 } from "./outlook-core.js";
 import { chanceOf10, horizonWords, plainDay, trendWords, weatherWords } from "./outlook-plain.js";
 import { PALETTE, buildChanceSparkline } from "./charts.js";
-import { buildEvolutionPanels, renderOutlookHtml, renderOutlookPng } from "./outlook-dashboard.js";
+import {
+  buildEvolutionPanels,
+  buildPlainStripSvg,
+  outlookImageKey,
+  renderOutlookCard,
+  renderOutlookEmailBlock,
+  renderOutlookHtml,
+  renderOutlookPng,
+} from "./outlook-dashboard.js";
 import type { HourEvaluation, OutlookDaySummary, OutlookDigestDay, OutlookHistory, OutlookRunEntry, WeatherPoint } from "./types.js";
 
 /** Words the plain layer must never use - they belong to the technical details only. */
@@ -544,7 +552,7 @@ test("buildChanceSparkline: bands, dots, direct labels, inline vs. rasterized st
   assert.ok(single.includes(">dnes<"));
 });
 
-test("outlook page and PNG render from a synthetic history", () => {
+test("outlook page renders from a synthetic history", () => {
   const history = syntheticHistory();
   const now = new Date(Date.UTC(2026, 8, 23, 8));
   const panels = buildEvolutionPanels(history, OUTLOOK, { interactive: true });
@@ -586,12 +594,54 @@ test("outlook page and PNG render from a synthetic history", () => {
   assert.ok(over.includes("stav k 05.10.2026 00:00"));
   assert.equal(over, renderOutlookHtml(history, null, null, closedAt, OUTLOOK));
 
-  const png = renderOutlookPng(history, OUTLOOK)!;
-  assert.deepEqual([...png.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
-
   const empty = renderOutlookHtml(emptyHistory(OUTLOOK, WINDOW), null, null, now, OUTLOOK);
   assert.ok(empty.includes("zatiaľ nie je k dispozícii") && !empty.includes("<details"));
-  assert.equal(renderOutlookPng(emptyHistory(OUTLOOK, WINDOW), OUTLOOK), null);
+});
+
+test("dashboard card, e-mail block and e-mail image all speak the plain layer", () => {
+  const history = syntheticHistory();
+  const digest = buildDigest(history, OUTLOOK, Date.UTC(2026, 8, 23, 8))!;
+  /** The e-mail is HTML: "%" is layout there (width="100%"), not language. */
+  const MAIL_BANNED = PLAIN_BANNED.filter((t) => t !== "%");
+
+  const card = renderOutlookCard(digest, OUTLOOK);
+  assert.ok(card.includes("Dá sa maľovať 1.–4.10.2026?"));
+  assert.ok(card.includes('href="outlook.html"'));
+  assert.ok(card.includes("štvrtok 1.10.") && card.includes("Pravdepodobne áno"));
+  assert.ok(card.includes(`áno v 6${NB}z${NB}10 predpovedí`));
+  assert.ok(card.includes("Výhľad na 8–11 dní dopredu – ešte sa môže zmeniť."));
+  // Model and run belong behind "Zdroj", nowhere above it.
+  const cardPlain = card.slice(0, card.indexOf("<details"));
+  for (const token of PLAIN_BANNED) assert.ok(!cardPlain.includes(token), `card contains banned "${token}"`);
+  assert.ok(card.includes("Zdroj") && card.includes("ECMWF"));
+
+  const mail = renderOutlookEmailBlock(digest, OUTLOOK);
+  assert.ok(mail.includes("Dá sa maľovať 1.–4.10.2026?"));
+  assert.ok(mail.includes("Pravdepodobne áno") && mail.includes(`áno v 6${NB}z${NB}10 predpovedí`));
+  for (const token of MAIL_BANNED) assert.ok(!mail.includes(token), `e-mail contains banned "${token}"`);
+  // Mail clients strip <details>/<style>, and the old seven-column table forced a phone to scroll.
+  assert.ok(!mail.includes("<details") && !mail.includes("<style") && !mail.includes("nowrap"));
+
+  // With images off, the alt text must still carry the whole message.
+  const alt = mail.match(/alt="([^"]*)"/)?.[1] ?? "";
+  assert.ok(alt.includes("štvrtok 1.10.") && alt.includes("nedeľa 4.10."), `alt too thin: ${alt}`);
+  // The image is cache-busted by its own content, so a changed picture is never served from cache.
+  const key = mail.match(/outlook\.png\?t=([0-9a-f]{10})\b/)?.[1];
+  assert.equal(key, outlookImageKey(digest, OUTLOOK));
+  const later = buildDigest(history, OUTLOOK, Date.UTC(2026, 9, 2, 8))!;
+  assert.notEqual(outlookImageKey(later, OUTLOOK), key);
+
+  const strip = buildPlainStripSvg(digest, OUTLOOK);
+  assert.equal(strip.width, 480);
+  assert.ok(strip.svg.includes("štvrtok 1.10.") && strip.svg.includes("Pravdepodobne áno"));
+  assert.ok(strip.svg.includes("asi áno") && strip.svg.includes("skôr nie")); // legend under the rows
+  // No emoji: the CI rasterizer has no emoji font and would draw "tofu" boxes instead.
+  assert.ok(!/\p{Extended_Pictographic}/u.test(strip.svg), "strip must not contain emoji");
+  assert.ok(buildPlainStripSvg(later, OUTLOOK).svg.includes("už je za nami"));
+
+  const png = renderOutlookPng(digest, OUTLOOK)!;
+  assert.deepEqual([...png.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+  assert.equal(renderOutlookPng(null, OUTLOOK), null);
 });
 
 function runOutlookCli(env: Record<string, string>): { status: number | null; stdout: string; stderr: string } {
@@ -620,7 +670,10 @@ test("outlook.ts: OUTLOOK_DOCS_DIR + OUTLOOK_RENDER_ONLY render a closed window 
   assert.ok(first.stdout.includes("Okno skončilo 2026-09-04"), first.stdout);
   const html = readFileSync(join(dir, "outlook.html"), "utf8");
   assert.ok(html.includes("už uplynulo") && html.includes("Podrobnosti pre technika") && html.includes("stav k 05.09.2026 00:00"));
-  assert.ok(existsSync(join(dir, "outlook.png")));
+  // The image is the four-day overview, so a finished window has nothing to draw - and nothing
+  // links to it any more either (the card and the e-mail block are gone with the digest).
+  assert.ok(!existsSync(join(dir, "outlook.png")));
+  assert.match(first.stdout, /outlook\.png nevygenerovaný/);
   assert.ok(!existsSync(join(dir, "outlook", "history-2026-09-01_2026-09-04.json")), "a matching window must not be archived");
 
   const second = runOutlookCli(env);

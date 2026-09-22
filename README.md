@@ -77,7 +77,7 @@ GeoSphere končí pri +60 h, takže na otázku *"dá sa maľovať o desať dní?
   „Podrobnosti pre technika“ ostáva všetko ostatné: podiely členov, **vývoj predpovede beh po behu**
   (jeden panel na cieľový deň: pravdepodobnosť maľovateľného dňa, aspoň hraničného dňa, dažďa a
   názory ostatných modelov), tabuľka všetkých behov a ensemble meteogram posledného behu (mediánový
-  scenár, konsenzuálny pás vhodnosti). `docs/outlook.png` sú panely vývoja pre e-mail.
+  scenár, konsenzuálny pás vhodnosti).
 - Mapovanie čísel na slová (`OUTLOOK.plain`): P(dážď ≥ 1 mm) ≥ 0,5 → 🌧️ „skôr dážď“, ≥ 0,3 → 🌦️
   „možno prehánky“, inak ☀️ „sucho“ (ak medián GOOD okna dosahuje `minGoodHours`) alebo 🌤️
   „sucho, ale chladno / vlhko / nie ideálne“. Šanca je `floor(P × 10)`, aby „6 z 10“ vždy sedelo
@@ -86,8 +86,16 @@ GeoSphere končí pri +60 h, takže na otázku *"dá sa maľovať o desať dní?
   horšie / bez zmeny“ je ten istý ±10 p. b. výpočet ako šípka v detailoch; bez porovnania (prvá
   snímka, zmena modelu) sa píše „zatiaľ nie je s čím porovnať“. Piktogram vyjadruje riziko dažďa a
   vhodnosť, nie oblačnosť.
-- Hlavný dashboard dostane kartu s verdiktmi a odkazom, ranný e-mail kompaktnú tabuľku s obrázkom –
-  oboje len kým okno trvá, potom zmiznú samy. Prešlé dni okna sú na stránke sivé („už je za nami“);
+- Karta na hlavnom dashboarde aj blok v rannom e-maile hovoria tou istou jednoduchou rečou (spoločné
+  funkcie z `src/outlook-plain.ts`, takže si nikdy neodporujú): karta je zoznam štyroch dní, e-mail
+  dvojstĺpcová tabuľka (deň + počasie | verdikt + šanca + trend). Technické údaje sú na karte pod
+  rozbaľovačom „Zdroj“ a v e-maile vôbec nie sú – tam vedie len odkaz na stránku.
+- `docs/outlook.png` je ten istý prehľad štyroch dní ako obrázok (480 px, rasterizované 2×) –
+  jediné, čo pridáva navyše, sú grafy šance. Piktogramy aj semafor sú kreslené SVG tvary, **nie
+  emoji**: rasterizér na CI nemá emoji font a nakreslil by prázdne štvorčeky (stráži test). Adresa
+  obrázka nesie hash jeho vlastného obsahu, takže Gmail ho pretiahne presne vtedy, keď sa zmenil.
+  `alt` obsahuje všetky štyri vety, aby e-mail dával zmysel aj s vypnutými obrázkami.
+- Oboje sa ukazuje len kým okno trvá, potom zmiznú samy. Prešlé dni okna sú na stránke sivé („už je za nami“);
   po skončení okna sa stránka ešte raz prerenderuje do stavu „okno už uplynulo“ (história ostáva
   v detailoch) – s pevnou pečiatkou polnoci po konci okna, takže ďalšie behy už nič nemenia.
 - Workflow beží navyše o 11:13 a 23:13 UTC bez e-mailu, aby zachytil 00z a 12z beh ECMWF.
@@ -115,6 +123,13 @@ OUTLOOK_DOCS_DIR=/cesta/scratch OUTLOOK_RENDER_ONLY=true npm run outlook   # -> 
 
 Meteogram posledného behu vtedy chýba (potrebuje čerstvo stiahnutých členov).
 `OUTLOOK_FORCE_RENDER=true` prerenderuje aj bez nového behu.
+
+Náhľad presne toho HTML, ktoré by odišlo e-mailom (obrázky sa ťahajú z Pages, takže ukazujú stav
+posledného publikovaného behu):
+
+```bash
+EMAIL_PREVIEW_PATH=/cesta/scratch/mail.html SEND_EMAIL=false npm run dev
+```
 
 ## Nasadenie na GitHub Actions
 

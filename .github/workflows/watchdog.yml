@@ -23,6 +23,10 @@ on:
         description: "Send the daily e-mail (off = only refresh the dashboard and the outlook)"
         type: boolean
         default: true
+      force_render:
+        description: "Re-render the outlook page and image even if no new model run landed (use after changing how they look)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -60,6 +64,10 @@ jobs:
       - name: Update medium-range outlook
         run: node dist/outlook.js
         continue-on-error: true
+        env:
+          # Only a manual run can ask for this; on a schedule the expression is simply "false", so
+          # the usual "nothing new landed -> change nothing" behaviour is untouched.
+          OUTLOOK_FORCE_RENDER: ${{ inputs.force_render == true }}
 
       # Generates docs/index.html + docs/chart.png without sending the e-mail yet - the e-mail
       # links to the chart as a hosted image (Gmail strips inline <svg> and refuses data: URIs),

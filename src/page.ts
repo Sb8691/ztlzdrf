@@ -98,8 +98,6 @@ export const PAGE_STYLES = `
   .day-card-prob small { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-left: 4px; }
   .day-card-trend { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; }
   .day-card .stat-row { font-size: 0.82rem; padding: 3px 0; }
-  .outlook-row { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.9rem; margin: 6px 0 0; }
-  .outlook-row .chip { font-weight: 600; }
   .trend-up { color: var(--series-humidity); }
   .trend-down { color: var(--critical); }
   .table-wrap { overflow-x: auto; }
@@ -132,6 +130,8 @@ export const PAGE_STYLES = `
   .plain-list { list-style: none; padding: 0; margin: 6px 0 0; }
   .plain-list li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
   .plain-list li:last-child { border-bottom: none; }
+  .plain-head { display: block; font-weight: 600; }
+  .plain-sub { display: block; margin-top: 2px; font-size: 0.88rem; color: var(--text-secondary); }
 `;
 
 export function renderPageShell(o: { title: string; heading: string; subtitle: string; body: string; scripts: string[] }): string {
