@@ -75,3 +75,54 @@ export const HUMIDITY_DISPLAY_THRESHOLDS = { green: 75, yellow: 85 };
 /** Minimum measurable precipitation, mm/h - below this we treat an hour as effectively dry rather
  * than flagging trace/instrument noise as "rain". Used throughout painting.ts. */
 export const RAIN_THRESHOLD_MM = 0.1;
+
+export interface OutlookModel {
+  /** Open-Meteo Ensemble API `models=` id. */
+  id: string;
+  label: string;
+  /** Open-Meteo data domain for `.../data/{domain}/static/meta.json` (model run metadata), or null
+   * when the domain exposes no usable metadata - the run is then labelled by fetch time. */
+  metaDomain: string | null;
+  /** Exactly one model is primary: its runs define snapshot identity, its members feed the
+   * meteogram and the e-mail/dashboard digest. A failing primary aborts the outlook run. */
+  primary?: boolean;
+  /** Optional models are expected to have no data for the window at first (short horizon) and
+   * simply join the history once they reach it. Never logged as an error. */
+  optional?: boolean;
+}
+
+/**
+ * Medium-range "target window" outlook (src/outlook.ts): watches how the ensemble forecast for a
+ * fixed set of days evolves run by run, far beyond the +60h horizon of the daily decision above.
+ * Every ensemble member is judged with the same hourly rules (PAINTING_RULES), so "probability of
+ * a paintable day" = share of members whose day contains a contiguous GOOD run >= minGoodHours.
+ * The window can be overridden per run with OUTLOOK_START / OUTLOOK_END (ISO dates).
+ */
+export const OUTLOOK = {
+  /** Local calendar dates, inclusive. */
+  window: { start: "2026-10-01", end: "2026-10-04" },
+  /** Days fetched before/after the window so the 12h dry-before and 12h rain-free-after rules have
+   * real data at both edges instead of "unknown". */
+  paddingDays: 1,
+  models: [
+    { id: "ecmwf_ifs025", label: "ECMWF IFS ENS", metaDomain: "ecmwf_ifs025_ensemble", primary: true },
+    { id: "ecmwf_aifs025", label: "ECMWF AIFS ENS", metaDomain: "ecmwf_aifs025_ensemble" },
+    { id: "gfs05", label: "GEFS 0,5°", metaDomain: "ncep_gefs05" },
+    { id: "ecmwf_ifs_europe_ensemble", label: "ECMWF IFS ENS 9 km", metaDomain: null, optional: true },
+  ] as OutlookModel[],
+  /** A member's day counts as paintable when its longest contiguous GOOD run is at least this
+   * long (a terrace coat plus a margin), and as "possible" when its longest non-BAD run is. */
+  minGoodHours: 4,
+  /** A member's day counts as rainy when its precipitation sum reaches this (mm). */
+  rainDayThresholdMm: 1.0,
+  /** Day verdict from member shares: GOOD when P(paintable) >= good; MARGINAL when P(paintable)
+   * >= marginal or P(possible) >= possibleMarginal; BAD otherwise. */
+  dayStatus: { good: 0.6, marginal: 0.3, possibleMarginal: 0.6 },
+  /** Per-hour consensus for the meteogram strip: share of members GOOD / non-BAD. */
+  hourConsensus: { good: 0.6, marginal: 0.3 },
+  /** Trend arrow: compare with the newest run at least minAgeHours older; below minDeltaPct
+   * (percentage points) the trend is flat. */
+  trend: { minDeltaPct: 10, minAgeHours: 24 },
+};
+
+export type OutlookConfig = typeof OUTLOOK;

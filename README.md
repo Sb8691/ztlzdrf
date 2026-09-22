@@ -49,12 +49,45 @@ Na GitHub ho sprístupníš cez **Settings → Pages → Source: Deploy from a b
 folder `/docs`** – dostaneš stálu URL (`https://sb8691.github.io/ztlzdrf/`), ktorá sa aktualizuje
 pri každom behu workflow.
 
+## Výhľad na konkrétne dni (strednodobý ensemble)
+
+GeoSphere končí pri +60 h, takže na otázku *"dá sa maľovať o desať dní?"* odpovedá samostatný beh
+`src/outlook.ts` (`npm run outlook`, v CI `node dist/outlook.js`):
+
+- Okno maľovania je v `src/config.ts` (`OUTLOOK.window`, aktuálne 1.–4.10.2026) a dá sa prepísať
+  cez `OUTLOOK_START` / `OUTLOOK_END`. Pri zmene okna sa stará história odloží vedľa do
+  `docs/outlook/history-<od>_<do>.json` a začne sa nová.
+- Dáta idú z [Open-Meteo Ensemble API](https://open-meteo.com/en/docs/ensemble-api) (bez kľúča):
+  primárne ECMWF IFS ENS (51 členov, 15 dní), pre kontrolu zhody ECMWF AIFS ENS a GEFS; európsky
+  9 km IFS ENS sa pripojí sám, keď jeho ~6-dňový horizont dosiahne okno. Pozri `src/openmeteo.ts`
+  (vrátane toho, prečo sa beh nedá určiť len z metadát – 06z/18z cykly ECMWF siahajú iba 144 h).
+- **Žiadne nové pravidlá**: každý člen ensemblu prejde tým istým hodinovým hodnotením ako denné
+  rozhodnutie (`evaluateHourForPainting`). Deň je pre člena *maľovateľný*, ak má aspoň
+  `OUTLOOK.minGoodHours` (4 h) súvisle GOOD hodín, a *aspoň hraničný*, ak toľko hodín nie je BAD.
+  Podiel takých členov je pravdepodobnosť; verdikt dňa (🟢/🟡/🔴) dávajú prahy v
+  `OUTLOOK.dayStatus`. Jadro je čisté (`src/outlook-core.ts`) a pokryté `src/outlook.test.ts`.
+- Každý beh modelu (00z/12z) sa uloží ako malý súhrn do `docs/outlook/history.json` – ukladanie je
+  idempotentné (rovnaký beh alebo rovnaké čísla sa nezapíšu dvakrát), surové série členov sa
+  neukladajú.
+- `docs/outlook.html` ukazuje rozhodnutie po dňoch, **vývoj predpovede beh po behu** (jeden panel na
+  cieľový deň: pravdepodobnosť maľovateľného dňa, aspoň hraničného dňa, dažďa a názory ostatných
+  modelov), tabuľku všetkých behov a ensemble meteogram posledného behu (mediánový scenár,
+  konsenzuálny pás vhodnosti). `docs/outlook.png` sú tie isté panely pre e-mail.
+- Hlavný dashboard dostane kartu s verdiktmi a odkazom, ranný e-mail kompaktnú tabuľku s obrázkom –
+  oboje len kým okno trvá, potom zmiznú samy.
+- Workflow beží navyše o 11:13 a 23:13 UTC bez e-mailu, aby zachytil 00z a 12z beh ECMWF.
+
+Výhľad na 9–12 dní je orientačný: sleduj trend a zhodu modelov, nie jednotlivé čísla. Keď sa okno
+dostane do horizontu +60 h, rozhoduje hlavný dashboard (AROME/INCA).
+
 ## Lokálne spustenie
 
 ```bash
 npm install
 cp .env.example .env   # doplň RESEND_API_KEY, ALERT_EMAIL_TO, ALERT_EMAIL_FROM
 SEND_EMAIL=false npm run dev   # vypíše výsledok do konzoly bez odoslania e-mailu
+npm run outlook                # snímka strednodobého výhľadu -> docs/outlook/history.json, docs/outlook.html
+npm test
 ```
 
 ## Nasadenie na GitHub Actions

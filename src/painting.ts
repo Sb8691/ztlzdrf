@@ -264,7 +264,10 @@ export function evaluateHourForPainting(
   return { ms: point.ms, status, isDaylight, reasons };
 }
 
-function longestRun(
+/** Longest contiguous run of hours satisfying `predicate`; runs never bridge a data gap wider
+ * than 1.5 steps. Exported for the outlook engine, which asks the same question per ensemble
+ * member and target day. */
+export function longestRun(
   hourly: HourEvaluation[],
   predicate: (h: HourEvaluation) => boolean,
   stepMs: number

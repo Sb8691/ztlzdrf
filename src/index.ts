@@ -1,13 +1,38 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { fetchWeatherWindow } from "./geosphere.js";
-import { CHART_WINDOW, LOCATION, PAINTING_RULES } from "./config.js";
+import { CHART_WINDOW, LOCATION, OUTLOOK, PAINTING_RULES } from "./config.js";
 import { sendAlert } from "./email.js";
 import { renderDashboardHtml, renderChartPng } from "./dashboard.js";
 import { evaluatePaintingConditions } from "./painting.js";
+import { buildDigest } from "./outlook-core.js";
+import { renderOutlookCard, renderOutlookEmailBlock } from "./outlook-dashboard.js";
+import { readOutlookHistory } from "./outlook-store.js";
 import type { WoodMoistureReading } from "./types.js";
 
 const DASHBOARD_DIR = fileURLToPath(new URL("../docs", import.meta.url));
+
+/**
+ * The medium-range outlook (src/outlook.ts) is a separate run that only leaves docs/outlook/
+ * history.json behind; here it is merely read and embedded as a card (dashboard) and a block
+ * (e-mail) while its target window is still ahead. Anything wrong with it degrades to "no outlook"
+ * - the daily decision must never depend on it.
+ */
+function readOutlookEmbeds(nowMs: number): { cardHtml: string; emailHtml: string; label: string | null } {
+  try {
+    const history = readOutlookHistory();
+    const digest = history ? buildDigest(history, OUTLOOK, nowMs) : null;
+    if (!digest) return { cardHtml: "", emailHtml: "", label: null };
+    return {
+      cardHtml: renderOutlookCard(digest, OUTLOOK),
+      emailHtml: renderOutlookEmailBlock(digest, OUTLOOK),
+      label: `${digest.window.start} – ${digest.window.end}, ${digest.primaryLabel} beh ${digest.latestRunAt}`,
+    };
+  } catch (err) {
+    console.warn(`Výhľad sa nepodarilo pripojiť: ${err instanceof Error ? err.message : String(err)}`);
+    return { cardHtml: "", emailHtml: "", label: null };
+  }
+}
 
 /**
  * Optional manual wood-moisture reading, overriding the weather-based dryness estimate - see
@@ -45,8 +70,11 @@ async function main() {
   if (assessment.reasons.length > 0) console.log(`Dôvody: ${assessment.reasons.join(" | ")}`);
   if (assessment.warnings.length > 0) console.log(`Upozornenia: ${assessment.warnings.join(" | ")}`);
 
+  const outlook = readOutlookEmbeds(now.getTime());
+  console.log(outlook.label ? `Výhľad na okno ${outlook.label} pripojený.` : "Výhľad: žiadne aktívne okno.");
+
   mkdirSync(DASHBOARD_DIR, { recursive: true });
-  writeFileSync(`${DASHBOARD_DIR}/index.html`, renderDashboardHtml(points, now, assessment));
+  writeFileSync(`${DASHBOARD_DIR}/index.html`, renderDashboardHtml(points, now, assessment, { outlookCardHtml: outlook.cardHtml }));
   console.log("Dashboard vygenerovaný do docs/index.html.");
 
   // Published so the e-mail can link to it as a real hosted image - Gmail (and most mail clients)
@@ -62,7 +90,7 @@ async function main() {
     if (!apiKey || !to || !from) {
       throw new Error("Chýbajú env premenné RESEND_API_KEY / ALERT_EMAIL_TO / ALERT_EMAIL_FROM");
     }
-    await sendAlert(points, now, assessment, { apiKey, to, from });
+    await sendAlert(points, now, assessment, { apiKey, to, from }, { outlookHtml: outlook.emailHtml });
     console.log("E-mail odoslaný.");
   } else {
     console.log("SEND_EMAIL=false – e-mail sa neposiela (dry-run).");

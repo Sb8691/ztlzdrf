@@ -1,5 +1,6 @@
 import { LOCATION } from "./config.js";
 import type { WeatherPoint } from "./types.js";
+import { toLocalWallClock } from "./time.js";
 
 /*
  * GeoSphere Austria integration summary (verified live against the API, 2026-08-27):
@@ -35,20 +36,6 @@ const ENSEMBLE_DATASET = "ensemble-v2-1h-1km";
 interface GeoSphereResponse {
   timestamps: string[];
   features: [{ properties: { parameters: Record<string, { data: (number | null)[] }> } }];
-}
-
-function toLocalWallClock(isoUtc: string, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date(isoUtc));
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
 
 /** Formats a Date as the naive "YYYY-MM-DDTHH:MM" (UTC) string GeoSphere's start/end params expect. */

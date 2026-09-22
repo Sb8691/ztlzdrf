@@ -65,6 +65,94 @@ export interface RainProbabilityBand {
   label: string;
 }
 
+// ---------------------------------------------------------------------------
+// Medium-range outlook (target window) - see src/outlook-core.ts
+// ---------------------------------------------------------------------------
+
+export interface Quantiles {
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+}
+
+/** One target day as seen by one model run: member shares and the spread across members. */
+export interface OutlookDaySummary {
+  /** Local calendar date "YYYY-MM-DD". */
+  date: string;
+  /** Members with complete data for this day (the denominator of every share below). */
+  n: number;
+  /** Share of members whose longest contiguous GOOD run reaches OUTLOOK.minGoodHours. */
+  pPaintable: number;
+  /** Share of members whose longest non-BAD (GOOD or MARGINAL) run reaches minGoodHours. */
+  pPossible: number;
+  /** Share of members with a day precipitation sum >= OUTLOOK.rainDayThresholdMm. */
+  pRain: number;
+  /** Day precipitation sum across members, mm. */
+  precip: Quantiles;
+  tMax: Quantiles;
+  tMin: Quantiles;
+  /** Longest contiguous GOOD run, hours. */
+  goodRun: Quantiles;
+  /** Minimum relative humidity between 12:00 and 17:59 local, %. */
+  rhMin: Quantiles;
+  /** Maximum 10m wind speed, km/h. */
+  windMax: Quantiles;
+}
+
+export interface OutlookRunEntry {
+  model: string;
+  /** ISO UTC instant of the (effective) model run these numbers come from. */
+  runAt: string;
+  runAtSource: "meta" | "fetch";
+  fetchedAt: string;
+  members: number;
+  grid: { latitude: number; longitude: number; elevation: number } | null;
+  days: OutlookDaySummary[];
+}
+
+export interface OutlookHistory {
+  schemaVersion: 1;
+  location: { latitude: number; longitude: number; timezone: string };
+  window: { start: string; end: string };
+  rules: { minGoodHours: number; rainDayThresholdMm: number };
+  runs: OutlookRunEntry[];
+}
+
+export interface OutlookTrend {
+  /** Change of P(paintable) in percentage points versus `vsRunAt`. */
+  deltaPct: number;
+  direction: "up" | "down" | "flat";
+  vsRunAt: string;
+}
+
+export interface OutlookDigestDay {
+  date: string;
+  status: PaintingStatus;
+  pPaintable: number;
+  pPossible: number;
+  pRain: number;
+  precipP50: number;
+  precipP90: number;
+  tMaxP50: number;
+  tMinP50: number;
+  goodRunP50: number;
+  trend: OutlookTrend | null;
+  /** Latest P(paintable) of every model that currently covers this day, primary first. */
+  byModel: { model: string; label: string; pPaintable: number; runAt: string }[];
+}
+
+/** What the dashboard card and the e-mail block need - derived from the history, never stored. */
+export interface OutlookDigest {
+  window: { start: string; end: string };
+  primaryModel: string;
+  primaryLabel: string;
+  latestRunAt: string;
+  runCount: number;
+  days: OutlookDigestDay[];
+}
+
 export interface PaintingAssessment {
   status: PaintingStatus;
   /** 0-100, from calculateDryingScore at the current hour - a drying-condition indicator, not a

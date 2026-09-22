@@ -67,7 +67,17 @@ function statRow(label: string, value: string, color?: string): string {
  * paint the terrace today" without interpreting any curves - the status card and window come first,
  * detailed charts are a compact single image at the bottom for anyone who wants to see why.
  */
-export function renderAlertEmail(points: WeatherPoint[], generatedAt: Date, assessment: PaintingAssessment): { subject: string; html: string } {
+export interface EmailExtras {
+  /** Pre-rendered outlook block (see outlook-dashboard.ts) inserted after the stats, or empty. */
+  outlookHtml?: string;
+}
+
+export function renderAlertEmail(
+  points: WeatherPoint[],
+  generatedAt: Date,
+  assessment: PaintingAssessment,
+  extras: EmailExtras = {}
+): { subject: string; html: string } {
   const niceNow = formatGeneratedAt(generatedAt);
   const subject = `${statusIcon(assessment.status)} ${statusLabel(assessment.status)} – Zedlitzdorf 74 – ${niceNow}`;
   const stats = computeStats(points);
@@ -147,6 +157,7 @@ export function renderAlertEmail(points: WeatherPoint[], generatedAt: Date, asse
               </td>
             </tr>
           </table>
+          ${extras.outlookHtml ?? ""}
 
           <div style="margin:20px 0 6px;font-size:12px;color:${MUTED};">
             <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#2a78d6;margin-right:5px;"></span>Zrážky
@@ -183,8 +194,14 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export async function sendAlert(points: WeatherPoint[], generatedAt: Date, assessment: PaintingAssessment, config: EmailConfig): Promise<void> {
-  const { subject, html } = renderAlertEmail(points, generatedAt, assessment);
+export async function sendAlert(
+  points: WeatherPoint[],
+  generatedAt: Date,
+  assessment: PaintingAssessment,
+  config: EmailConfig,
+  extras: EmailExtras = {}
+): Promise<void> {
+  const { subject, html } = renderAlertEmail(points, generatedAt, assessment, extras);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {

@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Graf predpovede pocasia (-24h/+24h: zrazky, slnecne ziarenie, teplota) pre Zedlitzdorf 74, Rakusko",
+  "description": "Rozhodovacia pomocka pre malovanie terasy (Zedlitzdorf 74, Rakusko): denne rozhodnutie z GeoSphere AROME/INCA (-24h/+60h) a strednodoby ensemble vyhlad na zvolene dni",
   "scripts": {
     "build": "tsc",
     "start": "node --env-file=.env dist/index.js",
     "dev": "tsx --env-file=.env src/index.ts",
+    "outlook": "tsx src/outlook.ts",
     "test": "tsx --test src/*.test.ts"
   },
   "devDependencies": {

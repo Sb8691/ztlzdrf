@@ -11,7 +11,18 @@ on:
     # start of the hour" - the busiest moment across all of GitHub Actions. :13 avoids that peak.
     - cron: "13 7 * 4-10 *"
     - cron: "13 8 * 11,12,1,2,3 *"
-  workflow_dispatch: {}
+    # Outlook-only snapshots (no e-mail). UTC-fixed on purpose: the ECMWF ensemble cycles that reach
+    # 15 days are 00z and 12z, and Open-Meteo has them roughly 9-10 h after initialisation (~09:30
+    # and ~21:30 UTC), so these two runs capture each cycle once. The outlook script is idempotent -
+    # if nothing new has landed yet, it changes nothing and no commit is made.
+    - cron: "13 11 * * *"
+    - cron: "13 23 * * *"
+  workflow_dispatch:
+    inputs:
+      send_email:
+        description: "Send the daily e-mail (off = only refresh the dashboard and the outlook)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -22,6 +33,11 @@ permissions:
 concurrency:
   group: watchdog
   cancel-in-progress: false
+
+env:
+  # The e-mail goes out only from the morning schedules or an explicit manual request; the
+  # outlook-only schedules just refresh the published pages.
+  EMAIL_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.send_email == true) || github.event.schedule == '13 7 * 4-10 *' || github.event.schedule == '13 8 * 11,12,1,2,3 *' }}
 
 jobs:
   check-weather:
@@ -35,6 +51,15 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+      - run: npm test
+
+      # Medium-range outlook for the configured painting window (src/outlook.ts): appends this
+      # model run's summary to docs/outlook/history.json (skipped when already captured) and
+      # re-renders docs/outlook.html + docs/outlook.png. Never allowed to break the daily run - the
+      # dashboard/e-mail below only read whatever history exists.
+      - name: Update medium-range outlook
+        run: node dist/outlook.js
+        continue-on-error: true
 
       # Generates docs/index.html + docs/chart.png without sending the e-mail yet - the e-mail
       # links to the chart as a hosted image (Gmail strips inline <svg> and refuses data: URIs),
@@ -46,19 +71,21 @@ jobs:
         env:
           SEND_EMAIL: "false"
 
-      # If this push is rejected (another run's commit landed first, despite the concurrency
-      # group above - e.g. a commit pushed outside this workflow), we retry by re-basing our
-      # already-generated docs/ output onto the new tip with `reset --soft` rather than giving up:
-      # a hard failure here must never skip sending the e-mail below, which is the whole point of
-      # this workflow. Regenerating isn't needed - the content we already produced is still this
-      # run's correct output regardless of which commit it lands on top of.
+      # Everything under docs/ is published (dashboard, chart, outlook page/image and the outlook
+      # history). `git add -A docs` + `git diff --cached` is what makes brand-new files count -
+      # `git diff --quiet` alone never sees untracked files.
+      #
+      # If the push is rejected (another commit landed first, despite the concurrency group above -
+      # e.g. a commit pushed outside this workflow), our commit is rebased onto the new tip with
+      # conflicts in docs/ resolved in favour of this run's output (`-X theirs` = the commit being
+      # replayed, i.e. ours). A hard failure here must never skip sending the e-mail below.
       - name: Publish dashboard so the chart image is live before the e-mail links to it
         id: publish
         run: |
-          if ! git diff --quiet -- docs/index.html docs/chart.png; then
+          git add -A docs
+          if ! git diff --cached --quiet; then
             git config user.name "terrace-watchdog-bot"
             git config user.email "actions@users.noreply.github.com"
-            git add docs/index.html docs/chart.png
             git commit -m "chore: update watchdog dashboard"
             for i in 1 2 3 4 5; do
               if git push; then
@@ -71,28 +98,37 @@ jobs:
               fi
               echo "Push rejected (attempt $i/5) - rebasing our commit onto the latest main and retrying..."
               git fetch origin
-              git reset --soft origin/main
-              git add docs/index.html docs/chart.png
-              git commit -m "chore: update watchdog dashboard"
+              if ! git rebase -X theirs origin/main; then
+                git rebase --abort
+                echo "::warning::Rebase onto origin/main failed (attempt $i/5)."
+              fi
             done
           fi
 
-      - name: Wait for GitHub Pages to actually serve the new chart
-        if: steps.publish.outputs.published == 'true'
+      - name: Wait for GitHub Pages to actually serve the new images
+        if: steps.publish.outputs.published == 'true' && env.EMAIL_RUN == 'true'
         run: |
-          local_hash=$(sha256sum docs/chart.png | cut -d' ' -f1)
-          for i in $(seq 1 24); do
-            remote_hash=$(curl -s "https://sb8691.github.io/ztlzdrf/chart.png?cb=$RANDOM$RANDOM" | sha256sum | cut -d' ' -f1)
-            if [ "$remote_hash" = "$local_hash" ]; then
-              echo "GitHub Pages is serving the fresh chart (attempt $i)."
-              exit 0
+          for file in chart.png outlook.png; do
+            [ -f "docs/$file" ] || continue
+            local_hash=$(sha256sum "docs/$file" | cut -d' ' -f1)
+            live=false
+            for i in $(seq 1 24); do
+              remote_hash=$(curl -s "https://sb8691.github.io/ztlzdrf/$file?cb=$RANDOM$RANDOM" | sha256sum | cut -d' ' -f1)
+              if [ "$remote_hash" = "$local_hash" ]; then
+                echo "GitHub Pages is serving the fresh $file (attempt $i)."
+                live=true
+                break
+              fi
+              echo "$file not live yet (attempt $i/24), waiting 10s..."
+              sleep 10
+            done
+            if [ "$live" != "true" ]; then
+              echo "::warning::GitHub Pages didn't confirm the new $file within the timeout; sending the e-mail anyway."
             fi
-            echo "Not live yet (attempt $i/24), waiting 10s..."
-            sleep 10
           done
-          echo "::warning::GitHub Pages didn't confirm the new chart within the timeout; sending the e-mail anyway."
 
       - name: Send e-mail
+        if: env.EMAIL_RUN == 'true'
         run: node dist/index.js
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
@@ -103,11 +139,12 @@ jobs:
       # sent, so a push failure here must only ever cost a slightly stale published dashboard until
       # the next run, never fail the whole job.
       - name: Commit any dashboard drift from the final run
+        if: env.EMAIL_RUN == 'true'
         run: |
-          if ! git diff --quiet -- docs/index.html docs/chart.png; then
+          git add -A docs
+          if ! git diff --cached --quiet; then
             git config user.name "terrace-watchdog-bot"
             git config user.email "actions@users.noreply.github.com"
-            git add docs/index.html docs/chart.png
             git commit -m "chore: update watchdog dashboard"
             for i in 1 2 3 4 5; do
               if git push; then
@@ -119,8 +156,9 @@ jobs:
               fi
               echo "Push rejected (attempt $i/5) - rebasing our commit onto the latest main and retrying..."
               git fetch origin
-              git reset --soft origin/main
-              git add docs/index.html docs/chart.png
-              git commit -m "chore: update watchdog dashboard"
+              if ! git rebase -X theirs origin/main; then
+                git rebase --abort
+                echo "::warning::Rebase onto origin/main failed (attempt $i/5)."
+              fi
             done
           fi
