@@ -8,8 +8,13 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    // src/window-core.js and src/window-ui.js are plain ESM JavaScript on purpose: the published
+    // page runs them verbatim (no bundler here), so they cannot be TypeScript. Including them in the
+    // compilation copies them to dist/ next to their importers - the page renderer reads whichever
+    // copy it is running from. checkJs stays off; their contract is covered by src/window.test.ts.
+    "allowJs": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.js"],
   "exclude": ["src/**/*.test.ts", "dist", "node_modules"]
 }

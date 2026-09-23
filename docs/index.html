@@ -3,487 +3,1434 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Zedlitzdorf 74 – maľovanie terasy</title>
+<title>Počasie na natieranie terasy</title>
+<meta name="description" content="Kedy natierať terasu v Zedlitzdorfe: vhodnosť počasia pre 8 hodín práce a ďalších 24 hodín sledovania, 1.–5. október 2026." />
 <style>
-
+:root {
+  color-scheme: light;
+  --page: #f7f7f5;
+  --surface: #ffffff;
+  --text: #1d2125;
+  --muted: #5e6871;
+  --hairline: #e3e5e4;
+  --grid: #ebedec;
+  --day-line: #d8dbda;
+  --accent: #2f6fb0;
+  --accent-soft: #eaf1f8;
+  --score: #2f7d6b;
+  --score-fill: rgba(47, 125, 107, 0.14);
+  --rain: #3d7cb8;
+  --rain-partial: #9dbcd8;
+  --temp: #c1562f;
+  --dew: #5b7a99;
+  --wind: #5a6b7a;
+  --sun: #b07d12;
+  --sun-fill: rgba(176, 125, 18, 0.13);
+  --band-work: rgba(47, 111, 176, 0.13);
+  --band-watch: rgba(214, 138, 51, 0.13);
+  --limit: #b03030;
+  --warn-bg: #fdf3e7;
+  --warn-text: #7a4a12;
+}
+@media (prefers-color-scheme: dark) {
   :root {
-    color-scheme: light;
-    --surface-1: #fcfcfb;
-    --page: #f9f9f7;
-    --text-primary: #0b0b0b;
-    --text-secondary: #52514e;
-    --muted: #898781;
-    --gridline: #e1e0d9;
-    --baseline: #c3c2b7;
-    --critical: #d03b3b;
-    --border: rgba(11,11,11,0.10);
-    --series-precip: #2a78d6;
-    --series-temp: #d9622a;
-    --series-dewpoint: #8a5fb0;
-    --series-radiation: #e0b430;
-    --series-wind: #4d8790;
-    --series-humidity: #3f9e89;
+    color-scheme: dark;
+    --page: #14171a;
+    --surface: #1c2024;
+    --text: #e8eaec;
+    --muted: #9aa4ad;
+    --hairline: #2b3137;
+    --grid: #272d33;
+    --day-line: #333b42;
+    --accent: #6fb1e8;
+    --accent-soft: #1f2a34;
+    --score: #5fc3ab;
+    --score-fill: rgba(95, 195, 171, 0.16);
+    --rain: #6fb1e8;
+    --rain-partial: #3f5f7a;
+    --temp: #f0906a;
+    --dew: #9bb6cf;
+    --wind: #a7b8c6;
+    --sun: #e9c46a;
+    --sun-fill: rgba(233, 196, 106, 0.14);
+    --band-work: rgba(111, 177, 232, 0.16);
+    --band-watch: rgba(233, 176, 106, 0.15);
+    --limit: #e8756f;
+    --warn-bg: #33291a;
+    --warn-text: #e8c489;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --surface-1: #1a1a19;
-      --page: #0d0d0d;
-      --text-primary: #ffffff;
-      --text-secondary: #c3c2b7;
-      --muted: #898781;
-      --gridline: #2c2c2a;
-      --baseline: #383835;
-      --critical: #e66767;
-      --border: rgba(255,255,255,0.10);
-      --series-precip: #5b9be0;
-      --series-temp: #e58a54;
-      --series-dewpoint: #a983cf;
-      --series-radiation: #e0b430;
-      --series-wind: #6ea9b2;
-      --series-humidity: #59baa4;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--page);
-    color: var(--text-primary);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    padding: 24px 16px 64px;
-  }
-  .wrap { max-width: 1000px; margin: 0 auto; }
-  h1 { font-size: 1.3rem; margin: 0 0 4px; }
-  .muted { color: var(--text-secondary); font-size: 0.85rem; }
-  .card {
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    margin: 16px 0;
-    position: relative;
-  }
-  .panel-title { font-size: 0.95rem; margin: 0 0 10px; }
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
-  .status-card { border: 2px solid var(--status-color); }
-  .status-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-  .status-icon { font-size: 1.6rem; }
-  .status-label { font-size: 1.25rem; font-weight: 700; color: var(--status-color); }
-  .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 8px; }
-  .status-metric-label { font-size: 0.78rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
-  .status-metric-value { font-size: 1.15rem; font-weight: 600; margin-top: 2px; }
-  .reason-list { margin: 8px 0 0; padding-left: 20px; font-size: 0.88rem; }
-  .reason-list li { margin: 3px 0; }
-  .stat-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 0.9rem; border-bottom: 1px solid var(--border); }
-  .stat-row:last-child { border-bottom: none; }
-  .stat-label { color: var(--text-secondary); }
-  .stat-value { font-weight: 600; font-variant-numeric: tabular-nums; }
-  .drying-score { margin-top: 8px; }
-  .score-bar { height: 8px; border-radius: 4px; background: var(--gridline); overflow: hidden; margin-top: 4px; }
-  .score-bar-fill { height: 100%; }
-  .sun-line { margin: 4px 0 0; }
-  .disclaimer { font-size: 0.78rem; color: var(--muted); margin-top: 20px; line-height: 1.4; }
-  a { color: inherit; }
-  .page-link { display: inline-block; margin-top: 8px; font-weight: 600; font-size: 0.9rem; }
-  /* Outlook (target-window) components, shared by the outlook page and the dashboard's link card. */
-  .outlook-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  @media (max-width: 760px) { .outlook-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 420px) { .outlook-grid { grid-template-columns: 1fr; } }
-  .day-card { border: 1px solid var(--border); border-left: 4px solid var(--status-color); border-radius: 10px; padding: 12px 14px; background: var(--surface-1); }
-  .day-card-date { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
-  .day-card-status { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 2px 0 6px; }
-  .day-card-prob { font-size: 1.9rem; font-weight: 600; line-height: 1.1; }
-  .day-card-prob small { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-left: 4px; }
-  .day-card-trend { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; }
-  .day-card .stat-row { font-size: 0.82rem; padding: 3px 0; }
-  .trend-up { color: var(--series-humidity); }
-  .trend-down { color: var(--critical); }
-  .table-wrap { overflow-x: auto; }
-  .data-table { border-collapse: collapse; font-size: 0.82rem; width: 100%; }
-  .data-table th, .data-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .data-table th:first-child, .data-table td:first-child { text-align: left; }
-  .data-table th { color: var(--text-secondary); font-weight: 600; }
-  details summary { cursor: pointer; color: var(--text-secondary); font-size: 0.85rem; }
-  /* Plain-language layer of the outlook: the reader's five seconds. Colour never carries meaning
-     alone - the verdict word is in ink, the traffic light and the left border are redundant. */
-  /* Own breakpoints: a plain card must never get narrower than ~200 px of content (4 columns only on
-     a desktop-wide page, 2 down to 560 px, then 1), so the verdict stays on one line and the
-     sparkline labels stay legible on an iPad or a large phone. */
-  .plain-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  @media (max-width: 999px) { .plain-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 559px) { .plain-grid { grid-template-columns: 1fr; } }
-  .plain-card { border: 1px solid var(--border); border-left: 6px solid var(--status-color); border-radius: 10px; padding: 12px 14px; background: var(--surface-1); display: flex; flex-direction: column; gap: 3px; }
-  /* Past days are greyed by colour, never by opacity - faded text would fail the contrast minimum. */
-  .plain-card.past { border-left-color: var(--baseline); background: transparent; }
-  .plain-card.past .plain-day, .plain-card.past .plain-verdict { color: var(--text-secondary); }
-  .plain-day { font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); }
-  .plain-verdict { display: flex; gap: 6px; align-items: flex-start; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); line-height: 1.25; }
-  .plain-weather, .plain-chance { font-size: 0.95rem; }
-  .plain-trend { font-size: 0.95rem; color: var(--text-secondary); }
-  .plain-source { font-size: 0.78rem; color: var(--muted); }
-  .plain-spark { margin-top: 6px; }
-  .how-to-read { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.45; margin: 12px 0 0; }
-  details.technical > summary { font-weight: 600; font-size: 0.95rem; color: var(--text-primary); padding: 2px 0; }
-  details.technical[open] > summary { margin-bottom: 12px; }
-  .plain-list { list-style: none; padding: 0; margin: 6px 0 0; }
-  .plain-list li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
-  .plain-list li:last-child { border-bottom: none; }
-  .plain-head { display: block; font-weight: 600; }
-  .plain-sub { display: block; margin-top: 2px; font-size: 0.88rem; color: var(--text-secondary); }
+}
 
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 0 16px 56px;
+  background: var(--page);
+  color: var(--text);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+.wx-wrap { max-width: 1000px; margin: 0 auto; }
 
-  .chart-svg { width: 100%; height: auto; overflow: visible; }
-  .chart-title { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 4px; }
-  .chart-marker { stroke: var(--surface-1); stroke-width: 2; }
-  .spark-svg { width: 100%; height: auto; display: block; overflow: visible; }
-  .spark-band { opacity: 0.12; }
-  @media (prefers-color-scheme: dark) { .spark-band { opacity: 0.22; } }
-  .spark-guide { stroke: var(--baseline); }
-  .spark-line { stroke: var(--text-secondary); }
-  .spark-dot { fill: var(--text-secondary); }
-  .spark-label { fill: var(--text-secondary); }
-  .spark-value { fill: var(--text-primary); paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; stroke-linejoin: round; }
-  .crosshair { stroke: var(--baseline); stroke-width: 1; opacity: 0; pointer-events: none; }
-  .hover-capture { fill: transparent; cursor: crosshair; }
-  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 4px; font-size: 0.85rem; color: var(--text-secondary); }
-  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
-  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-  .legend-line { width: 18px; height: 0; border-top: 3px solid currentColor; display: inline-block; border-radius: 2px; }
-  .legend-line-dashed { border-top-style: dashed; }
-  .legend-swatch-precip { background: var(--series-precip); }
-  .legend-swatch-temp { background: var(--series-temp); }
-  .legend-swatch-dewpoint { background: var(--series-dewpoint); }
-  .legend-swatch-radiation { background: var(--series-radiation); }
-  .legend-swatch-humidity { background: var(--series-humidity); }
-  .legend-swatch-wind { background: var(--series-wind); }
-  .tooltip {
-    position: absolute;
-    display: none;
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 0.78rem;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-    pointer-events: none;
-    z-index: 10;
-    max-width: 240px;
-  }
-  .tooltip-time { color: var(--text-secondary); margin-bottom: 4px; }
-  .tooltip-row { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
-  .tooltip-key { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); }
-  .tooltip-value { font-weight: 600; }
+header { padding: 32px 0 8px; }
+h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 4px; font-weight: 650; letter-spacing: -0.01em; }
+.wx-sub { margin: 0 0 14px; color: var(--muted); }
+.wx-meta { margin: 0; font-size: 0.82rem; color: var(--muted); }
+.wx-status {
+  margin: 12px 0 0; padding: 10px 12px; border-radius: 8px;
+  background: var(--warn-bg); color: var(--warn-text); font-size: 0.88rem;
+}
 
+button {
+  font: inherit; color: inherit; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px;
+}
+button:focus-visible, select:focus-visible, svg:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.wx-refresh { margin-top: 16px; padding: 9px 16px; font-weight: 550; }
+.wx-refresh[disabled] { opacity: 0.6; cursor: progress; }
+
+.wx-controls {
+  display: flex; flex-wrap: wrap; gap: 20px 28px; align-items: flex-end;
+  margin: 24px 0 8px; padding: 16px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
+}
+.wx-field { display: flex; flex-direction: column; gap: 8px; }
+.wx-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.wx-days { display: flex; flex-wrap: wrap; gap: 8px; }
+.wx-days button { padding: 7px 13px; line-height: 1.2; text-align: center; }
+.wx-days button b { display: block; font-weight: 600; }
+.wx-days button span { display: block; font-size: 0.72rem; color: var(--muted); }
+.wx-days button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.wx-days button[aria-pressed="true"] span { color: inherit; }
+.wx-hour { display: flex; align-items: center; gap: 8px; }
+.wx-hour button { width: 42px; height: 42px; font-size: 1rem; }
+.wx-hour select {
+  font: inherit; color: inherit; padding: 9px 10px; min-height: 42px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 8px;
+}
+.wx-plan { margin: 14px 0 0; font-size: 0.95rem; }
+
+#wx-charts { position: relative; }
+.wx-card { margin: 28px 0 0; }
+.wx-card h2 {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+  margin: 0 0 2px; font-size: 1.02rem; font-weight: 600;
+}
+.wx-value { font-weight: 500; color: var(--score); font-variant-numeric: tabular-nums; }
+.wx-value.wx-missing { color: var(--muted); font-style: italic; }
+.wx-note { margin: 2px 0 0; font-size: 0.82rem; color: var(--muted); }
+.wx-legend { display: flex; gap: 16px; margin: 4px 0 0; font-size: 0.8rem; color: var(--muted); }
+.wx-legend i { display: inline-block; width: 14px; height: 2px; margin-right: 6px; vertical-align: middle; }
+
+.wx-svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.wx-grid { stroke: var(--grid); stroke-width: 1; }
+.wx-day-line { stroke: var(--day-line); stroke-width: 1; }
+.wx-tick, .wx-day-label { fill: var(--muted); font-size: 11px; }
+.wx-unit { fill: var(--muted); font-size: 11px; }
+.wx-capture { fill: transparent; }
+.wx-cursor { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.wx-band-work { fill: var(--band-work); }
+.wx-band-watch { fill: var(--band-watch); }
+.wx-score-area { fill: var(--score-fill); }
+.wx-score-line { fill: none; stroke: var(--score); stroke-width: 2; stroke-linejoin: round; }
+.wx-marker { fill: var(--score); stroke: var(--surface); stroke-width: 2; }
+.wx-bar { fill: var(--rain); }
+.wx-bar-partial { fill: var(--rain-partial); }
+.wx-temp-line { fill: none; stroke: var(--temp); stroke-width: 2; stroke-linejoin: round; }
+.wx-dew-line { fill: none; stroke: var(--dew); stroke-width: 2; stroke-dasharray: 1 0; stroke-linejoin: round; }
+.wx-wind-line { fill: none; stroke: var(--wind); stroke-width: 2; stroke-linejoin: round; }
+.wx-sun-area { fill: var(--sun-fill); }
+.wx-sun-line { fill: none; stroke: var(--sun); stroke-width: 2; stroke-linejoin: round; }
+.wx-limit { stroke: var(--limit); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wx-limit-label { fill: var(--limit); font-size: 11px; }
+
+#wx-tooltip {
+  position: absolute; top: 0; left: 0; z-index: 5; min-width: 180px;
+  padding: 9px 11px; border: 1px solid var(--hairline); border-radius: 8px;
+  background: var(--surface); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  font-size: 0.82rem; pointer-events: none;
+}
+#wx-tooltip strong { display: block; margin-bottom: 5px; }
+.wx-tip-row { display: flex; justify-content: space-between; gap: 18px; font-variant-numeric: tabular-nums; }
+.wx-tip-row span:last-child { color: var(--muted); }
+
+.wx-method { margin: 22px 0 0; }
+.wx-method-toggle { padding: 6px 12px; font-size: 0.84rem; }
+.wx-method-panel {
+  margin: 10px 0 0; padding: 14px 16px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--hairline); font-size: 0.86rem; color: var(--muted);
+}
+.wx-method-panel p { margin: 0 0 8px; }
+.wx-method-panel p:last-child { margin-bottom: 0; }
+footer { margin: 30px 0 0; padding-top: 18px; border-top: 1px solid var(--hairline); font-size: 0.84rem; color: var(--muted); }
+footer p { margin: 0; }
+
+@media (max-width: 560px) {
+  h1 { font-size: 1.35rem; }
+  .wx-controls { gap: 16px; }
+  .wx-days { width: 100%; }
+  .wx-days button { flex: 1 1 0; padding: 7px 4px; }
+  #wx-tooltip { min-width: 150px; font-size: 0.78rem; }
+}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Zedlitzdorf 74 – maľovanie terasy</h1>
-    <p class="muted">Zedlitzdorf 74, Gnesau (Feldkirchen, Kärnten, Rakúsko) &middot; vygenerované 23.09.2026 00:28</p>
+<div class="wx-wrap">
+<header>
+  <h1>Počasie na natieranie terasy</h1>
+  <p class="wx-sub">Zedlitzdorf · 1.–5. október 2026</p>
+  <p class="wx-meta" id="wx-meta"></p>
+  <p class="wx-status" id="wx-past" hidden>Plánované obdobie už uplynulo. Toto je predpoveď pre dni, ktoré sú za nami – nie je to aktuálne rozhodnutie.</p>
+  <p class="wx-status" id="wx-status" hidden></p>
+  <button type="button" class="wx-refresh" id="wx-refresh">Obnoviť predpoveď</button>
+</header>
 
-
-    
-    <section class="card status-card" style="--status-color:#d03b3b">
-      <div class="status-header">
-        <span class="status-icon">🔴</span>
-        <span class="status-label">NEMAĽOVAŤ</span>
-      </div>
-      <div class="status-grid">
-        <div>
-          <div class="status-metric-label">Najlepšie okno</div>
-          <div class="status-metric-value">13:00 – 18:00 <span class="muted">(5 h)</span></div>
-        </div>
-        <div>
-          <div class="status-metric-label">Bezdažďový čas na vyschnutie</div>
-          <div class="status-metric-value">5 h</div>
-        </div>
-      </div>
-      <ul class="reason-list"><li>Tma – maľovanie sa neodporúča mimo denného svetla.</li></ul>
-      <ul class="reason-list muted"><li>V rámci dostupného horizontu predpovede sa nepredpokladajú žiadne zrážky.</li></ul>
-    </section>
-  
-    
-    <section class="card">
-      <h2 class="panel-title">Dá sa maľovať 1.–4.10.2026?</h2>
-      <ul class="plain-list"><li>
-          <span class="plain-head"><span aria-hidden="true">🟢</span> štvrtok 1.10. &middot; Pravdepodobne áno</span>
-          <span class="plain-sub"><span aria-hidden="true">☀️</span> sucho &middot; cez deň okolo 18 °C &middot; áno v 6 z 10 predpovedí &middot; zatiaľ nie je s čím porovnať</span>
-        </li><li>
-          <span class="plain-head"><span aria-hidden="true">🟡</span> piatok 2.10. &middot; Neisté</span>
-          <span class="plain-sub"><span aria-hidden="true">🌦️</span> možno prehánky &middot; cez deň okolo 17 °C &middot; áno v 4 z 10 predpovedí &middot; zatiaľ nie je s čím porovnať</span>
-        </li><li>
-          <span class="plain-head"><span aria-hidden="true">🟡</span> sobota 3.10. &middot; Neisté</span>
-          <span class="plain-sub"><span aria-hidden="true">🌤️</span> sucho, ale nie ideálne &middot; cez deň okolo 17 °C &middot; áno v 4 z 10 predpovedí &middot; zatiaľ nie je s čím porovnať</span>
-        </li><li>
-          <span class="plain-head"><span aria-hidden="true">🔴</span> nedeľa 4.10. &middot; Skôr nie</span>
-          <span class="plain-sub"><span aria-hidden="true">🌦️</span> možno prehánky &middot; cez deň okolo 16 °C &middot; áno v 2 z 10 predpovedí &middot; zatiaľ nie je s čím porovnať</span>
-        </li></ul>
-      <p class="how-to-read">Výhľad na 8–11 dní dopredu – ešte sa môže zmeniť. 🟢 asi áno · 🟡 ešte nevieme · 🔴 skôr nie</p>
-      <a class="page-link" href="outlook.html">Podrobný výhľad →</a>
-      <details style="margin-top:10px;">
-        <summary>Zdroj</summary>
-        <p class="muted" style="margin:6px 0 0;">ECMWF IFS ENS, beh 22.9. 00 UTC (02:00) &middot; podiel členov ensemblu s aspoň 4 h súvisle vhodných podmienok; trend = zmena za 24 h.</p>
-      </details>
-    </section>
-  
-
-    <section class="card">
-      <h2 class="panel-title">Časová os vhodnosti na maľovanie</h2>
-      
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 74" width="900" height="74" class="chart-svg" role="img" aria-label="Časová os vhodnosti na maľovanie">
-      <rect x="46" y="30" width="804" height="22" rx="4" style="fill:#d8d6cd" />
-      <rect x="46.0" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="56.6" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="67.2" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="77.7" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="88.3" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="98.9" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="109.5" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="120.1" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="130.6" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="141.2" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="151.8" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="162.4" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="172.9" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="183.5" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="194.1" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="204.7" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="215.3" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="225.8" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="236.4" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="247.0" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="257.6" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="268.2" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="278.7" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="289.3" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="299.9" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="310.5" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="321.1" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="331.6" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="342.2" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="352.8" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="363.4" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="373.9" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="384.5" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="395.1" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="405.7" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="416.3" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="426.8" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="437.4" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="448.0" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="458.6" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="469.2" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="479.7" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="490.3" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="500.9" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="511.5" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="522.1" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="532.6" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="543.2" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="553.8" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="564.4" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="574.9" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="585.5" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="596.1" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="606.7" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="617.3" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="627.8" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="638.4" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="649.0" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="659.6" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="670.2" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="680.7" y="30" width="10.6" height="22" style="fill:#2f9e44" /><rect x="691.3" y="30" width="10.6" height="22" style="fill:#2f9e44" /><rect x="701.9" y="30" width="10.6" height="22" style="fill:#2f9e44" /><rect x="712.5" y="30" width="10.6" height="22" style="fill:#2f9e44" /><rect x="723.1" y="30" width="10.6" height="22" style="fill:#2f9e44" /><rect x="733.6" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="744.2" y="30" width="10.6" height="22" style="fill:#d99a1f" /><rect x="754.8" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="765.4" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="775.9" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="786.5" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="797.1" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="807.7" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="818.3" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="828.8" y="30" width="10.6" height="22" style="fill:#d03b3b" /><rect x="839.4" y="30" width="10.6" height="22" style="fill:#d03b3b" />
-      <text x="67.2" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">03:00</text><text x="130.6" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">09:00</text><text x="194.1" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">15:00</text><text x="257.6" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">21:00</text><text x="321.1" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">03:00</text><text x="384.5" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">09:00</text><text x="448.0" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">15:00</text><text x="511.5" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">21:00</text><text x="574.9" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">03:00</text><text x="638.4" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">09:00</text><text x="701.9" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">15:00</text><text x="765.4" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">21:00</text><text x="828.8" y="22" style="fill:#8a8880;font-size:10px" text-anchor="middle">03:00</text>
-      <line x1="294.3" y1="26" x2="294.3" y2="56" style="stroke:#d03b3b;stroke-width:2" />
-      
-      <line x1="680.7" y1="66" x2="733.6" y2="66" style="stroke:#2f9e44;stroke-width:2" />
-      <line x1="680.7" y1="62" x2="680.7" y2="70" style="stroke:#2f9e44;stroke-width:2" />
-      <line x1="733.6" y1="62" x2="733.6" y2="70" style="stroke:#2f9e44;stroke-width:2" />
-      <text x="707.2" y="82" style="fill:#2f9e44;font-size:11px;font-weight:600" text-anchor="middle">13:00 – 18:00</text>
-    
-    </svg>
-  
-    </section>
-
-    <div class="two-col">
-      
-    <section class="card">
-      <h2 class="panel-title">Zrážky</h2>
-      <div class="stat-row"><span class="stat-label">Posledných 6 h</span><span class="stat-value">0.0 mm</span></div>
-      <div class="stat-row"><span class="stat-label">Posledných 12 h</span><span class="stat-value">0.0 mm</span></div>
-      <div class="stat-row"><span class="stat-label">Posledných 24 h</span><span class="stat-value">0.0 mm</span></div>
-      <div class="stat-row"><span class="stat-label">Ďalších 6 h</span><span class="stat-value">0.0 mm</span></div>
-      <div class="stat-row"><span class="stat-label">Ďalších 12 h</span><span class="stat-value">0.0 mm</span></div>
-      <div class="stat-row"><span class="stat-label">Ďalších 24 h</span><span class="stat-value">0.0 mm</span></div>
-      <div class="stat-row"><span class="stat-label">Ďalší očakávaný dážď</span><span class="stat-value">nepredpokladá sa v rámci horizontu</span></div>
-      <div class="stat-row"><span class="stat-label">Pravdepodobnosť zrážok (12 h)</span><span class="stat-value">< 10 %</span></div>
-      <div class="stat-row"><span class="stat-label">Pravdepodobnosť zrážok (24 h)</span><span class="stat-value">< 10 %</span></div>
-    </section>
-  
-      
-    <section class="card">
-      <h2 class="panel-title">Aktuálne podmienky</h2>
-      <div class="stat-row"><span class="stat-label">Teplota</span><span class="stat-value">5.1 °C</span></div>
-      <div class="stat-row"><span class="stat-label">Vlhkosť</span><span class="stat-value" style="color:#2f9e44">66 %</span></div>
-      <div class="stat-row"><span class="stat-label">Rosný bod</span><span class="stat-value">-0.6 °C</span></div>
-      <div class="stat-row"><span class="stat-label">T − Td</span><span class="stat-value" style="color:#2f9e44">+5.7 °C</span></div>
-      <div class="stat-row"><span class="stat-label">Vietor</span><span class="stat-value">6 km/h</span></div>
-      <div class="stat-row"><span class="stat-label">Nárazy vetra</span><span class="stat-value">4 km/h</span></div>
-      <div class="drying-score">
-        <div class="stat-row"><span class="stat-label">Potenciál vysychania</span><span class="stat-value">55 / 100 — Priemerné</span></div>
-        <div class="score-bar"><div class="score-bar-fill" style="width:55%;background:#d99a1f"></div></div>
-      </div>
-      <div class="stat-row"><span class="stat-label">Odhadovaný stav terasy</span><span class="stat-value">Pravdepodobne suchá</span></div>
-      <div class="stat-row"><span class="stat-label">Vlhkosť dreva</span><span class="stat-value">nemeraná</span></div>
-    </section>
-  
-    </div>
-    <p class="muted sun-line">🌅 Východ slnka 06:53 &nbsp;&nbsp; 🌇 Západ slnka 19:03</p>
-
-    <h1 style="margin-top:32px;font-size:1.05rem;">Podrobná predpoveď počasia</h1>
-    
-    <div class="legend">
-      <span class="legend-item"><span class="legend-swatch legend-swatch-precip"></span>Zrážky (mm)</span>
-      <span class="legend-item"><span class="legend-swatch legend-swatch-temp"></span>Teplota (°C)</span>
-      <span class="legend-item"><span class="legend-swatch legend-swatch-dewpoint"></span>Rosný bod (°C)</span>
-      <span class="legend-item"><span class="legend-swatch legend-swatch-humidity"></span>Vlhkosť (%)</span>
-      <span class="legend-item"><span class="legend-swatch legend-swatch-radiation"></span>Slnečné žiarenie (W/m²)</span>
-      <span class="legend-item"><span class="legend-swatch legend-swatch-wind"></span>Vietor (km/h)</span>
-    </div>
-  
-    
-    <section class="card">
-      <h2 class="chart-title">Zrážky (mm)</h2>
-      
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 210" width="900" height="210" class="chart-svg" role="img" aria-label="Graf zrážok">
-      
-      <rect x="46.0" y="22" width="63.5" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="247.0" y="22" width="116.4" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="500.9" y="22" width="116.4" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="754.8" y="22" width="95.2" height="156" style="fill:#8a8880;opacity:0.10" />
-      
-        <line x1="46" y1="178.0" x2="850" y2="178.0" style="stroke:#d8d6cd;stroke-width:1" />
-        <text x="38" y="181.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">0.0</text>
-      
-        <line x1="46" y1="126.0" x2="850" y2="126.0" style="stroke:#d8d6cd;stroke-width:1" />
-        <text x="38" y="129.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">0.4</text>
-      
-        <line x1="46" y1="74.0" x2="850" y2="74.0" style="stroke:#d8d6cd;stroke-width:1" />
-        <text x="38" y="77.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">0.8</text>
-      
-        <line x1="46" y1="22.0" x2="850" y2="22.0" style="stroke:#d8d6cd;stroke-width:1" />
-        <text x="38" y="25.0" style="fill:#2a78d6;font-size:10px" text-anchor="end">1.3</text>
-      
-      <text x="46.0" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">22.09. 01:00</text><text x="162.4" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">22.09. 12:00</text><text x="289.3" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">23.09. 00:00</text><text x="416.3" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">23.09. 12:00</text><text x="543.2" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">24.09. 00:00</text><text x="670.2" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">24.09. 12:00</text><text x="797.1" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">25.09. 00:00</text>
-      
-      <rect x="46.0" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="56.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="67.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="77.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="88.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="98.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="109.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="120.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="130.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="141.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="151.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="162.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="172.9" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="183.5" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="194.1" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="204.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="215.3" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="225.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="236.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="247.0" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="257.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="268.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="278.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="289.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="299.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="310.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="321.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="331.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="342.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="352.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="363.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="373.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="384.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="395.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="405.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="416.3" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="426.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="437.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="448.0" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="458.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="469.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="479.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="490.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="500.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="511.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="522.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="532.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="543.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="553.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="564.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="574.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="585.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="596.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="606.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="617.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="627.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="638.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="649.0" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="659.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="670.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="680.7" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="691.3" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="701.9" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="712.5" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="723.1" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="733.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="744.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="754.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="765.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="775.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="786.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="797.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="807.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="818.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="828.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="839.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" />
-      
-    <line x1="294.3" y1="22" x2="294.3" y2="178" style="stroke:#d03b3b;stroke-width:1.5;stroke-dasharray:3 3;opacity:0.85" />
-    <text x="294.3" y="16" style="fill:#d03b3b;font-size:10px;font-weight:600" text-anchor="middle">teraz</text>
-  
-      
-      <line class="crosshair" x1="0" y1="22" x2="0" y2="178" data-chart="precip" />
-      <rect class="hover-capture" x="46" y="22" width="804" height="156" data-chart="precip" />
-    
-    </svg>
-    <div class="tooltip" data-chart-tooltip="precip" style="display:none"></div>
-  
-    </section>
-  
-    
-    <section class="card">
-      <h2 class="chart-title">Teplota a rosný bod (°C)</h2>
-      
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 210" width="900" height="210" class="chart-svg" role="img" aria-label="Graf teploty a rosného bodu">
-      
-      <rect x="46.0" y="22" width="63.5" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="247.0" y="22" width="116.4" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="500.9" y="22" width="116.4" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="754.8" y="22" width="95.2" height="156" style="fill:#8a8880;opacity:0.10" />
-      <line x1="46" y1="178.0" x2="850" y2="178.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="139.0" x2="850" y2="139.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="100.0" x2="850" y2="100.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="61.0" x2="850" y2="61.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="22.0" x2="850" y2="22.0" style="stroke:#d8d6cd;stroke-width:1" />
-      <text x="38" y="181.0" style="fill:#8a8880;font-size:10px" text-anchor="end">-6°</text><text x="38" y="142.0" style="fill:#8a8880;font-size:10px" text-anchor="end">-0°</text><text x="38" y="103.0" style="fill:#8a8880;font-size:10px" text-anchor="end">6°</text><text x="38" y="64.0" style="fill:#8a8880;font-size:10px" text-anchor="end">12°</text><text x="38" y="25.0" style="fill:#8a8880;font-size:10px" text-anchor="end">18°</text>
-      <text x="46.0" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">22.09. 01:00</text><text x="162.4" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">22.09. 12:00</text><text x="289.3" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">23.09. 00:00</text><text x="416.3" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">23.09. 12:00</text><text x="543.2" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">24.09. 00:00</text><text x="670.2" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">24.09. 12:00</text><text x="797.1" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">25.09. 00:00</text>
-      <path d="M 46.0 126.9 L 56.6 128.8 L 67.2 125.9 L 77.7 127.3 L 88.3 127.4 L 98.9 129.3 L 109.5 128.9 L 120.1 129.8 L 130.6 127.1 L 141.2 129.0 L 151.8 133.2 L 162.4 131.8 L 172.9 136.4 L 183.5 135.2 L 194.1 139.4 L 204.7 135.1 L 215.3 133.7 L 225.8 129.3 L 236.4 120.0 L 247.0 117.0 L 257.6 117.5 L 268.2 117.3 L 278.7 118.2 L 289.3 141.5 L 299.9 145.6 L 310.5 149.3 L 321.1 150.1 L 331.6 153.0 L 342.2 156.1 L 352.8 157.9 L 363.4 157.7 L 373.9 152.2 L 384.5 147.0 L 395.1 140.4 L 405.7 130.6 L 416.3 127.2 L 426.8 121.5 L 437.4 119.0 L 448.0 118.2 L 458.6 117.3 L 469.2 118.3 L 479.7 116.3 L 490.3 121.0 L 500.9 129.9 L 511.5 131.0 L 522.1 132.2 L 532.6 141.2 L 543.2 144.2 L 553.8 146.3 L 564.4 151.1 L 574.9 152.4 L 585.5 156.9 L 596.1 161.2 L 606.7 165.0 L 617.3 165.4 L 627.8 148.7 L 638.4 119.7 L 649.0 114.3 L 659.6 110.3 L 670.2 102.0 L 680.7 99.0 L 691.3 100.7 L 701.9 98.1 L 712.5 96.5 L 723.1 92.6 L 733.6 83.3 L 744.2 123.2 L 754.8 132.0 L 765.4 131.9 L 775.9 133.1 L 786.5 131.7 L 797.1 137.2 L 807.7 145.2 L 818.3 148.6 L 828.8 146.4 L 839.4 143.7 L 850.0 138.8" style="fill:none;stroke:#8a5fb0;stroke-width:1.5;stroke-dasharray:4 3;stroke-linecap:round;stroke-linejoin:round" />
-      <path d="M 46.0 96.8 L 56.6 100.6 L 67.2 102.1 L 77.7 103.1 L 88.3 105.7 L 98.9 107.8 L 109.5 105.8 L 120.1 96.5 L 130.6 77.5 L 141.2 60.7 L 151.8 51.2 L 162.4 46.9 L 172.9 45.7 L 183.5 45.0 L 194.1 41.8 L 204.7 43.8 L 215.3 48.4 L 225.8 59.4 L 236.4 73.6 L 247.0 87.7 L 257.6 95.1 L 268.2 98.9 L 278.7 102.7 L 289.3 105.5 L 299.9 111.2 L 310.5 116.8 L 321.1 121.9 L 331.6 125.0 L 342.2 126.9 L 352.8 128.1 L 363.4 128.1 L 373.9 120.6 L 384.5 98.6 L 395.1 79.2 L 405.7 71.0 L 416.3 65.3 L 426.8 60.3 L 437.4 55.9 L 448.0 53.4 L 458.6 52.8 L 469.2 55.9 L 479.7 62.2 L 490.3 79.2 L 500.9 91.7 L 511.5 99.9 L 522.1 105.5 L 532.6 108.7 L 543.2 109.3 L 553.8 108.7 L 564.4 109.9 L 574.9 111.2 L 585.5 112.4 L 596.1 112.4 L 606.7 113.1 L 617.3 114.3 L 627.8 106.2 L 638.4 84.8 L 649.0 61.6 L 659.6 51.5 L 670.2 45.9 L 680.7 42.7 L 691.3 38.3 L 701.9 34.6 L 712.5 37.1 L 723.1 42.7 L 733.6 51.5 L 744.2 50.9 L 754.8 54.7 L 765.4 59.1 L 775.9 60.3 L 786.5 67.8 L 797.1 72.9 L 807.7 77.3 L 818.3 80.4 L 828.8 89.2 L 839.4 94.9 L 850.0 104.3" style="fill:none;stroke:#d9622a;stroke-width:2;stroke-linecap:round;stroke-linejoin:round" />
-      <rect x="46.0" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="56.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="67.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="77.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="88.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="98.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="109.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="120.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="130.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="141.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="151.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="162.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="172.9" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="183.5" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="194.1" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="204.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="215.3" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="225.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="236.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="247.0" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="257.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="268.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="278.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="289.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="299.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="310.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="321.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="331.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="342.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="352.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="363.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="373.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="384.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="395.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="405.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="416.3" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="426.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="437.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="448.0" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="458.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="469.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="479.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="490.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="500.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="511.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="522.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="532.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="543.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="553.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="564.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="574.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="585.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="596.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="606.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="617.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="627.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="638.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="649.0" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="659.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="670.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="680.7" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="691.3" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="701.9" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="712.5" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="723.1" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="733.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="744.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="754.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="765.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="775.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="786.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="797.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="807.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="818.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="828.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="839.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" />
-      
-    <line x1="294.3" y1="22" x2="294.3" y2="178" style="stroke:#d03b3b;stroke-width:1.5;stroke-dasharray:3 3;opacity:0.85" />
-    <text x="294.3" y="16" style="fill:#d03b3b;font-size:10px;font-weight:600" text-anchor="middle">teraz</text>
-  
-      
-      <line class="crosshair" x1="0" y1="22" x2="0" y2="178" data-chart="temp" />
-      <rect class="hover-capture" x="46" y="22" width="804" height="156" data-chart="temp" />
-    
-    </svg>
-    <div class="tooltip" data-chart-tooltip="temp" style="display:none"></div>
-  
-    </section>
-  
-    
-    <section class="card">
-      <h2 class="chart-title">Relatívna vlhkosť (%)</h2>
-      
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 210" width="900" height="210" class="chart-svg" role="img" aria-label="Graf relatívnej vlhkosti">
-      
-      <rect x="46.0" y="22" width="63.5" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="247.0" y="22" width="116.4" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="500.9" y="22" width="116.4" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="754.8" y="22" width="95.2" height="156" style="fill:#8a8880;opacity:0.10" />
-      <line x1="46" y1="178.0" x2="850" y2="178.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="139.0" x2="850" y2="139.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="100.0" x2="850" y2="100.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="61.0" x2="850" y2="61.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="22.0" x2="850" y2="22.0" style="stroke:#d8d6cd;stroke-width:1" />
-      <text x="38" y="181.0" style="fill:#8a8880;font-size:10px" text-anchor="end">0%</text><text x="38" y="142.0" style="fill:#8a8880;font-size:10px" text-anchor="end">25%</text><text x="38" y="103.0" style="fill:#8a8880;font-size:10px" text-anchor="end">50%</text><text x="38" y="64.0" style="fill:#8a8880;font-size:10px" text-anchor="end">75%</text><text x="38" y="25.0" style="fill:#8a8880;font-size:10px" text-anchor="end">100%</text>
-      <text x="46.0" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">22.09. 01:00</text><text x="162.4" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">22.09. 12:00</text><text x="289.3" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">23.09. 00:00</text><text x="416.3" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">23.09. 12:00</text><text x="543.2" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">24.09. 00:00</text><text x="670.2" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">24.09. 12:00</text><text x="797.1" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">25.09. 00:00</text>
-      <path d="M 46.0 66.6 L 56.6 64.3 L 67.2 58.5 L 77.7 59.2 L 88.3 55.9 L 98.9 55.8 L 109.5 57.8 L 120.1 70.6 L 130.6 88.0 L 141.2 104.2 L 151.8 114.3 L 162.4 116.1 L 172.9 120.0 L 183.5 119.6 L 194.1 124.2 L 204.7 120.2 L 215.3 116.5 L 225.8 105.4 L 236.4 84.3 L 247.0 65.2 L 257.6 56.4 L 268.2 51.0 L 278.7 46.9 L 289.3 74.3 L 299.9 72.7 L 310.5 70.5 L 321.1 65.3 L 331.6 65.2 L 342.2 66.9 L 352.8 67.6 L 363.4 67.3 L 373.9 69.6 L 384.5 87.8 L 395.1 99.2 L 405.7 97.1 L 416.3 98.8 L 426.8 97.8 L 437.4 99.2 L 448.0 100.5 L 458.6 100.2 L 469.2 98.5 L 479.7 91.3 L 490.3 79.5 L 500.9 76.1 L 511.5 68.0 L 522.1 62.5 L 532.6 70.2 L 543.2 73.2 L 553.8 76.4 L 564.4 80.6 L 574.9 80.7 L 585.5 84.4 L 596.1 89.2 L 606.7 92.5 L 617.3 91.7 L 627.8 81.9 L 638.4 71.9 L 649.0 89.9 L 659.6 95.0 L 670.2 92.2 L 680.7 92.1 L 691.3 97.4 L 701.9 98.2 L 712.5 94.7 L 723.1 85.9 L 733.6 66.5 L 744.2 106.7 L 754.8 110.9 L 765.4 107.7 L 775.9 107.7 L 786.5 100.7 L 797.1 101.5 L 807.7 104.9 L 818.3 105.4 L 828.8 96.1 L 839.4 88.1 L 850.0 72.4 L 850.0 178 L 46.0 178 Z" style="fill:#3f9e89;opacity:0.18" />
-      <path d="M 46.0 66.6 L 56.6 64.3 L 67.2 58.5 L 77.7 59.2 L 88.3 55.9 L 98.9 55.8 L 109.5 57.8 L 120.1 70.6 L 130.6 88.0 L 141.2 104.2 L 151.8 114.3 L 162.4 116.1 L 172.9 120.0 L 183.5 119.6 L 194.1 124.2 L 204.7 120.2 L 215.3 116.5 L 225.8 105.4 L 236.4 84.3 L 247.0 65.2 L 257.6 56.4 L 268.2 51.0 L 278.7 46.9 L 289.3 74.3 L 299.9 72.7 L 310.5 70.5 L 321.1 65.3 L 331.6 65.2 L 342.2 66.9 L 352.8 67.6 L 363.4 67.3 L 373.9 69.6 L 384.5 87.8 L 395.1 99.2 L 405.7 97.1 L 416.3 98.8 L 426.8 97.8 L 437.4 99.2 L 448.0 100.5 L 458.6 100.2 L 469.2 98.5 L 479.7 91.3 L 490.3 79.5 L 500.9 76.1 L 511.5 68.0 L 522.1 62.5 L 532.6 70.2 L 543.2 73.2 L 553.8 76.4 L 564.4 80.6 L 574.9 80.7 L 585.5 84.4 L 596.1 89.2 L 606.7 92.5 L 617.3 91.7 L 627.8 81.9 L 638.4 71.9 L 649.0 89.9 L 659.6 95.0 L 670.2 92.2 L 680.7 92.1 L 691.3 97.4 L 701.9 98.2 L 712.5 94.7 L 723.1 85.9 L 733.6 66.5 L 744.2 106.7 L 754.8 110.9 L 765.4 107.7 L 775.9 107.7 L 786.5 100.7 L 797.1 101.5 L 807.7 104.9 L 818.3 105.4 L 828.8 96.1 L 839.4 88.1 L 850.0 72.4" style="fill:none;stroke:#3f9e89;stroke-width:2;stroke-linecap:round" />
-      <rect x="46.0" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="56.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="67.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="77.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="88.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="98.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="109.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="120.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="130.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="141.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="151.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="162.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="172.9" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="183.5" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="194.1" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="204.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="215.3" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="225.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="236.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="247.0" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="257.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="268.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="278.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="289.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="299.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="310.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="321.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="331.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="342.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="352.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="363.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="373.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="384.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="395.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="405.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="416.3" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="426.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="437.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="448.0" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="458.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="469.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="479.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="490.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="500.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="511.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="522.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="532.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="543.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="553.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="564.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="574.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="585.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="596.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="606.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="617.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="627.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="638.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="649.0" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="659.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="670.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="680.7" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="691.3" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="701.9" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="712.5" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="723.1" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="733.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="744.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="754.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="765.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="775.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="786.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="797.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="807.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="818.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="828.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="839.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" />
-      
-    <line x1="294.3" y1="22" x2="294.3" y2="178" style="stroke:#d03b3b;stroke-width:1.5;stroke-dasharray:3 3;opacity:0.85" />
-    <text x="294.3" y="16" style="fill:#d03b3b;font-size:10px;font-weight:600" text-anchor="middle">teraz</text>
-  
-      
-      <line class="crosshair" x1="0" y1="22" x2="0" y2="178" data-chart="humidity" />
-      <rect class="hover-capture" x="46" y="22" width="804" height="156" data-chart="humidity" />
-    
-    </svg>
-    <div class="tooltip" data-chart-tooltip="humidity" style="display:none"></div>
-  
-    </section>
-  
-    
-    <section class="card">
-      <h2 class="chart-title">Slnečné žiarenie (W/m²) a vietor (km/h)</h2>
-      
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 210" width="900" height="210" class="chart-svg" role="img" aria-label="Graf slnečného žiarenia a vetra">
-      
-      <rect x="46.0" y="22" width="63.5" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="247.0" y="22" width="116.4" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="500.9" y="22" width="116.4" height="156" style="fill:#8a8880;opacity:0.10" /><rect x="754.8" y="22" width="95.2" height="156" style="fill:#8a8880;opacity:0.10" />
-      <line x1="46" y1="178.0" x2="850" y2="178.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="126.0" x2="850" y2="126.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="74.0" x2="850" y2="74.0" style="stroke:#d8d6cd;stroke-width:1" /><line x1="46" y1="22.0" x2="850" y2="22.0" style="stroke:#d8d6cd;stroke-width:1" />
-      <text x="38" y="181.0" style="fill:#8a8880;font-size:10px" text-anchor="end">0</text><text x="38" y="129.0" style="fill:#8a8880;font-size:10px" text-anchor="end">270</text><text x="38" y="77.0" style="fill:#8a8880;font-size:10px" text-anchor="end">539</text><text x="38" y="25.0" style="fill:#8a8880;font-size:10px" text-anchor="end">809</text>
-      <text x="46.0" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">22.09. 01:00</text><text x="162.4" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">22.09. 12:00</text><text x="289.3" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">23.09. 00:00</text><text x="416.3" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">23.09. 12:00</text><text x="543.2" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">24.09. 00:00</text><text x="670.2" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">24.09. 12:00</text><text x="797.1" y="202" style="fill:#8a8880;font-size:10px" text-anchor="middle">25.09. 00:00</text>
-      <path d="M 46.0 178.0 L 56.6 178.0 L 67.2 178.0 L 77.7 178.0 L 88.3 178.0 L 98.9 178.0 L 109.5 178.0 L 120.1 168.2 L 130.6 119.3 L 141.2 92.3 L 151.8 91.8 L 162.4 86.1 L 172.9 58.0 L 183.5 51.6 L 194.1 55.9 L 204.7 86.7 L 215.3 117.5 L 225.8 172.1 L 236.4 178.0 L 247.0 178.0 L 257.6 178.0 L 268.2 178.0 L 278.7 178.0 L 289.3 178.0 L 299.9 178.0 L 310.5 178.0 L 321.1 178.0 L 331.6 178.0 L 342.2 178.0 L 352.8 178.0 L 363.4 178.0 L 373.9 165.3 L 384.5 129.9 L 395.1 91.6 L 405.7 58.4 L 416.3 34.4 L 426.8 22.0 L 437.4 22.5 L 448.0 36.0 L 458.6 60.9 L 469.2 94.6 L 479.7 133.2 L 490.3 168.9 L 500.9 178.0 L 511.5 178.0 L 522.1 178.0 L 532.6 178.0 L 543.2 178.0 L 553.8 178.0 L 564.4 178.0 L 574.9 178.0 L 585.5 178.0 L 596.1 178.0 L 606.7 178.0 L 617.3 178.0 L 627.8 165.7 L 638.4 131.5 L 649.0 96.5 L 659.6 68.3 L 670.2 50.2 L 680.7 54.1 L 691.3 55.1 L 701.9 46.3 L 712.5 65.2 L 723.1 101.1 L 733.6 147.6 L 744.2 173.0 L 754.8 178.0 L 765.4 178.0 L 775.9 178.0 L 786.5 178.0 L 797.1 178.0 L 807.7 178.0 L 818.3 178.0 L 828.8 178.0 L 839.4 178.0 L 850.0 178.0 L 850.0 178 L 46.0 178 Z" style="fill:#e0b430;opacity:0.15" />
-      <path d="M 46.0 178.0 L 56.6 178.0 L 67.2 178.0 L 77.7 178.0 L 88.3 178.0 L 98.9 178.0 L 109.5 178.0 L 120.1 168.2 L 130.6 119.3 L 141.2 92.3 L 151.8 91.8 L 162.4 86.1 L 172.9 58.0 L 183.5 51.6 L 194.1 55.9 L 204.7 86.7 L 215.3 117.5 L 225.8 172.1 L 236.4 178.0 L 247.0 178.0 L 257.6 178.0 L 268.2 178.0 L 278.7 178.0 L 289.3 178.0 L 299.9 178.0 L 310.5 178.0 L 321.1 178.0 L 331.6 178.0 L 342.2 178.0 L 352.8 178.0 L 363.4 178.0 L 373.9 165.3 L 384.5 129.9 L 395.1 91.6 L 405.7 58.4 L 416.3 34.4 L 426.8 22.0 L 437.4 22.5 L 448.0 36.0 L 458.6 60.9 L 469.2 94.6 L 479.7 133.2 L 490.3 168.9 L 500.9 178.0 L 511.5 178.0 L 522.1 178.0 L 532.6 178.0 L 543.2 178.0 L 553.8 178.0 L 564.4 178.0 L 574.9 178.0 L 585.5 178.0 L 596.1 178.0 L 606.7 178.0 L 617.3 178.0 L 627.8 165.7 L 638.4 131.5 L 649.0 96.5 L 659.6 68.3 L 670.2 50.2 L 680.7 54.1 L 691.3 55.1 L 701.9 46.3 L 712.5 65.2 L 723.1 101.1 L 733.6 147.6 L 744.2 173.0 L 754.8 178.0 L 765.4 178.0 L 775.9 178.0 L 786.5 178.0 L 797.1 178.0 L 807.7 178.0 L 818.3 178.0 L 828.8 178.0 L 839.4 178.0 L 850.0 178.0" style="fill:none;stroke:#e0b430;stroke-width:1.5;stroke-linecap:round" />
-      <path d="M 46.0 139.3 L 56.6 144.9 L 67.2 135.1 L 77.7 134.2 L 88.3 134.5 L 98.9 139.3 L 109.5 141.5 L 120.1 142.2 L 130.6 125.7 L 141.2 111.5 L 151.8 82.2 L 162.4 95.7 L 172.9 101.6 L 183.5 87.6 L 194.1 76.0 L 204.7 99.9 L 215.3 88.9 L 225.8 72.0 L 236.4 48.0 L 247.0 55.9 L 257.6 116.4 L 268.2 117.3 L 278.7 162.6 L 289.3 146.6 L 299.9 161.4 L 310.5 164.3 L 321.1 162.6 L 331.6 164.3 L 342.2 167.5 L 352.8 166.6 L 363.4 166.6 L 373.9 165.1 L 384.5 163.2 L 395.1 152.1 L 405.7 133.4 L 416.3 128.5 L 426.8 125.9 L 437.4 124.6 L 448.0 127.2 L 458.6 129.8 L 469.2 138.6 L 479.7 156.1 L 490.3 170.8 L 500.9 170.6 L 511.5 167.2 L 522.1 165.3 L 532.6 165.3 L 543.2 163.5 L 553.8 163.5 L 564.4 164.9 L 574.9 162.6 L 585.5 162.7 L 596.1 162.7 L 606.7 163.2 L 617.3 159.3 L 627.8 161.4 L 638.4 170.6 L 649.0 167.1 L 659.6 157.5 L 670.2 149.1 L 680.7 147.5 L 691.3 144.9 L 701.9 136.1 L 712.5 140.1 L 723.1 155.5 L 733.6 170.0 L 744.2 130.9 L 754.8 119.2 L 765.4 117.7 L 775.9 84.1 L 786.5 111.8 L 797.1 143.5 L 807.7 137.1 L 818.3 147.4 L 828.8 158.7 L 839.4 161.7 L 850.0 158.7" style="fill:none;stroke:#4d8790;stroke-width:1.5;stroke-dasharray:2 2;stroke-linecap:round" />
-      <rect x="46.0" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="56.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="67.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="77.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="88.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="98.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="109.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="120.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="130.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="141.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="151.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="162.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="172.9" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="183.5" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="194.1" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="204.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="215.3" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="225.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="236.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="247.0" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="257.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="268.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="278.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="289.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="299.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="310.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="321.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="331.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="342.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="352.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="363.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="373.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="384.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="395.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="405.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="416.3" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="426.8" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="437.4" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="448.0" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="458.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="469.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="479.7" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="490.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="500.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="511.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="522.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="532.6" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="543.2" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="553.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="564.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="574.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="585.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="596.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="606.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="617.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="627.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="638.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="649.0" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="659.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="670.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="680.7" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="691.3" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="701.9" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="712.5" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="723.1" y="182" width="10.6" height="7" style="fill:#2f9e44;opacity:0.85" /><rect x="733.6" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="744.2" y="182" width="10.6" height="7" style="fill:#d99a1f;opacity:0.85" /><rect x="754.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="765.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="775.9" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="786.5" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="797.1" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="807.7" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="818.3" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="828.8" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" /><rect x="839.4" y="182" width="10.6" height="7" style="fill:#d03b3b;opacity:0.85" />
-      
-    <line x1="294.3" y1="22" x2="294.3" y2="178" style="stroke:#d03b3b;stroke-width:1.5;stroke-dasharray:3 3;opacity:0.85" />
-    <text x="294.3" y="16" style="fill:#d03b3b;font-size:10px;font-weight:600" text-anchor="middle">teraz</text>
-  
-      
-      <line class="crosshair" x1="0" y1="22" x2="0" y2="178" data-chart="radiation" />
-      <rect class="hover-capture" x="46" y="22" width="804" height="156" data-chart="radiation" />
-    
-    </svg>
-    <div class="tooltip" data-chart-tooltip="radiation" style="display:none"></div>
-  
-    </section>
-  
-    <p class="muted">Súčet zrážok za celé okno: 0.0 mm.</p>
-    <p class="disclaimer">Ide len o odhad na základe meteorologických dát. Pred aplikáciou vždy overte, že je povrch dreva skutočne suchý - podľa možnosti meračom vlhkosti dreva. Presná akceptovateľná vlhkosť dreva závisí od konkrétneho náteru/moridla.</p>
-  
+<div class="wx-controls">
+  <div class="wx-field">
+    <span class="wx-label" id="wx-day-label">Deň začiatku</span>
+    <div class="wx-days" role="group" aria-labelledby="wx-day-label"><button type="button" data-day="2026-10-01" aria-pressed="false" aria-label="št 1. 10."><b>1. 10.</b><span>št</span></button><button type="button" data-day="2026-10-02" aria-pressed="false" aria-label="pi 2. 10."><b>2. 10.</b><span>pi</span></button><button type="button" data-day="2026-10-03" aria-pressed="false" aria-label="so 3. 10."><b>3. 10.</b><span>so</span></button><button type="button" data-day="2026-10-04" aria-pressed="false" aria-label="ne 4. 10."><b>4. 10.</b><span>ne</span></button><button type="button" data-day="2026-10-05" aria-pressed="false" aria-label="po 5. 10."><b>5. 10.</b><span>po</span></button></div>
   </div>
-  <script>
-    const CHART_DATA = {};
-    CHART_DATA["precip"] = {"points":[{"x":46,"label":"22.09. 01:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":56.6,"label":"22.09. 02:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":67.2,"label":"22.09. 03:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":77.7,"label":"22.09. 04:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":88.3,"label":"22.09. 05:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":98.9,"label":"22.09. 06:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":109.5,"label":"22.09. 07:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":120.1,"label":"22.09. 08:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":130.6,"label":"22.09. 09:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":141.2,"label":"22.09. 10:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":151.8,"label":"22.09. 11:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":162.4,"label":"22.09. 12:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":172.9,"label":"22.09. 13:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":183.5,"label":"22.09. 14:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":194.1,"label":"22.09. 15:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":204.7,"label":"22.09. 16:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":215.3,"label":"22.09. 17:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":225.8,"label":"22.09. 18:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":236.4,"label":"22.09. 19:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":247,"label":"22.09. 20:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":257.6,"label":"22.09. 21:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":268.2,"label":"22.09. 22:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":278.7,"label":"22.09. 23:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"}]},{"x":289.3,"label":"23.09. 00:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":299.9,"label":"23.09. 01:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":310.5,"label":"23.09. 02:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":321.1,"label":"23.09. 03:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":331.6,"label":"23.09. 04:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":342.2,"label":"23.09. 05:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":352.8,"label":"23.09. 06:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":363.4,"label":"23.09. 07:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":373.9,"label":"23.09. 08:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":384.5,"label":"23.09. 09:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":395.1,"label":"23.09. 10:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":405.7,"label":"23.09. 11:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":416.3,"label":"23.09. 12:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":426.8,"label":"23.09. 13:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":437.4,"label":"23.09. 14:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":448,"label":"23.09. 15:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":458.6,"label":"23.09. 16:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":469.2,"label":"23.09. 17:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":479.7,"label":"23.09. 18:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":490.3,"label":"23.09. 19:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":500.9,"label":"23.09. 20:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":511.5,"label":"23.09. 21:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":522.1,"label":"23.09. 22:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":532.6,"label":"23.09. 23:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":543.2,"label":"24.09. 00:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":553.8,"label":"24.09. 01:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":564.4,"label":"24.09. 02:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":574.9,"label":"24.09. 03:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":585.5,"label":"24.09. 04:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":596.1,"label":"24.09. 05:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":606.7,"label":"24.09. 06:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":617.3,"label":"24.09. 07:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":627.8,"label":"24.09. 08:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":638.4,"label":"24.09. 09:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":649,"label":"24.09. 10:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":659.6,"label":"24.09. 11:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":670.2,"label":"24.09. 12:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":680.7,"label":"24.09. 13:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":691.3,"label":"24.09. 14:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":701.9,"label":"24.09. 15:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":712.5,"label":"24.09. 16:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":723.1,"label":"24.09. 17:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":733.6,"label":"24.09. 18:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":744.2,"label":"24.09. 19:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":754.8,"label":"24.09. 20:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":765.4,"label":"24.09. 21:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.2 mm","color":"#2a78d6"}]},{"x":775.9,"label":"24.09. 22:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.1 mm","color":"#2a78d6"}]},{"x":786.5,"label":"24.09. 23:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":797.1,"label":"25.09. 00:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":807.7,"label":"25.09. 01:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":818.3,"label":"25.09. 02:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":828.8,"label":"25.09. 03:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":839.4,"label":"25.09. 04:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]},{"x":850,"label":"25.09. 05:00","rows":[{"label":"Zrážky","value":"0.0 mm","color":"#2a78d6"},{"label":"Ensemble p50 / p90","value":"0.0 / 0.0 mm","color":"#2a78d6"}]}]};
-CHART_DATA["temp"] = {"points":[{"x":46,"label":"22.09. 01:00","rows":[{"label":"Teplota","value":"6.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.7 °C","color":"#8a5fb0"}]},{"x":56.6,"label":"22.09. 02:00","rows":[{"label":"Teplota","value":"5.9 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.4 °C","color":"#8a5fb0"}]},{"x":67.2,"label":"22.09. 03:00","rows":[{"label":"Teplota","value":"5.6 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.9 °C","color":"#8a5fb0"}]},{"x":77.7,"label":"22.09. 04:00","rows":[{"label":"Teplota","value":"5.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.6 °C","color":"#8a5fb0"}]},{"x":88.3,"label":"22.09. 05:00","rows":[{"label":"Teplota","value":"5.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.6 °C","color":"#8a5fb0"}]},{"x":98.9,"label":"22.09. 06:00","rows":[{"label":"Teplota","value":"4.7 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.3 °C","color":"#8a5fb0"}]},{"x":109.5,"label":"22.09. 07:00","rows":[{"label":"Teplota","value":"5.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.4 °C","color":"#8a5fb0"}]},{"x":120.1,"label":"22.09. 08:00","rows":[{"label":"Teplota","value":"6.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.2 °C","color":"#8a5fb0"}]},{"x":130.6,"label":"22.09. 09:00","rows":[{"label":"Teplota","value":"9.6 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.7 °C","color":"#8a5fb0"}]},{"x":141.2,"label":"22.09. 10:00","rows":[{"label":"Teplota","value":"12.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.4 °C","color":"#8a5fb0"}]},{"x":151.8,"label":"22.09. 11:00","rows":[{"label":"Teplota","value":"13.8 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.7 °C","color":"#8a5fb0"}]},{"x":162.4,"label":"22.09. 12:00","rows":[{"label":"Teplota","value":"14.4 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.9 °C","color":"#8a5fb0"}]},{"x":172.9,"label":"22.09. 13:00","rows":[{"label":"Teplota","value":"14.6 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.2 °C","color":"#8a5fb0"}]},{"x":183.5,"label":"22.09. 14:00","rows":[{"label":"Teplota","value":"14.7 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.4 °C","color":"#8a5fb0"}]},{"x":194.1,"label":"22.09. 15:00","rows":[{"label":"Teplota","value":"15.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-0.3 °C","color":"#8a5fb0"}]},{"x":204.7,"label":"22.09. 16:00","rows":[{"label":"Teplota","value":"14.9 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.4 °C","color":"#8a5fb0"}]},{"x":215.3,"label":"22.09. 17:00","rows":[{"label":"Teplota","value":"14.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.6 °C","color":"#8a5fb0"}]},{"x":225.8,"label":"22.09. 18:00","rows":[{"label":"Teplota","value":"12.4 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.3 °C","color":"#8a5fb0"}]},{"x":236.4,"label":"22.09. 19:00","rows":[{"label":"Teplota","value":"10.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"2.8 °C","color":"#8a5fb0"}]},{"x":247,"label":"22.09. 20:00","rows":[{"label":"Teplota","value":"7.9 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.3 °C","color":"#8a5fb0"}]},{"x":257.6,"label":"22.09. 21:00","rows":[{"label":"Teplota","value":"6.8 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.2 °C","color":"#8a5fb0"}]},{"x":268.2,"label":"22.09. 22:00","rows":[{"label":"Teplota","value":"6.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.2 °C","color":"#8a5fb0"}]},{"x":278.7,"label":"22.09. 23:00","rows":[{"label":"Teplota","value":"5.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.1 °C","color":"#8a5fb0"}]},{"x":289.3,"label":"23.09. 00:00","rows":[{"label":"Teplota","value":"5.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-0.6 °C","color":"#8a5fb0"}]},{"x":299.9,"label":"23.09. 01:00","rows":[{"label":"Teplota","value":"4.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.3 °C","color":"#8a5fb0"}]},{"x":310.5,"label":"23.09. 02:00","rows":[{"label":"Teplota","value":"3.3 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.9 °C","color":"#8a5fb0"}]},{"x":321.1,"label":"23.09. 03:00","rows":[{"label":"Teplota","value":"2.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-2.0 °C","color":"#8a5fb0"}]},{"x":331.6,"label":"23.09. 04:00","rows":[{"label":"Teplota","value":"2.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-2.5 °C","color":"#8a5fb0"}]},{"x":342.2,"label":"23.09. 05:00","rows":[{"label":"Teplota","value":"1.7 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-3.0 °C","color":"#8a5fb0"}]},{"x":352.8,"label":"23.09. 06:00","rows":[{"label":"Teplota","value":"1.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-3.2 °C","color":"#8a5fb0"}]},{"x":363.4,"label":"23.09. 07:00","rows":[{"label":"Teplota","value":"1.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-3.2 °C","color":"#8a5fb0"}]},{"x":373.9,"label":"23.09. 08:00","rows":[{"label":"Teplota","value":"2.7 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-2.3 °C","color":"#8a5fb0"}]},{"x":384.5,"label":"23.09. 09:00","rows":[{"label":"Teplota","value":"6.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.5 °C","color":"#8a5fb0"}]},{"x":395.1,"label":"23.09. 10:00","rows":[{"label":"Teplota","value":"9.3 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-0.5 °C","color":"#8a5fb0"}]},{"x":405.7,"label":"23.09. 11:00","rows":[{"label":"Teplota","value":"10.6 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.1 °C","color":"#8a5fb0"}]},{"x":416.3,"label":"23.09. 12:00","rows":[{"label":"Teplota","value":"11.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.6 °C","color":"#8a5fb0"}]},{"x":426.8,"label":"23.09. 13:00","rows":[{"label":"Teplota","value":"12.3 °C","color":"#d9622a"},{"label":"Rosný bod","value":"2.6 °C","color":"#8a5fb0"}]},{"x":437.4,"label":"23.09. 14:00","rows":[{"label":"Teplota","value":"13.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.0 °C","color":"#8a5fb0"}]},{"x":448,"label":"23.09. 15:00","rows":[{"label":"Teplota","value":"13.4 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.1 °C","color":"#8a5fb0"}]},{"x":458.6,"label":"23.09. 16:00","rows":[{"label":"Teplota","value":"13.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.2 °C","color":"#8a5fb0"}]},{"x":469.2,"label":"23.09. 17:00","rows":[{"label":"Teplota","value":"13.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.1 °C","color":"#8a5fb0"}]},{"x":479.7,"label":"23.09. 18:00","rows":[{"label":"Teplota","value":"12.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.4 °C","color":"#8a5fb0"}]},{"x":490.3,"label":"23.09. 19:00","rows":[{"label":"Teplota","value":"9.3 °C","color":"#d9622a"},{"label":"Rosný bod","value":"2.6 °C","color":"#8a5fb0"}]},{"x":500.9,"label":"23.09. 20:00","rows":[{"label":"Teplota","value":"7.3 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.2 °C","color":"#8a5fb0"}]},{"x":511.5,"label":"23.09. 21:00","rows":[{"label":"Teplota","value":"6.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"1.0 °C","color":"#8a5fb0"}]},{"x":522.1,"label":"23.09. 22:00","rows":[{"label":"Teplota","value":"5.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.8 °C","color":"#8a5fb0"}]},{"x":532.6,"label":"23.09. 23:00","rows":[{"label":"Teplota","value":"4.6 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-0.6 °C","color":"#8a5fb0"}]},{"x":543.2,"label":"24.09. 00:00","rows":[{"label":"Teplota","value":"4.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.1 °C","color":"#8a5fb0"}]},{"x":553.8,"label":"24.09. 01:00","rows":[{"label":"Teplota","value":"4.6 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.4 °C","color":"#8a5fb0"}]},{"x":564.4,"label":"24.09. 02:00","rows":[{"label":"Teplota","value":"4.4 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-2.2 °C","color":"#8a5fb0"}]},{"x":574.9,"label":"24.09. 03:00","rows":[{"label":"Teplota","value":"4.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-2.4 °C","color":"#8a5fb0"}]},{"x":585.5,"label":"24.09. 04:00","rows":[{"label":"Teplota","value":"4.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-3.1 °C","color":"#8a5fb0"}]},{"x":596.1,"label":"24.09. 05:00","rows":[{"label":"Teplota","value":"4.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-3.8 °C","color":"#8a5fb0"}]},{"x":606.7,"label":"24.09. 06:00","rows":[{"label":"Teplota","value":"3.9 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-4.4 °C","color":"#8a5fb0"}]},{"x":617.3,"label":"24.09. 07:00","rows":[{"label":"Teplota","value":"3.7 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-4.4 °C","color":"#8a5fb0"}]},{"x":627.8,"label":"24.09. 08:00","rows":[{"label":"Teplota","value":"5.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.8 °C","color":"#8a5fb0"}]},{"x":638.4,"label":"24.09. 09:00","rows":[{"label":"Teplota","value":"8.4 °C","color":"#d9622a"},{"label":"Rosný bod","value":"2.8 °C","color":"#8a5fb0"}]},{"x":649,"label":"24.09. 10:00","rows":[{"label":"Teplota","value":"12.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"3.7 °C","color":"#8a5fb0"}]},{"x":659.6,"label":"24.09. 11:00","rows":[{"label":"Teplota","value":"13.7 °C","color":"#d9622a"},{"label":"Rosný bod","value":"4.3 °C","color":"#8a5fb0"}]},{"x":670.2,"label":"24.09. 12:00","rows":[{"label":"Teplota","value":"14.6 °C","color":"#d9622a"},{"label":"Rosný bod","value":"5.7 °C","color":"#8a5fb0"}]},{"x":680.7,"label":"24.09. 13:00","rows":[{"label":"Teplota","value":"15.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"6.1 °C","color":"#8a5fb0"}]},{"x":691.3,"label":"24.09. 14:00","rows":[{"label":"Teplota","value":"15.8 °C","color":"#d9622a"},{"label":"Rosný bod","value":"5.9 °C","color":"#8a5fb0"}]},{"x":701.9,"label":"24.09. 15:00","rows":[{"label":"Teplota","value":"16.4 °C","color":"#d9622a"},{"label":"Rosný bod","value":"6.3 °C","color":"#8a5fb0"}]},{"x":712.5,"label":"24.09. 16:00","rows":[{"label":"Teplota","value":"16.0 °C","color":"#d9622a"},{"label":"Rosný bod","value":"6.5 °C","color":"#8a5fb0"}]},{"x":723.1,"label":"24.09. 17:00","rows":[{"label":"Teplota","value":"15.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"7.2 °C","color":"#8a5fb0"}]},{"x":733.6,"label":"24.09. 18:00","rows":[{"label":"Teplota","value":"13.7 °C","color":"#d9622a"},{"label":"Rosný bod","value":"8.6 °C","color":"#8a5fb0"}]},{"x":744.2,"label":"24.09. 19:00","rows":[{"label":"Teplota","value":"13.8 °C","color":"#d9622a"},{"label":"Rosný bod","value":"2.3 °C","color":"#8a5fb0"}]},{"x":754.8,"label":"24.09. 20:00","rows":[{"label":"Teplota","value":"13.2 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.9 °C","color":"#8a5fb0"}]},{"x":765.4,"label":"24.09. 21:00","rows":[{"label":"Teplota","value":"12.5 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.9 °C","color":"#8a5fb0"}]},{"x":775.9,"label":"24.09. 22:00","rows":[{"label":"Teplota","value":"12.3 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.7 °C","color":"#8a5fb0"}]},{"x":786.5,"label":"24.09. 23:00","rows":[{"label":"Teplota","value":"11.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.9 °C","color":"#8a5fb0"}]},{"x":797.1,"label":"25.09. 00:00","rows":[{"label":"Teplota","value":"10.3 °C","color":"#d9622a"},{"label":"Rosný bod","value":"0.1 °C","color":"#8a5fb0"}]},{"x":807.7,"label":"25.09. 01:00","rows":[{"label":"Teplota","value":"9.6 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.2 °C","color":"#8a5fb0"}]},{"x":818.3,"label":"25.09. 02:00","rows":[{"label":"Teplota","value":"9.1 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.8 °C","color":"#8a5fb0"}]},{"x":828.8,"label":"25.09. 03:00","rows":[{"label":"Teplota","value":"7.7 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.4 °C","color":"#8a5fb0"}]},{"x":839.4,"label":"25.09. 04:00","rows":[{"label":"Teplota","value":"6.8 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-1.0 °C","color":"#8a5fb0"}]},{"x":850,"label":"25.09. 05:00","rows":[{"label":"Teplota","value":"5.3 °C","color":"#d9622a"},{"label":"Rosný bod","value":"-0.2 °C","color":"#8a5fb0"}]}]};
-CHART_DATA["humidity"] = {"points":[{"x":46,"label":"22.09. 01:00","rows":[{"label":"Vlhkosť","value":"71 %","color":"#3f9e89"}]},{"x":56.6,"label":"22.09. 02:00","rows":[{"label":"Vlhkosť","value":"73 %","color":"#3f9e89"}]},{"x":67.2,"label":"22.09. 03:00","rows":[{"label":"Vlhkosť","value":"77 %","color":"#3f9e89"}]},{"x":77.7,"label":"22.09. 04:00","rows":[{"label":"Vlhkosť","value":"76 %","color":"#3f9e89"}]},{"x":88.3,"label":"22.09. 05:00","rows":[{"label":"Vlhkosť","value":"78 %","color":"#3f9e89"}]},{"x":98.9,"label":"22.09. 06:00","rows":[{"label":"Vlhkosť","value":"78 %","color":"#3f9e89"}]},{"x":109.5,"label":"22.09. 07:00","rows":[{"label":"Vlhkosť","value":"77 %","color":"#3f9e89"}]},{"x":120.1,"label":"22.09. 08:00","rows":[{"label":"Vlhkosť","value":"69 %","color":"#3f9e89"}]},{"x":130.6,"label":"22.09. 09:00","rows":[{"label":"Vlhkosť","value":"58 %","color":"#3f9e89"}]},{"x":141.2,"label":"22.09. 10:00","rows":[{"label":"Vlhkosť","value":"47 %","color":"#3f9e89"}]},{"x":151.8,"label":"22.09. 11:00","rows":[{"label":"Vlhkosť","value":"41 %","color":"#3f9e89"}]},{"x":162.4,"label":"22.09. 12:00","rows":[{"label":"Vlhkosť","value":"40 %","color":"#3f9e89"}]},{"x":172.9,"label":"22.09. 13:00","rows":[{"label":"Vlhkosť","value":"37 %","color":"#3f9e89"}]},{"x":183.5,"label":"22.09. 14:00","rows":[{"label":"Vlhkosť","value":"37 %","color":"#3f9e89"}]},{"x":194.1,"label":"22.09. 15:00","rows":[{"label":"Vlhkosť","value":"35 %","color":"#3f9e89"}]},{"x":204.7,"label":"22.09. 16:00","rows":[{"label":"Vlhkosť","value":"37 %","color":"#3f9e89"}]},{"x":215.3,"label":"22.09. 17:00","rows":[{"label":"Vlhkosť","value":"39 %","color":"#3f9e89"}]},{"x":225.8,"label":"22.09. 18:00","rows":[{"label":"Vlhkosť","value":"47 %","color":"#3f9e89"}]},{"x":236.4,"label":"22.09. 19:00","rows":[{"label":"Vlhkosť","value":"60 %","color":"#3f9e89"}]},{"x":247,"label":"22.09. 20:00","rows":[{"label":"Vlhkosť","value":"72 %","color":"#3f9e89"}]},{"x":257.6,"label":"22.09. 21:00","rows":[{"label":"Vlhkosť","value":"78 %","color":"#3f9e89"}]},{"x":268.2,"label":"22.09. 22:00","rows":[{"label":"Vlhkosť","value":"81 %","color":"#3f9e89"}]},{"x":278.7,"label":"22.09. 23:00","rows":[{"label":"Vlhkosť","value":"84 %","color":"#3f9e89"}]},{"x":289.3,"label":"23.09. 00:00","rows":[{"label":"Vlhkosť","value":"66 %","color":"#3f9e89"}]},{"x":299.9,"label":"23.09. 01:00","rows":[{"label":"Vlhkosť","value":"68 %","color":"#3f9e89"}]},{"x":310.5,"label":"23.09. 02:00","rows":[{"label":"Vlhkosť","value":"69 %","color":"#3f9e89"}]},{"x":321.1,"label":"23.09. 03:00","rows":[{"label":"Vlhkosť","value":"72 %","color":"#3f9e89"}]},{"x":331.6,"label":"23.09. 04:00","rows":[{"label":"Vlhkosť","value":"72 %","color":"#3f9e89"}]},{"x":342.2,"label":"23.09. 05:00","rows":[{"label":"Vlhkosť","value":"71 %","color":"#3f9e89"}]},{"x":352.8,"label":"23.09. 06:00","rows":[{"label":"Vlhkosť","value":"71 %","color":"#3f9e89"}]},{"x":363.4,"label":"23.09. 07:00","rows":[{"label":"Vlhkosť","value":"71 %","color":"#3f9e89"}]},{"x":373.9,"label":"23.09. 08:00","rows":[{"label":"Vlhkosť","value":"69 %","color":"#3f9e89"}]},{"x":384.5,"label":"23.09. 09:00","rows":[{"label":"Vlhkosť","value":"58 %","color":"#3f9e89"}]},{"x":395.1,"label":"23.09. 10:00","rows":[{"label":"Vlhkosť","value":"51 %","color":"#3f9e89"}]},{"x":405.7,"label":"23.09. 11:00","rows":[{"label":"Vlhkosť","value":"52 %","color":"#3f9e89"}]},{"x":416.3,"label":"23.09. 12:00","rows":[{"label":"Vlhkosť","value":"51 %","color":"#3f9e89"}]},{"x":426.8,"label":"23.09. 13:00","rows":[{"label":"Vlhkosť","value":"51 %","color":"#3f9e89"}]},{"x":437.4,"label":"23.09. 14:00","rows":[{"label":"Vlhkosť","value":"51 %","color":"#3f9e89"}]},{"x":448,"label":"23.09. 15:00","rows":[{"label":"Vlhkosť","value":"50 %","color":"#3f9e89"}]},{"x":458.6,"label":"23.09. 16:00","rows":[{"label":"Vlhkosť","value":"50 %","color":"#3f9e89"}]},{"x":469.2,"label":"23.09. 17:00","rows":[{"label":"Vlhkosť","value":"51 %","color":"#3f9e89"}]},{"x":479.7,"label":"23.09. 18:00","rows":[{"label":"Vlhkosť","value":"56 %","color":"#3f9e89"}]},{"x":490.3,"label":"23.09. 19:00","rows":[{"label":"Vlhkosť","value":"63 %","color":"#3f9e89"}]},{"x":500.9,"label":"23.09. 20:00","rows":[{"label":"Vlhkosť","value":"65 %","color":"#3f9e89"}]},{"x":511.5,"label":"23.09. 21:00","rows":[{"label":"Vlhkosť","value":"71 %","color":"#3f9e89"}]},{"x":522.1,"label":"23.09. 22:00","rows":[{"label":"Vlhkosť","value":"74 %","color":"#3f9e89"}]},{"x":532.6,"label":"23.09. 23:00","rows":[{"label":"Vlhkosť","value":"69 %","color":"#3f9e89"}]},{"x":543.2,"label":"24.09. 00:00","rows":[{"label":"Vlhkosť","value":"67 %","color":"#3f9e89"}]},{"x":553.8,"label":"24.09. 01:00","rows":[{"label":"Vlhkosť","value":"65 %","color":"#3f9e89"}]},{"x":564.4,"label":"24.09. 02:00","rows":[{"label":"Vlhkosť","value":"62 %","color":"#3f9e89"}]},{"x":574.9,"label":"24.09. 03:00","rows":[{"label":"Vlhkosť","value":"62 %","color":"#3f9e89"}]},{"x":585.5,"label":"24.09. 04:00","rows":[{"label":"Vlhkosť","value":"60 %","color":"#3f9e89"}]},{"x":596.1,"label":"24.09. 05:00","rows":[{"label":"Vlhkosť","value":"57 %","color":"#3f9e89"}]},{"x":606.7,"label":"24.09. 06:00","rows":[{"label":"Vlhkosť","value":"55 %","color":"#3f9e89"}]},{"x":617.3,"label":"24.09. 07:00","rows":[{"label":"Vlhkosť","value":"55 %","color":"#3f9e89"}]},{"x":627.8,"label":"24.09. 08:00","rows":[{"label":"Vlhkosť","value":"62 %","color":"#3f9e89"}]},{"x":638.4,"label":"24.09. 09:00","rows":[{"label":"Vlhkosť","value":"68 %","color":"#3f9e89"}]},{"x":649,"label":"24.09. 10:00","rows":[{"label":"Vlhkosť","value":"56 %","color":"#3f9e89"}]},{"x":659.6,"label":"24.09. 11:00","rows":[{"label":"Vlhkosť","value":"53 %","color":"#3f9e89"}]},{"x":670.2,"label":"24.09. 12:00","rows":[{"label":"Vlhkosť","value":"55 %","color":"#3f9e89"}]},{"x":680.7,"label":"24.09. 13:00","rows":[{"label":"Vlhkosť","value":"55 %","color":"#3f9e89"}]},{"x":691.3,"label":"24.09. 14:00","rows":[{"label":"Vlhkosť","value":"52 %","color":"#3f9e89"}]},{"x":701.9,"label":"24.09. 15:00","rows":[{"label":"Vlhkosť","value":"51 %","color":"#3f9e89"}]},{"x":712.5,"label":"24.09. 16:00","rows":[{"label":"Vlhkosť","value":"53 %","color":"#3f9e89"}]},{"x":723.1,"label":"24.09. 17:00","rows":[{"label":"Vlhkosť","value":"59 %","color":"#3f9e89"}]},{"x":733.6,"label":"24.09. 18:00","rows":[{"label":"Vlhkosť","value":"71 %","color":"#3f9e89"}]},{"x":744.2,"label":"24.09. 19:00","rows":[{"label":"Vlhkosť","value":"46 %","color":"#3f9e89"}]},{"x":754.8,"label":"24.09. 20:00","rows":[{"label":"Vlhkosť","value":"43 %","color":"#3f9e89"}]},{"x":765.4,"label":"24.09. 21:00","rows":[{"label":"Vlhkosť","value":"45 %","color":"#3f9e89"}]},{"x":775.9,"label":"24.09. 22:00","rows":[{"label":"Vlhkosť","value":"45 %","color":"#3f9e89"}]},{"x":786.5,"label":"24.09. 23:00","rows":[{"label":"Vlhkosť","value":"50 %","color":"#3f9e89"}]},{"x":797.1,"label":"25.09. 00:00","rows":[{"label":"Vlhkosť","value":"49 %","color":"#3f9e89"}]},{"x":807.7,"label":"25.09. 01:00","rows":[{"label":"Vlhkosť","value":"47 %","color":"#3f9e89"}]},{"x":818.3,"label":"25.09. 02:00","rows":[{"label":"Vlhkosť","value":"47 %","color":"#3f9e89"}]},{"x":828.8,"label":"25.09. 03:00","rows":[{"label":"Vlhkosť","value":"53 %","color":"#3f9e89"}]},{"x":839.4,"label":"25.09. 04:00","rows":[{"label":"Vlhkosť","value":"58 %","color":"#3f9e89"}]},{"x":850,"label":"25.09. 05:00","rows":[{"label":"Vlhkosť","value":"68 %","color":"#3f9e89"}]}]};
-CHART_DATA["radiation"] = {"points":[{"x":46,"label":"22.09. 01:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"8 km/h","color":"#4d8790"}]},{"x":56.6,"label":"22.09. 02:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"7 km/h","color":"#4d8790"}]},{"x":67.2,"label":"22.09. 03:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"9 km/h","color":"#4d8790"}]},{"x":77.7,"label":"22.09. 04:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"9 km/h","color":"#4d8790"}]},{"x":88.3,"label":"22.09. 05:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"9 km/h","color":"#4d8790"}]},{"x":98.9,"label":"22.09. 06:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"8 km/h","color":"#4d8790"}]},{"x":109.5,"label":"22.09. 07:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"7 km/h","color":"#4d8790"}]},{"x":120.1,"label":"22.09. 08:00","rows":[{"label":"Slnko","value":"51 W/m²","color":"#e0b430"},{"label":"Vietor","value":"7 km/h","color":"#4d8790"}]},{"x":130.6,"label":"22.09. 09:00","rows":[{"label":"Slnko","value":"304 W/m²","color":"#e0b430"},{"label":"Vietor","value":"10 km/h","color":"#4d8790"}]},{"x":141.2,"label":"22.09. 10:00","rows":[{"label":"Slnko","value":"445 W/m²","color":"#e0b430"},{"label":"Vietor","value":"13 km/h","color":"#4d8790"}]},{"x":151.8,"label":"22.09. 11:00","rows":[{"label":"Slnko","value":"447 W/m²","color":"#e0b430"},{"label":"Vietor","value":"19 km/h","color":"#4d8790"}]},{"x":162.4,"label":"22.09. 12:00","rows":[{"label":"Slnko","value":"476 W/m²","color":"#e0b430"},{"label":"Vietor","value":"17 km/h","color":"#4d8790"}]},{"x":172.9,"label":"22.09. 13:00","rows":[{"label":"Slnko","value":"622 W/m²","color":"#e0b430"},{"label":"Vietor","value":"15 km/h","color":"#4d8790"}]},{"x":183.5,"label":"22.09. 14:00","rows":[{"label":"Slnko","value":"655 W/m²","color":"#e0b430"},{"label":"Vietor","value":"18 km/h","color":"#4d8790"}]},{"x":194.1,"label":"22.09. 15:00","rows":[{"label":"Slnko","value":"633 W/m²","color":"#e0b430"},{"label":"Vietor","value":"20 km/h","color":"#4d8790"}]},{"x":204.7,"label":"22.09. 16:00","rows":[{"label":"Slnko","value":"474 W/m²","color":"#e0b430"},{"label":"Vietor","value":"16 km/h","color":"#4d8790"}]},{"x":215.3,"label":"22.09. 17:00","rows":[{"label":"Slnko","value":"314 W/m²","color":"#e0b430"},{"label":"Vietor","value":"18 km/h","color":"#4d8790"}]},{"x":225.8,"label":"22.09. 18:00","rows":[{"label":"Slnko","value":"31 W/m²","color":"#e0b430"},{"label":"Vietor","value":"21 km/h","color":"#4d8790"}]},{"x":236.4,"label":"22.09. 19:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"26 km/h","color":"#4d8790"}]},{"x":247,"label":"22.09. 20:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"24 km/h","color":"#4d8790"}]},{"x":257.6,"label":"22.09. 21:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"12 km/h","color":"#4d8790"}]},{"x":268.2,"label":"22.09. 22:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"12 km/h","color":"#4d8790"}]},{"x":278.7,"label":"22.09. 23:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":289.3,"label":"23.09. 00:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"6 km/h","color":"#4d8790"}]},{"x":299.9,"label":"23.09. 01:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":310.5,"label":"23.09. 02:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":321.1,"label":"23.09. 03:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":331.6,"label":"23.09. 04:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":342.2,"label":"23.09. 05:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"2 km/h","color":"#4d8790"}]},{"x":352.8,"label":"23.09. 06:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"2 km/h","color":"#4d8790"}]},{"x":363.4,"label":"23.09. 07:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"2 km/h","color":"#4d8790"}]},{"x":373.9,"label":"23.09. 08:00","rows":[{"label":"Slnko","value":"66 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":384.5,"label":"23.09. 09:00","rows":[{"label":"Slnko","value":"249 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":395.1,"label":"23.09. 10:00","rows":[{"label":"Slnko","value":"448 W/m²","color":"#e0b430"},{"label":"Vietor","value":"5 km/h","color":"#4d8790"}]},{"x":405.7,"label":"23.09. 11:00","rows":[{"label":"Slnko","value":"620 W/m²","color":"#e0b430"},{"label":"Vietor","value":"9 km/h","color":"#4d8790"}]},{"x":416.3,"label":"23.09. 12:00","rows":[{"label":"Slnko","value":"745 W/m²","color":"#e0b430"},{"label":"Vietor","value":"10 km/h","color":"#4d8790"}]},{"x":426.8,"label":"23.09. 13:00","rows":[{"label":"Slnko","value":"809 W/m²","color":"#e0b430"},{"label":"Vietor","value":"10 km/h","color":"#4d8790"}]},{"x":437.4,"label":"23.09. 14:00","rows":[{"label":"Slnko","value":"806 W/m²","color":"#e0b430"},{"label":"Vietor","value":"11 km/h","color":"#4d8790"}]},{"x":448,"label":"23.09. 15:00","rows":[{"label":"Slnko","value":"736 W/m²","color":"#e0b430"},{"label":"Vietor","value":"10 km/h","color":"#4d8790"}]},{"x":458.6,"label":"23.09. 16:00","rows":[{"label":"Slnko","value":"607 W/m²","color":"#e0b430"},{"label":"Vietor","value":"10 km/h","color":"#4d8790"}]},{"x":469.2,"label":"23.09. 17:00","rows":[{"label":"Slnko","value":"433 W/m²","color":"#e0b430"},{"label":"Vietor","value":"8 km/h","color":"#4d8790"}]},{"x":479.7,"label":"23.09. 18:00","rows":[{"label":"Slnko","value":"233 W/m²","color":"#e0b430"},{"label":"Vietor","value":"4 km/h","color":"#4d8790"}]},{"x":490.3,"label":"23.09. 19:00","rows":[{"label":"Slnko","value":"47 W/m²","color":"#e0b430"},{"label":"Vietor","value":"1 km/h","color":"#4d8790"}]},{"x":500.9,"label":"23.09. 20:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"1 km/h","color":"#4d8790"}]},{"x":511.5,"label":"23.09. 21:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"2 km/h","color":"#4d8790"}]},{"x":522.1,"label":"23.09. 22:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":532.6,"label":"23.09. 23:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":543.2,"label":"24.09. 00:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":553.8,"label":"24.09. 01:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":564.4,"label":"24.09. 02:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":574.9,"label":"24.09. 03:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":585.5,"label":"24.09. 04:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":596.1,"label":"24.09. 05:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":606.7,"label":"24.09. 06:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":617.3,"label":"24.09. 07:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"4 km/h","color":"#4d8790"}]},{"x":627.8,"label":"24.09. 08:00","rows":[{"label":"Slnko","value":"64 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":638.4,"label":"24.09. 09:00","rows":[{"label":"Slnko","value":"241 W/m²","color":"#e0b430"},{"label":"Vietor","value":"1 km/h","color":"#4d8790"}]},{"x":649,"label":"24.09. 10:00","rows":[{"label":"Slnko","value":"423 W/m²","color":"#e0b430"},{"label":"Vietor","value":"2 km/h","color":"#4d8790"}]},{"x":659.6,"label":"24.09. 11:00","rows":[{"label":"Slnko","value":"569 W/m²","color":"#e0b430"},{"label":"Vietor","value":"4 km/h","color":"#4d8790"}]},{"x":670.2,"label":"24.09. 12:00","rows":[{"label":"Slnko","value":"663 W/m²","color":"#e0b430"},{"label":"Vietor","value":"6 km/h","color":"#4d8790"}]},{"x":680.7,"label":"24.09. 13:00","rows":[{"label":"Slnko","value":"642 W/m²","color":"#e0b430"},{"label":"Vietor","value":"6 km/h","color":"#4d8790"}]},{"x":691.3,"label":"24.09. 14:00","rows":[{"label":"Slnko","value":"637 W/m²","color":"#e0b430"},{"label":"Vietor","value":"7 km/h","color":"#4d8790"}]},{"x":701.9,"label":"24.09. 15:00","rows":[{"label":"Slnko","value":"683 W/m²","color":"#e0b430"},{"label":"Vietor","value":"8 km/h","color":"#4d8790"}]},{"x":712.5,"label":"24.09. 16:00","rows":[{"label":"Slnko","value":"585 W/m²","color":"#e0b430"},{"label":"Vietor","value":"8 km/h","color":"#4d8790"}]},{"x":723.1,"label":"24.09. 17:00","rows":[{"label":"Slnko","value":"399 W/m²","color":"#e0b430"},{"label":"Vietor","value":"5 km/h","color":"#4d8790"}]},{"x":733.6,"label":"24.09. 18:00","rows":[{"label":"Slnko","value":"158 W/m²","color":"#e0b430"},{"label":"Vietor","value":"2 km/h","color":"#4d8790"}]},{"x":744.2,"label":"24.09. 19:00","rows":[{"label":"Slnko","value":"26 W/m²","color":"#e0b430"},{"label":"Vietor","value":"9 km/h","color":"#4d8790"}]},{"x":754.8,"label":"24.09. 20:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"12 km/h","color":"#4d8790"}]},{"x":765.4,"label":"24.09. 21:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"12 km/h","color":"#4d8790"}]},{"x":775.9,"label":"24.09. 22:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"19 km/h","color":"#4d8790"}]},{"x":786.5,"label":"24.09. 23:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"13 km/h","color":"#4d8790"}]},{"x":797.1,"label":"25.09. 00:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"7 km/h","color":"#4d8790"}]},{"x":807.7,"label":"25.09. 01:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"8 km/h","color":"#4d8790"}]},{"x":818.3,"label":"25.09. 02:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"6 km/h","color":"#4d8790"}]},{"x":828.8,"label":"25.09. 03:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"4 km/h","color":"#4d8790"}]},{"x":839.4,"label":"25.09. 04:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"3 km/h","color":"#4d8790"}]},{"x":850,"label":"25.09. 05:00","rows":[{"label":"Slnko","value":"0 W/m²","color":"#e0b430"},{"label":"Vietor","value":"4 km/h","color":"#4d8790"}]}]};
+  <div class="wx-field">
+    <span class="wx-label"><label for="wx-hour">Hodina začiatku</label></span>
+    <div class="wx-hour">
+      <button type="button" id="wx-hour-prev" aria-label="O hodinu skôr">◀</button>
+      <select id="wx-hour"><option value="0">00:00</option><option value="1">01:00</option><option value="2">02:00</option><option value="3">03:00</option><option value="4">04:00</option><option value="5">05:00</option><option value="6">06:00</option><option value="7">07:00</option><option value="8">08:00</option><option value="9" selected>09:00</option><option value="10">10:00</option><option value="11">11:00</option><option value="12">12:00</option><option value="13">13:00</option><option value="14">14:00</option><option value="15">15:00</option><option value="16">16:00</option><option value="17">17:00</option><option value="18">18:00</option><option value="19">19:00</option><option value="20">20:00</option><option value="21">21:00</option><option value="22">22:00</option><option value="23">23:00</option></select>
+      <button type="button" id="wx-hour-next" aria-label="O hodinu neskôr">▶</button>
+    </div>
+  </div>
+</div>
+<p class="wx-plan" id="wx-plan"></p>
 
-    document.querySelectorAll(".hover-capture").forEach((rect) => {
-      const chartId = rect.getAttribute("data-chart");
-      const svg = rect.closest("svg");
-      const crosshair = svg.querySelector(`.crosshair[data-chart="${chartId}"]`);
-      const tooltip = document.querySelector(`[data-chart-tooltip="${chartId}"]`);
-      const chart = CHART_DATA[chartId];
-      if (!chart) return;
-      const data = chart.points;
+<noscript><p class="wx-status">Táto stránka potrebuje JavaScript: grafy sa kreslia a predpoveď sa sťahuje priamo v prehliadači.</p></noscript>
 
-      function nearestPoint(mouseX) {
-        let best = data[0];
-        let bestDist = Infinity;
-        for (const p of data) {
-          const dist = Math.abs(p.x - mouseX);
-          if (dist < bestDist) { bestDist = dist; best = p; }
+<main id="wx-charts">
+  <div id="wx-tooltip" hidden></div>
+  <section class="wx-card"><h2>Vhodnosť počasia pri začiatku náteru <span class="wx-value" id="wx-score-value"></span></h2><div id="wx-chart-score"></div><p class="wx-note">Viac percent = viac scenárov vyhovuje pre 8 h práce a ďalších 24 h. Hodnotíme dážď a teplotu, nie suchosť dreva.</p></section>
+  <section class="wx-card"><h2>Dážď</h2><div id="wx-chart-rain"></div><p class="wx-note" id="wx-daily"></p><p class="wx-note">Stĺpec je úhrn za celých šesť hodín (mm / 6 h). Mierka je spoločná pre celé obdobie.</p></section>
+  <section class="wx-card"><h2>Teplota a hranica rosenia</h2><div id="wx-chart-temp"></div><p class="wx-legend"><span><i style="background:var(--temp)"></i>teplota vzduchu</span><span><i style="background:var(--dew)"></i>rosný bod</span><span><i style="background:var(--limit)"></i>hranica 7 °C</span></p><p class="wx-note">Rosa sa tvorí, keď povrch vychladne na rosný bod. Teplota dreva sa môže líšiť od teploty vzduchu.</p></section>
+  <section class="wx-card"><h2>Vietor</h2><div id="wx-chart-wind"></div><p class="wx-note">Predpoveď vetra je vo výške 10 m; pod terasou môže byť slabší.</p></section>
+  <section class="wx-card"><h2>Sila slnka</h2><div id="wx-chart-sun"></div><p class="wx-note">Viac žiarenia môže pomáhať vysychaniu; spodok terasy a zatienené časti dostávajú menej slnka.</p></section>
+</main>
+
+<div class="wx-method">
+  <button type="button" class="wx-method-toggle" id="wx-method-toggle" aria-expanded="false" aria-controls="wx-method">Ako sa počíta percento?</button>
+  <div class="wx-method-panel" id="wx-method" hidden>
+    <p>Pre každú hodinu začiatku prejde každý scenár predpovede tým istým filtrom: teplota vzduchu aspoň 7 °C vo všetkých hodinách 8-hodinovej práce a menej než 0,2 mm zrážok za celý čas práce aj nasledujúcich 24 hodín. Percento je podiel scenárov, ktoré prejdú.</p>
+    <p>Je to priehľadný filter meteorologických scenárov, nie model schnutia dreva ani pravdepodobnosť úspešného náteru. Hranica 0,2 mm je pracovná tolerancia výpočtu, nie potvrdenie, že taký dážď náteru neuškodí. Teplota sa kontroluje počas nanášania – teplota, rosa a vlhkosť počas následného schnutia tým nie sú overené.</p>
+    <p>Ak čo i len jednému scenáru chýba niektorá potrebná hodnota, percento sa nezobrazí a hodina je označená ako nedostatok dát. Chýbajúce údaje sa nikdy nepočítajú ako nula.</p>
+    <p>Hodnotenie je čisto meteorologické: nočný začiatok s vysokým percentom nie je odporúčanie pracovať v noci.</p>
+  </div>
+</div>
+
+<footer>
+  <p>Pred natieraním zmerajte vlhkosť a teplotu dreva. Predpoveď ich nepotvrdzuje. Nasledujúcich 24 h je sledované obdobie, nie záruka vyschnutia.</p>
+</footer>
+</div>
+
+<script type="application/json" id="wx-snapshot">{"version":1,"fetchedAtMs":1790121052063,"runAtMs":1790078400000,"runSource":"meta","config":{"start":"2026-10-01","end":"2026-10-05","applicationHours":8,"postApplicationHours":24,"minimumAirTemperatureC":7,"maximumWindowPrecipitationMm":0.2,"model":"ecmwf_ifs025","metaDomain":"ecmwf_ifs025_ensemble","modelLabel":"ECMWF IFS 0,25°","expectedEnsembleMembers":51,"serverMinRefreshMinutes":20,"clientRefreshMinutes":60,"latitude":46.7998317,"longitude":13.9201988,"timezone":"Europe/Vienna"},"grid":{"latitude":46.75,"longitude":14,"elevation":1055},"utcOffsetSeconds":7200,"series":{"timesMs":[1790805600000,1790809200000,1790812800000,1790816400000,1790820000000,1790823600000,1790827200000,1790830800000,1790834400000,1790838000000,1790841600000,1790845200000,1790848800000,1790852400000,1790856000000,1790859600000,1790863200000,1790866800000,1790870400000,1790874000000,1790877600000,1790881200000,1790884800000,1790888400000,1790892000000,1790895600000,1790899200000,1790902800000,1790906400000,1790910000000,1790913600000,1790917200000,1790920800000,1790924400000,1790928000000,1790931600000,1790935200000,1790938800000,1790942400000,1790946000000,1790949600000,1790953200000,1790956800000,1790960400000,1790964000000,1790967600000,1790971200000,1790974800000,1790978400000,1790982000000,1790985600000,1790989200000,1790992800000,1790996400000,1791000000000,1791003600000,1791007200000,1791010800000,1791014400000,1791018000000,1791021600000,1791025200000,1791028800000,1791032400000,1791036000000,1791039600000,1791043200000,1791046800000,1791050400000,1791054000000,1791057600000,1791061200000,1791064800000,1791068400000,1791072000000,1791075600000,1791079200000,1791082800000,1791086400000,1791090000000,1791093600000,1791097200000,1791100800000,1791104400000,1791108000000,1791111600000,1791115200000,1791118800000,1791122400000,1791126000000,1791129600000,1791133200000,1791136800000,1791140400000,1791144000000,1791147600000,1791151200000,1791154800000,1791158400000,1791162000000,1791165600000,1791169200000,1791172800000,1791176400000,1791180000000,1791183600000,1791187200000,1791190800000,1791194400000,1791198000000,1791201600000,1791205200000,1791208800000,1791212400000,1791216000000,1791219600000,1791223200000,1791226800000,1791230400000,1791234000000,1791237600000,1791241200000,1791244800000,1791248400000,1791252000000,1791255600000,1791259200000,1791262800000,1791266400000,1791270000000,1791273600000,1791277200000,1791280800000,1791284400000,1791288000000,1791291600000,1791295200000,1791298800000,1791302400000,1791306000000,1791309600000,1791313200000,1791316800000,1791320400000,1791324000000,1791327600000,1791331200000,1791334800000,1791338400000,1791342000000,1791345600000,1791349200000,1791352800000,1791356400000,1791360000000,1791363600000,1791367200000,1791370800000,1791374400000,1791378000000,1791381600000,1791385200000,1791388800000,1791392400000,1791396000000,1791399600000,1791403200000,1791406800000],"temperature":[10.2,10,9.8,9.6,9.4,9.3,9.4,9.6,10.1,11.3,12.8,14.2,15.5,16.8,17.6,17.4,16.7,15.9,14.9,13.8,12.8,12.1,11.5,11,10.5,10.1,9.8,9.6,9.5,9.6,9.7,10,10.6,11.7,13,14.3,15.6,16.7,17.4,17.2,16.4,15.5,14.6,13.5,12.7,12.2,11.9,11.7,11.5,11.4,11.2,10.9,10.6,10.4,10.3,10.2,10.6,11.5,12.8,14,15.2,16.3,17,16.8,16.2,15.4,14.5,13.6,12.7,12.1,11.7,11.3,11,10.7,10.5,10.4,10.4,10.5,10.7,10.9,11.3,11.9,12.7,13.5,14.2,14.8,15.2,15,14.5,14,13.4,12.7,12.3,12.1,12.2,12.3,12.4,12.5,12.5,12.2,11.7,11.3,11,10.8,11,11.8,13.1,14.3,15.5,16.6,17.2,17,16.2,15.4,14.4,13.4,12.6,12.1,11.8,11.5,11.3,11.2,11,10.6,10.2,9.9,9.7,9.7,10.1,11.3,13,14.7,16.3,17.8,18.6,18.4,17.6,16.6,15.6,14.3,13.4,12.8,12.5,12.2,12,11.9,11.7,11.3,10.9,10.6,10.5,10.4,10.9,12.1,13.7,15.4,17.2,19.1,19.9,20.3,20.1,null,null,null,null,null,null,null],"dewPoint":[7.3,6.9,6.7,6.7,6.5,6.6,6.6,6.8,7.2,7.8,8.3,8.8,9.2,9.7,10,10.1,10.1,10.2,10.1,9.9,9.7,9.3,9,8.7,8.4,8.2,8.1,8,8,8,8.2,8.5,8.7,9.2,9.7,10.2,10.6,10.8,11.2,11.7,11.9,12.1,12.1,11.9,11.7,11.4,10.8,10.4,10.1,9.6,9.3,9.2,9.2,9.2,9.2,9.5,9.7,9.9,10.1,10.4,10.6,10.6,10.6,10.7,10.7,10.8,10.7,10.8,10.6,10.4,10.3,10.1,9.9,9.8,9.8,9.7,9.7,9.8,9.8,10,10.2,10.7,11.5,12,12.6,13,13.4,13.2,12.9,12.4,11.9,11.3,10.9,10.4,10.1,9.8,9.6,9.4,9.3,9.4,9.4,9.6,9.8,9.9,10.1,10.4,10.6,10.9,11.1,11.1,11.3,11.3,11.4,11.4,11.2,11.1,11,10.8,10.5,10.3,10.1,9.9,9.7,9.5,9.3,9.2,9,8.9,9.1,9.6,10.2,10.7,11,11.3,11.5,11.3,11,10.7,10.3,10,9.6,9.7,9.9,10.1,10.4,10.6,10.6,10.2,9.6,9.2,8.7,8.2,8.1,8.4,8.8,9.3,9.6,10.1,10.1,10.1,9.9,null,null,null,null,null,null,null],"humidity":[82,81,81,82,82,83,83,83,82,79,74,70,66,63,61,62,65,69,73,77,81,83,85,86,87,88,89,90,90,90,90,90,88,85,80,76,72,68,67,70,75,80,85,90,94,95,93,92,91,89,88,89,91,92,93,95,94,90,84,79,74,69,66,67,70,74,78,83,87,89,91,92,93,94,95,95,95,95,94,94,93,92,92,91,90,89,89,89,90,90,91,91,91,89,87,85,83,81,81,83,86,89,92,94,94,91,85,80,75,70,68,69,73,77,81,86,90,92,92,92,92,92,92,93,94,95,95,95,93,89,83,77,71,66,63,63,65,68,71,75,78,81,84,87,90,92,93,93,92,91,89,86,83,78,72,67,61,56,53,52,52,null,null,null,null,null,null,null],"precipitation":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.2,0.2,0.2,0.2,0.2,0.2,0.1,0.1,0.1,0.1,0.1,0.1,0,0,0,0,0,0,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0,0,0,0,0,0,0.1,0.1,0.1,0.1,0.1,0.1,1.1,1.1,1.1,1.1,1.1,1.1,0.7,0.7,0.7,0.7,0.7,0.7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,null,null,null,null,null,null,null,null,null],"wind":[1.9,1.6,1.6,1.6,1.8,1.8,1.8,1.5,1,0.4,1.1,2.4,3.4,4.4,4.9,4.6,3.3,2.3,1.5,1.3,1.8,2.2,2.2,2.2,2.2,1.9,1.6,1.6,1.5,1.5,1.5,1.5,1,0.5,0.5,1.3,2,2.8,3.1,2.8,1.8,1.1,0.8,1.1,1.8,2.2,1.8,1.9,1.8,2,1.8,1.8,1.8,1.6,1.5,1.1,0.8,0.5,1.8,3.3,4.7,5.8,6.5,5.8,4.3,2.9,1.5,0.8,1.6,2.4,2.7,2.9,2.9,2.8,2.8,2.8,2.3,2.3,1.8,1.8,1.3,1.3,1.3,1.3,1.3,1.3,1.3,1.3,1.3,1.3,1.3,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.8,0.7,0.7,0.4,0.5,0.5,1.5,2.9,4,5.1,5.9,6.3,5.6,4.2,2.9,1.8,1.3,2.1,2.4,2.4,2.4,2.1,2,2,2,2.5,2.8,2.8,2.8,2.5,1.9,1.8,2.9,4.2,5.6,6.4,6.2,5.5,4.8,4.7,4.7,5.5,6,6.5,7,7.1,7.6,7.2,6.6,6,5.4,4.6,3.8,2.8,1.8,1.1,1.3,2.5,3.6,4.3,4.7,4.3,null,null,null,null,null,null,null],"radiation":[0,0,0,0,0,0,0,0,44,192,361,498,582,617,604,540,434,296,150,26,0,0,0,0,0,0,0,0,0,0,0,0,38,176,336,458,525,538,499,415,313,206,103,17,0,0,0,0,0,0,0,0,0,0,0,0,29,135,255,348,402,418,398,342,266,177,87,13,0,0,0,0,0,0,0,0,0,0,0,0,29,144,277,385,451,478,467,417,333,223,108,15,0,0,0,0,0,0,0,0,0,0,0,0,24,118,227,322,394,440,467,456,388,265,127,16,0,0,0,0,0,0,0,0,0,0,0,0,24,134,267,370,426,437,407,339,256,166,78,9,0,0,0,0,0,0,0,0,0,0,0,0,27,151,303,428,509,547,544,495,null,null,null,null,null,null,null,null]},"scores":[{"startMs":1790805600000,"score":67,"matching":34,"expected":51,"reason":null},{"startMs":1790809200000,"score":67,"matching":34,"expected":51,"reason":null},{"startMs":1790812800000,"score":67,"matching":34,"expected":51,"reason":null},{"startMs":1790816400000,"score":67,"matching":34,"expected":51,"reason":null},{"startMs":1790820000000,"score":67,"matching":34,"expected":51,"reason":null},{"startMs":1790823600000,"score":67,"matching":34,"expected":51,"reason":null},{"startMs":1790827200000,"score":67,"matching":34,"expected":51,"reason":null},{"startMs":1790830800000,"score":63,"matching":32,"expected":51,"reason":null},{"startMs":1790834400000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790838000000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790841600000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790845200000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790848800000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790852400000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790856000000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790859600000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790863200000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790866800000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790870400000,"score":57,"matching":29,"expected":51,"reason":null},{"startMs":1790874000000,"score":59,"matching":30,"expected":51,"reason":null},{"startMs":1790877600000,"score":59,"matching":30,"expected":51,"reason":null},{"startMs":1790881200000,"score":59,"matching":30,"expected":51,"reason":null},{"startMs":1790884800000,"score":59,"matching":30,"expected":51,"reason":null},{"startMs":1790888400000,"score":59,"matching":30,"expected":51,"reason":null},{"startMs":1790892000000,"score":59,"matching":30,"expected":51,"reason":null},{"startMs":1790895600000,"score":59,"matching":30,"expected":51,"reason":null},{"startMs":1790899200000,"score":53,"matching":27,"expected":51,"reason":null},{"startMs":1790902800000,"score":53,"matching":27,"expected":51,"reason":null},{"startMs":1790906400000,"score":53,"matching":27,"expected":51,"reason":null},{"startMs":1790910000000,"score":53,"matching":27,"expected":51,"reason":null},{"startMs":1790913600000,"score":53,"matching":27,"expected":51,"reason":null},{"startMs":1790917200000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790920800000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790924400000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790928000000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790931600000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790935200000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790938800000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790942400000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790946000000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790949600000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790953200000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1790956800000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1790960400000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1790964000000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1790967600000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1790971200000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1790974800000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1790978400000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1790982000000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1790985600000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1790989200000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1790992800000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1790996400000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791000000000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791003600000,"score":47,"matching":24,"expected":51,"reason":null},{"startMs":1791007200000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1791010800000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1791014400000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1791018000000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1791021600000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1791025200000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1791028800000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1791032400000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1791036000000,"score":47,"matching":24,"expected":51,"reason":null},{"startMs":1791039600000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791043200000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791046800000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791050400000,"score":47,"matching":24,"expected":51,"reason":null},{"startMs":1791054000000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791057600000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791061200000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791064800000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791068400000,"score":41,"matching":21,"expected":51,"reason":null},{"startMs":1791072000000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791075600000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791079200000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791082800000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791086400000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791090000000,"score":41,"matching":21,"expected":51,"reason":null},{"startMs":1791093600000,"score":39,"matching":20,"expected":51,"reason":null},{"startMs":1791097200000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791100800000,"score":51,"matching":26,"expected":51,"reason":null},{"startMs":1791104400000,"score":47,"matching":24,"expected":51,"reason":null},{"startMs":1791108000000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791111600000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791115200000,"score":41,"matching":21,"expected":51,"reason":null},{"startMs":1791118800000,"score":39,"matching":20,"expected":51,"reason":null},{"startMs":1791122400000,"score":39,"matching":20,"expected":51,"reason":null},{"startMs":1791126000000,"score":39,"matching":20,"expected":51,"reason":null},{"startMs":1791129600000,"score":37,"matching":19,"expected":51,"reason":null},{"startMs":1791133200000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791136800000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791140400000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791144000000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791147600000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791151200000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791154800000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791158400000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791162000000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791165600000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791169200000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791172800000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791176400000,"score":39,"matching":20,"expected":51,"reason":null},{"startMs":1791180000000,"score":39,"matching":20,"expected":51,"reason":null},{"startMs":1791183600000,"score":39,"matching":20,"expected":51,"reason":null},{"startMs":1791187200000,"score":49,"matching":25,"expected":51,"reason":null},{"startMs":1791190800000,"score":47,"matching":24,"expected":51,"reason":null},{"startMs":1791194400000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791198000000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791201600000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791205200000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791208800000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791212400000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791216000000,"score":43,"matching":22,"expected":51,"reason":null},{"startMs":1791219600000,"score":47,"matching":24,"expected":51,"reason":null},{"startMs":1791223200000,"score":47,"matching":24,"expected":51,"reason":null},{"startMs":1791226800000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791230400000,"score":45,"matching":23,"expected":51,"reason":null},{"startMs":1791234000000,"score":45,"matching":23,"expected":51,"reason":null}],"buckets":[{"date":"2026-10-01","startHour":0,"startMs":1790805600000,"endMs":1790827200000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-01","startHour":6,"startMs":1790827200000,"endMs":1790848800000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-01","startHour":12,"startMs":1790848800000,"endMs":1790870400000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-01","startHour":18,"startMs":1790870400000,"endMs":1790892000000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-02","startHour":0,"startMs":1790892000000,"endMs":1790913600000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-02","startHour":6,"startMs":1790913600000,"endMs":1790935200000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-02","startHour":12,"startMs":1790935200000,"endMs":1790956800000,"totalMm":0.8,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-02","startHour":18,"startMs":1790956800000,"endMs":1790978400000,"totalMm":0.8,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-03","startHour":0,"startMs":1790978400000,"endMs":1791000000000,"totalMm":0.2,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-03","startHour":6,"startMs":1791000000000,"endMs":1791021600000,"totalMm":0.4,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-03","startHour":12,"startMs":1791021600000,"endMs":1791043200000,"totalMm":0.6,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-03","startHour":18,"startMs":1791043200000,"endMs":1791064800000,"totalMm":0.2,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-04","startHour":0,"startMs":1791064800000,"endMs":1791086400000,"totalMm":0.4,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-04","startHour":6,"startMs":1791086400000,"endMs":1791108000000,"totalMm":4.6,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-04","startHour":12,"startMs":1791108000000,"endMs":1791129600000,"totalMm":5,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-04","startHour":18,"startMs":1791129600000,"endMs":1791151200000,"totalMm":1.4,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-05","startHour":0,"startMs":1791151200000,"endMs":1791172800000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-05","startHour":6,"startMs":1791172800000,"endMs":1791194400000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-05","startHour":12,"startMs":1791194400000,"endMs":1791216000000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true},{"date":"2026-10-05","startHour":18,"startMs":1791216000000,"endMs":1791237600000,"totalMm":0,"hours":6,"expectedHours":6,"complete":true}],"daily":[{"date":"2026-10-01","totalMm":0,"complete":true,"hours":24,"expectedHours":24},{"date":"2026-10-02","totalMm":1.6,"complete":true,"hours":24,"expectedHours":24},{"date":"2026-10-03","totalMm":1.4,"complete":true,"hours":24,"expectedHours":24},{"date":"2026-10-04","totalMm":11.4,"complete":true,"hours":24,"expectedHours":24},{"date":"2026-10-05","totalMm":0,"complete":true,"hours":24,"expectedHours":24}],"precipAxisMax":6,"ensemble":{"discovered":51,"expected":51,"precipCoverageEndMs":1791374400000,"tempCoverageEndMs":1791381600000}}</script>
+<script type="module">
+/**
+ * Everything the painting-window page computes, as plain ESM JavaScript with no imports at all.
+ *
+ * This file is deliberately not TypeScript and deliberately dependency-free, because it runs in two
+ * places verbatim: in Node (the generator that writes docs/index.html, and the tests) and inside the
+ * published page, where the "Obnoviť predpoveď" button re-fetches Open-Meteo directly from the
+ * browser. The site is static - GitHub Pages serves files, there is no server to ask - so a real
+ * refresh can only happen client-side, and the only way to keep one algorithm instead of two is to
+ * ship this exact source to both. tsc copies it to dist/ (allowJs), the page renderer inlines it.
+ *
+ * Conventions that the rest of the code depends on:
+ *   - Instants are UTC epoch milliseconds, always. Local time exists only for labels and for day
+ *     boundaries, and is derived through Intl with an explicit IANA zone - never by parsing a naive
+ *     string (which would silently mean "the viewer's zone") and never by adding a fixed offset.
+ *   - Open-Meteo hourly accumulations are documented as the "preceding hour sum", so the value
+ *     stamped 10:00 is the rain that fell between 09:00 and 10:00. Every precipitation window here
+ *     is therefore right-open on the left: a start at 09:00 first counts the stamp at 10:00.
+ *   - Missing and zero are different things. A gap never becomes 0 mm, never joins a line across
+ *     it, and never improves a score.
+ */
+const HOUR_MS = 3_600_000;
+const FORECAST_ENDPOINT = "https://api.open-meteo.com/v1/forecast";
+const ENSEMBLE_ENDPOINT = "https://ensemble-api.open-meteo.com/v1/ensemble";
+const META_ENDPOINT = "https://ensemble-api.open-meteo.com/data";
+/** Chart variables, in the order the page draws them. */
+const FORECAST_VARS = [
+    "temperature_2m",
+    "relative_humidity_2m",
+    "dew_point_2m",
+    "precipitation",
+    "wind_speed_10m",
+    "shortwave_radiation",
+];
+/** The score needs nothing else: air temperature while applying, precipitation for the whole window. */
+const ENSEMBLE_VARS = ["temperature_2m", "precipitation"];
+/** Verified live 2026-09-23. A response in other units is a changed API, not something to convert
+ * silently - the caller is expected to fail loudly rather than publish mislabelled axes. */
+const EXPECTED_UNITS = {
+    temperature_2m: "°C",
+    relative_humidity_2m: "%",
+    dew_point_2m: "°C",
+    precipitation: "mm",
+    wind_speed_10m: "km/h",
+    shortwave_radiation: "W/m²",
+};
+// ---------------------------------------------------------------------------
+// Local time. The browser twin of src/time.ts (which stays as-is for the older
+// TypeScript modules); same iterative Intl approach, no offset tables, DST-safe.
+// ---------------------------------------------------------------------------
+const partsCache = new Map();
+function formatterFor(timeZone) {
+    let f = partsCache.get(timeZone);
+    if (!f) {
+        f = new Intl.DateTimeFormat("en-CA", {
+            timeZone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+        });
+        partsCache.set(timeZone, f);
+    }
+    return f;
+}
+function localParts(ms, timeZone) {
+    const out = {};
+    for (const p of formatterFor(timeZone).formatToParts(new Date(ms)))
+        out[p.type] = p.value;
+    return out;
+}
+/** "YYYY-MM-DD" of an instant in the given zone. */
+function localDateOf(ms, timeZone) {
+    const p = localParts(ms, timeZone);
+    return `${p.year}-${p.month}-${p.day}`;
+}
+/** Hour of day 0-23 of an instant in the given zone. */
+function localHourOf(ms, timeZone) {
+    return Number(localParts(ms, timeZone).hour);
+}
+/** "HH:mm" of an instant in the given zone. */
+function localTimeLabel(ms, timeZone) {
+    const p = localParts(ms, timeZone);
+    return `${p.hour}:${p.minute}`;
+}
+/** Pure calendar arithmetic on an ISO date - no zone involved. */
+function addDays(isoDate, days) {
+    const [y, m, d] = isoDate.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+/** Inclusive list of ISO dates from `start` to `end`. */
+function eachDate(start, end) {
+    const dates = [];
+    for (let d = start; d <= end; d = addDays(d, 1))
+        dates.push(d);
+    return dates;
+}
+/**
+ * The instant at which the given local wall-clock hour of the given local date begins. Solved by
+ * interpreting the zone's own label as UTC and correcting the difference, which converges in a step
+ * or two and stays correct across DST changes (on a spring-forward gap it lands on the instant the
+ * clock jumps to, which is the only sensible answer).
+ */
+function localTimeMs(isoDate, hour, timeZone) {
+    const [y, m, d] = isoDate.split("-").map(Number);
+    const target = Date.UTC(y, m - 1, d, hour);
+    let ms = target;
+    for (let i = 0; i < 4; i++) {
+        const p = localParts(ms, timeZone);
+        const asUtc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute));
+        const diff = asUtc - target;
+        if (diff === 0)
+            break;
+        ms -= diff;
+    }
+    return ms;
+}
+function localMidnightMs(isoDate, timeZone) {
+    return localTimeMs(isoDate, 0, timeZone);
+}
+/** Sums of one-decimal millimetres accumulate float dust; 3 decimals is far below what the data
+ * resolves and makes "exactly 0.2" behave like exactly 0.2. */
+function round3(x) {
+    return Math.round(x * 1000) / 1000;
+}
+// ---------------------------------------------------------------------------
+// Request building - one definition, used by the generator and by the page.
+// ---------------------------------------------------------------------------
+/**
+ * The local dates the request has to cover. The last candidate start is `end` 23:00, and it needs
+ * applicationHours + postApplicationHours beyond that, so with 8 + 24 the data must reach 07:00 two
+ * days after the window - all of it derived, so switching to 48h moves the boundary by itself.
+ */
+function requestDates(cfg) {
+    const reach = 23 + cfg.applicationHours + cfg.postApplicationHours;
+    return { startDate: cfg.start, endDate: addDays(cfg.end, Math.floor(reach / 24)) };
+}
+function baseParams(cfg) {
+    const { startDate, endDate } = requestDates(cfg);
+    return {
+        latitude: String(cfg.latitude),
+        longitude: String(cfg.longitude),
+        models: cfg.model,
+        start_date: startDate,
+        end_date: endDate,
+        timezone: cfg.timezone,
+        // Epoch seconds: unambiguous instants in, local labels derived here. The timezone parameter then
+        // only decides which local days start_date/end_date mean.
+        timeformat: "unixtime",
+    };
+}
+function withQuery(base, params) {
+    const q = Object.entries(params)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&");
+    return `${base}?${q}`;
+}
+function forecastUrl(cfg) {
+    return withQuery(FORECAST_ENDPOINT, { ...baseParams(cfg), hourly: FORECAST_VARS.join(",") });
+}
+function ensembleUrl(cfg) {
+    return withQuery(ENSEMBLE_ENDPOINT, { ...baseParams(cfg), hourly: ENSEMBLE_VARS.join(",") });
+}
+function metaUrl(cfg) {
+    return cfg.metaDomain ? `${META_ENDPOINT}/${cfg.metaDomain}/static/meta.json` : null;
+}
+// ---------------------------------------------------------------------------
+// Parsing
+// ---------------------------------------------------------------------------
+function requireHourly(json, what) {
+    if (json && json.error)
+        throw new Error(`Open-Meteo (${what}): ${json.reason || "neznáma chyba"}`);
+    if (!json || !json.hourly || !Array.isArray(json.hourly.time))
+        throw new Error(`Open-Meteo (${what}): odpoveď bez hodinových dát`);
+}
+function checkUnits(json, vars, what) {
+    const units = json.hourly_units || {};
+    for (const v of vars) {
+        const expected = EXPECTED_UNITS[v];
+        const got = units[v];
+        // Ensemble responses label the control column exactly like the plain variable, so one check per
+        // variable is enough; a member in different units has never been observed and would be an API change.
+        if (expected && got && got !== expected)
+            throw new Error(`Open-Meteo (${what}): ${v} prišlo v ${got}, očakávam ${expected}`);
+    }
+}
+/** Numbers stay numbers, everything else (including undefined past the horizon) becomes null. */
+function column(hourly, name, length) {
+    const raw = hourly[name];
+    const out = new Array(length);
+    for (let i = 0; i < length; i++) {
+        const v = Array.isArray(raw) ? raw[i] : undefined;
+        out[i] = typeof v === "number" && Number.isFinite(v) ? v : null;
+    }
+    return out;
+}
+/** The deterministic run that draws charts 2-5. */
+function parseForecast(json) {
+    requireHourly(json, "predpoveď");
+    checkUnits(json, FORECAST_VARS, "predpoveď");
+    const h = json.hourly;
+    const n = h.time.length;
+    return {
+        timesMs: h.time.map((t) => t * 1000),
+        temperature: column(h, "temperature_2m", n),
+        humidity: column(h, "relative_humidity_2m", n),
+        dewPoint: column(h, "dew_point_2m", n),
+        precipitation: column(h, "precipitation", n),
+        wind: column(h, "wind_speed_10m", n),
+        radiation: column(h, "shortwave_radiation", n),
+        utcOffsetSeconds: json.utc_offset_seconds ?? 0,
+        grid: { latitude: json.latitude, longitude: json.longitude, elevation: json.elevation },
+    };
+}
+/**
+ * Members are discovered from the response instead of being generated from a hardcoded list of 51
+ * field names, so a product whose membership changes is read correctly. A member counts only when
+ * both variables are present; the unsuffixed pair is the control run and sorts first.
+ */
+function memberKeys(hourly) {
+    const suffix = (prefix, key) => key.slice(prefix.length);
+    const temps = new Set(Object.keys(hourly).filter((k) => /^temperature_2m(_member\d+)?$/.test(k)).map((k) => suffix("temperature_2m", k)));
+    const precs = Object.keys(hourly)
+        .filter((k) => /^precipitation(_member\d+)?$/.test(k))
+        .map((k) => suffix("precipitation", k));
+    return precs.filter((s) => temps.has(s)).sort((a, b) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b)));
+}
+function parseEnsemble(json) {
+    requireHourly(json, "ansámbel");
+    checkUnits(json, ENSEMBLE_VARS, "ansámbel");
+    const h = json.hourly;
+    const n = h.time.length;
+    const keys = memberKeys(h);
+    return {
+        timesMs: h.time.map((t) => t * 1000),
+        members: keys.map((key) => ({
+            key: key === "" ? "control" : key.replace(/^_/, ""),
+            temperature: column(h, `temperature_2m${key}`, n),
+            precipitation: column(h, `precipitation${key}`, n),
+        })),
+        utcOffsetSeconds: json.utc_offset_seconds ?? 0,
+        grid: { latitude: json.latitude, longitude: json.longitude, elevation: json.elevation },
+    };
+}
+/**
+ * The model run the numbers actually come from, or null when the source does not say. ECMWF's
+ * 06z/18z ensemble cycles only reach 144h, so past that horizon the API still serves the previous
+ * 00z/12z run and the metadata's own initialisation time would overstate the freshness.
+ * Never a stand-in for the fetch time - the page shows the two separately or omits this one.
+ */
+function resolveRun(meta, lastNeededMs) {
+    if (!meta)
+        return null;
+    const init = meta.last_run_initialisation_time;
+    const dataEnd = meta.data_end_time;
+    const interval = meta.update_interval_seconds;
+    if (![init, dataEnd, interval].every((v) => typeof v === "number" && Number.isFinite(v)))
+        return null;
+    if (dataEnd * 1000 >= lastNeededMs)
+        return { runAtMs: init * 1000, source: "meta" };
+    return { runAtMs: (init - interval) * 1000, source: "meta" };
+}
+// ---------------------------------------------------------------------------
+// The score
+// ---------------------------------------------------------------------------
+/** Every hourly start in the window: 24 per day, as instants. */
+function startTimes(cfg) {
+    const starts = [];
+    for (const date of eachDate(cfg.start, cfg.end)) {
+        for (let hour = 0; hour < 24; hour++)
+            starts.push(localTimeMs(date, hour, cfg.timezone));
+    }
+    return starts;
+}
+/** The last instant any start needs data for - the horizon the sources have to reach. */
+function lastNeededMs(cfg) {
+    const starts = startTimes(cfg);
+    return starts[starts.length - 1] + (cfg.applicationHours + cfg.postApplicationHours) * HOUR_MS;
+}
+function indexByTime(timesMs) {
+    const idx = new Map();
+    for (let i = 0; i < timesMs.length; i++)
+        idx.set(timesMs[i], i);
+    return idx;
+}
+/**
+ * One member against one start: true (fits), false (does not), or null (cannot tell - a value the
+ * rule needs is missing). Null must never be folded into either of the other two.
+ *
+ * Temperature is checked at the 9 hourly points from the start to the end of the 8h of work,
+ * boundaries included. Precipitation is summed over the 32 hourly accumulations that cover the work
+ * plus the 24h watch period, i.e. the stamps start+1h ... start+32h.
+ */
+function judgeMember(member, startMs, cfg, idx) {
+    for (let k = 0; k <= cfg.applicationHours; k++) {
+        const i = idx.get(startMs + k * HOUR_MS);
+        const t = i === undefined ? null : member.temperature[i];
+        if (t === null)
+            return null;
+        if (round3(t) < cfg.minimumAirTemperatureC)
+            return false;
+    }
+    const steps = cfg.applicationHours + cfg.postApplicationHours;
+    let sum = 0;
+    for (let k = 1; k <= steps; k++) {
+        const i = idx.get(startMs + k * HOUR_MS);
+        const p = i === undefined ? null : member.precipitation[i];
+        if (p === null)
+            return null;
+        sum += p;
+    }
+    return round3(sum) < cfg.maximumWindowPrecipitationMm;
+}
+/**
+ * Share of ensemble scenarios that fit, per hourly start.
+ *
+ * The denominator is the expected membership of the product, never "however many columns happened
+ * to arrive": a response short of a member, or a member short of one of the values a start needs,
+ * makes that start `score: null` ("Nedostatok dát"). Dropping the incomplete member instead would
+ * quietly turn thin data into a better-looking percentage.
+ */
+function scoreStarts(ens, cfg) {
+    const idx = indexByTime(ens.timesMs);
+    const expected = cfg.expectedEnsembleMembers;
+    const membersMissing = ens.members.length !== expected;
+    return startTimes(cfg).map((startMs) => {
+        if (membersMissing)
+            return { startMs, score: null, matching: 0, expected, reason: "members" };
+        let matching = 0;
+        for (const member of ens.members) {
+            const verdict = judgeMember(member, startMs, cfg, idx);
+            if (verdict === null)
+                return { startMs, score: null, matching: 0, expected, reason: "horizon" };
+            if (verdict)
+                matching++;
         }
-        return best;
-      }
-
-      rect.addEventListener("pointermove", (evt) => {
-        const box = svg.getBoundingClientRect();
-        const scale = 900 / box.width;
-        const mouseX = (evt.clientX - box.left) * scale;
-        const point = nearestPoint(mouseX);
-        if (!point) return;
-
-        crosshair.setAttribute("x1", point.x);
-        crosshair.setAttribute("x2", point.x);
-        crosshair.style.opacity = "1";
-
-        tooltip.replaceChildren();
-        const timeEl = document.createElement("div");
-        timeEl.className = "tooltip-time";
-        timeEl.textContent = point.label;
-        tooltip.appendChild(timeEl);
-        for (const rowData of point.rows) {
-          const row = document.createElement("div");
-          row.className = "tooltip-row";
-          const key = document.createElement("span");
-          key.className = "tooltip-key";
-          const swatch = document.createElement("span");
-          swatch.className = "legend-swatch";
-          swatch.style.background = rowData.color;
-          key.appendChild(swatch);
-          key.appendChild(document.createTextNode(rowData.label));
-          const value = document.createElement("span");
-          value.className = "tooltip-value";
-          value.textContent = rowData.value;
-          row.appendChild(key);
-          row.appendChild(value);
-          tooltip.appendChild(row);
-        }
-
-        const container = rect.closest(".card") || document.body;
-        const containerBox = container.getBoundingClientRect();
-        tooltip.style.display = "block";
-        tooltip.style.left = (evt.clientX - containerBox.left + 12) + "px";
-        tooltip.style.top = (evt.clientY - containerBox.top + 12) + "px";
-      });
-
-      rect.addEventListener("pointerleave", () => {
-        crosshair.style.opacity = "0";
-        tooltip.style.display = "none";
-      });
+        return { startMs, score: Math.round((100 * matching) / expected), matching, expected, reason: null };
     });
+}
+/** The best scored start of each local day, for the e-mail digest. Days without a single computable
+ * start are reported as such rather than as a zero. */
+function bestStartPerDay(scores, cfg) {
+    return eachDate(cfg.start, cfg.end).map((date) => {
+        const ofDay = scores.filter((s) => localDateOf(s.startMs, cfg.timezone) === date);
+        const scored = ofDay.filter((s) => s.score !== null);
+        if (scored.length === 0)
+            return { date, best: null, computable: 0, total: ofDay.length };
+        let best = scored[0];
+        for (const s of scored)
+            if (s.score > best.score)
+                best = s;
+        return { date, best, computable: scored.length, total: ofDay.length };
+    });
+}
+// ---------------------------------------------------------------------------
+// Precipitation aggregation
+// ---------------------------------------------------------------------------
+const BUCKET_START_HOURS = [0, 6, 12, 18];
+/**
+ * Six-hour local buckets 00-06, 06-12, 12-18, 18-24. A bucket holds the accumulations stamped after
+ * its start and up to and including its end, which is the same right-open convention the score uses
+ * - so a bar, a daily total and the score can never disagree about which hour belongs where. The
+ * bucket end is resolved through the zone rather than by adding 6h, so a DST day gets its real 5 or
+ * 7 hours instead of a silently wrong sum.
+ */
+function sixHourBuckets(series, cfg) {
+    const idx = indexByTime(series.timesMs);
+    const buckets = [];
+    for (const date of eachDate(cfg.start, cfg.end)) {
+        for (const startHour of BUCKET_START_HOURS) {
+            const startMs = localTimeMs(date, startHour, cfg.timezone);
+            const endMs = startHour === 18 ? localMidnightMs(addDays(date, 1), cfg.timezone) : localTimeMs(date, startHour + 6, cfg.timezone);
+            const expectedHours = Math.round((endMs - startMs) / HOUR_MS);
+            let total = 0;
+            let hours = 0;
+            for (let t = startMs + HOUR_MS; t <= endMs; t += HOUR_MS) {
+                const i = idx.get(t);
+                const v = i === undefined ? null : series.precipitation[i];
+                if (v === null)
+                    continue;
+                total += v;
+                hours++;
+            }
+            buckets.push({
+                date,
+                startHour,
+                startMs,
+                endMs,
+                totalMm: hours === 0 ? null : round3(total),
+                hours,
+                expectedHours,
+                complete: hours === expectedHours,
+            });
+        }
+    }
+    return buckets;
+}
+/** Daily totals from the very same buckets, so the text line always matches the bars. A day missing
+ * any hour is an incomplete total, not a smaller one. */
+function dailyTotals(buckets) {
+    const byDate = new Map();
+    for (const b of buckets) {
+        let day = byDate.get(b.date);
+        if (!day) {
+            day = { date: b.date, totalMm: null, complete: true, hours: 0, expectedHours: 0 };
+            byDate.set(b.date, day);
+        }
+        if (b.totalMm !== null)
+            day.totalMm = round3((day.totalMm ?? 0) + b.totalMm);
+        day.hours += b.hours;
+        day.expectedHours += b.expectedHours;
+        if (!b.complete)
+            day.complete = false;
+    }
+    return [...byDate.values()];
+}
+const NICE_STEPS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 150, 200];
+/**
+ * One shared y-axis for the whole period, so a drizzle never looks dramatic just because a single
+ * day was scaled to it. Derived from the tallest six-hour total anywhere in the window, plus
+ * headroom, rounded up to a readable step - and never below 1 mm / 6h. Changing the selected day or
+ * hour does not touch it; only new data does.
+ */
+function precipAxisMax(buckets) {
+    let max = 0;
+    for (const b of buckets)
+        if (b.totalMm !== null && b.totalMm > max)
+            max = b.totalMm;
+    if (max <= 1)
+        return 1;
+    const target = max * 1.15;
+    for (const step of NICE_STEPS)
+        if (step >= target)
+            return step;
+    return Math.ceil(target / 50) * 50;
+}
+// ---------------------------------------------------------------------------
+// The snapshot embedded in the page (and re-made in the browser on refresh)
+// ---------------------------------------------------------------------------
+const SNAPSHOT_VERSION = 1;
+/** Last instant for which a variable has a value, so the page can say honestly how far the data
+ * actually reaches rather than implying the axis is full. */
+function coverageEndMs(timesMs, columns) {
+    let last = null;
+    for (const col of columns) {
+        let end = null;
+        for (let i = col.length - 1; i >= 0; i--) {
+            if (col[i] !== null) {
+                end = timesMs[i];
+                break;
+            }
+        }
+        if (end === null)
+            return null;
+        if (last === null || end < last)
+            last = end;
+    }
+    return last;
+}
+/**
+ * Everything the page draws, derived once by whoever has the raw responses - the generator at build
+ * time, the page itself after a manual refresh. Both call this same function, so a refreshed page
+ * can never drift from a generated one.
+ */
+function buildSnapshot(forecastJson, ensembleJson, metaJson, cfg, fetchedAtMs) {
+    const series = parseForecast(forecastJson);
+    const ens = parseEnsemble(ensembleJson);
+    const buckets = sixHourBuckets(series, cfg);
+    const scores = scoreStarts(ens, cfg);
+    const run = resolveRun(metaJson, lastNeededMs(cfg));
+    return {
+        version: SNAPSHOT_VERSION,
+        fetchedAtMs,
+        runAtMs: run ? run.runAtMs : null,
+        runSource: run ? run.source : null,
+        config: cfg,
+        grid: series.grid,
+        utcOffsetSeconds: series.utcOffsetSeconds,
+        series: {
+            timesMs: series.timesMs,
+            temperature: series.temperature,
+            dewPoint: series.dewPoint,
+            humidity: series.humidity,
+            precipitation: series.precipitation,
+            wind: series.wind,
+            radiation: series.radiation,
+        },
+        scores,
+        buckets,
+        daily: dailyTotals(buckets),
+        precipAxisMax: precipAxisMax(buckets),
+        ensemble: {
+            discovered: ens.members.length,
+            expected: cfg.expectedEnsembleMembers,
+            precipCoverageEndMs: coverageEndMs(ens.timesMs, ens.members.map((m) => m.precipitation)),
+            tempCoverageEndMs: coverageEndMs(ens.timesMs, ens.members.map((m) => m.temperature)),
+        },
+    };
+}
 
-  </script>
+/**
+ * The page itself: five charts over one shared time axis, the start picker, the shared cursor and
+ * the refresh button. Plain ESM JavaScript with no imports - it is inlined into docs/index.html
+ * right after src/window-core.js and calls into it directly.
+ *
+ * Everything that decides a number lives in window-core.js. This file only draws and reacts, so a
+ * refresh in the browser and a render on the server can never disagree about what the data says.
+ *
+ * Charts are hand-written SVG, like everywhere else in this project, and are re-rendered at the
+ * container's real pixel width (not scaled by viewBox) so labels stay the same readable size on a
+ * phone as on a desktop.
+ */
+const GEO = {
+    marginLeft: 46,
+    marginRight: 14,
+    // Room above the plot for the axis unit, which sits in the left margin so it can never collide
+    // with the data.
+    marginTop: 24,
+    marginBottom: 24,
+    plotHeight: 112,
+    scorePlotHeight: 132,
+    minWidth: 300,
+    maxWidth: 1000,
+};
+const state = {
+    snapshot: null,
+    /** Selected start, as an instant. Kept across refreshes. */
+    startMs: null,
+    cursorMs: null,
+    cursorChart: null,
+    width: 900,
+    pending: false,
+    /** Only the newest request may write to the state - a slow earlier one must not overwrite it. */
+    seq: 0,
+    error: null,
+    lastSuccessMs: null,
+    charts: [],
+};
+// ---------------------------------------------------------------------------
+// Formatting
+// ---------------------------------------------------------------------------
+const NB = " ";
+function num(value, digits) {
+    return value.toFixed(digits).replace(".", ",");
+}
+function dayLabel(isoDate) {
+    const [y, m, d] = isoDate.split("-").map(Number);
+    const weekday = new Intl.DateTimeFormat("sk-SK", { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
+    return `${weekday} ${d}.${m}.`;
+}
+function shortDate(isoDate) {
+    const [, m, d] = isoDate.split("-").map(Number);
+    return `${d}.${m}.`;
+}
+function cfg() {
+    return state.snapshot.config;
+}
+function hhmm(ms) {
+    return localTimeLabel(ms, cfg().timezone);
+}
+/** "1.10. 09:00", and only the time when the date is already obvious from the context. */
+function stamp(ms, withDate) {
+    const date = localDateOf(ms, cfg().timezone);
+    return withDate ? `${shortDate(date)} ${hhmm(ms)}` : hhmm(ms);
+}
+function clockLabel(ms) {
+    const parts = localParts(ms, cfg().timezone);
+    return `${Number(parts.day)}.${Number(parts.month)}. ${parts.hour}:${parts.minute}`;
+}
+function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+// ---------------------------------------------------------------------------
+// Axis
+// ---------------------------------------------------------------------------
+/** The visible domain: local midnight opening the window to local midnight closing it. Identical in
+ * all five charts, and unaffected by the selection - the point is to compare the five days. */
+function domain() {
+    const c = cfg();
+    return { fromMs: localMidnightMs(c.start, c.timezone), toMs: localMidnightMs(addDays(c.end, 1), c.timezone) };
+}
+function plotWidth() {
+    return state.width - GEO.marginLeft - GEO.marginRight;
+}
+function xOf(ms) {
+    const { fromMs, toMs } = domain();
+    const ratio = (ms - fromMs) / (toMs - fromMs);
+    return GEO.marginLeft + Math.max(0, Math.min(1, ratio)) * plotWidth();
+}
+/** Instant under a pixel, clamped to the visible domain. */
+function msAtX(x) {
+    const { fromMs, toMs } = domain();
+    const ratio = (x - GEO.marginLeft) / plotWidth();
+    return fromMs + Math.max(0, Math.min(1, ratio)) * (toMs - fromMs);
+}
+function nearestHour(ms) {
+    return Math.round(ms / HOUR_MS) * HOUR_MS;
+}
+// ---------------------------------------------------------------------------
+// Series access
+// ---------------------------------------------------------------------------
+let seriesIndex = new Map();
+function reindex() {
+    seriesIndex = new Map();
+    const times = state.snapshot.series.timesMs;
+    for (let i = 0; i < times.length; i++)
+        seriesIndex.set(times[i], i);
+}
+function valueAt(field, ms) {
+    const i = seriesIndex.get(ms);
+    return i === undefined ? null : state.snapshot.series[field][i];
+}
+function scoreAt(ms) {
+    return state.snapshot.scores.find((s) => s.startMs === ms) || null;
+}
+function bucketAt(ms) {
+    return state.snapshot.buckets.find((b) => ms > b.startMs && ms <= b.endMs) || null;
+}
+/** Points of one variable inside the visible domain, nulls kept so gaps stay gaps. */
+function visiblePoints(field) {
+    const { fromMs, toMs } = domain();
+    const out = [];
+    const times = state.snapshot.series.timesMs;
+    for (let i = 0; i < times.length; i++) {
+        if (times[i] < fromMs || times[i] > toMs)
+            continue;
+        out.push({ ms: times[i], value: state.snapshot.series[field][i] });
+    }
+    return out;
+}
+// ---------------------------------------------------------------------------
+// SVG building blocks
+// ---------------------------------------------------------------------------
+/** A line is cut wherever a value is missing: no interpolation across a gap. */
+function linePath(points, yOf) {
+    let d = "";
+    let pen = false;
+    for (const p of points) {
+        if (p.value === null) {
+            pen = false;
+            continue;
+        }
+        d += `${pen ? "L" : "M"} ${xOf(p.ms).toFixed(1)} ${yOf(p.value).toFixed(1)} `;
+        pen = true;
+    }
+    return d.trim();
+}
+function areaPath(points, yOf, baseY) {
+    let d = "";
+    let run = [];
+    const flush = () => {
+        if (run.length < 2) {
+            run = [];
+            return;
+        }
+        d += `M ${xOf(run[0].ms).toFixed(1)} ${baseY.toFixed(1)} `;
+        for (const p of run)
+            d += `L ${xOf(p.ms).toFixed(1)} ${yOf(p.value).toFixed(1)} `;
+        d += `L ${xOf(run[run.length - 1].ms).toFixed(1)} ${baseY.toFixed(1)} Z `;
+        run = [];
+    };
+    for (const p of points) {
+        if (p.value === null)
+            flush();
+        else
+            run.push(p);
+    }
+    flush();
+    return d.trim();
+}
+function niceCeil(value) {
+    if (value <= 0)
+        return 1;
+    const magnitude = 10 ** Math.floor(Math.log10(value));
+    for (const step of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) {
+        if (step * magnitude >= value)
+            return step * magnitude;
+    }
+    return 10 * magnitude;
+}
+/**
+ * Gridlines on readable numbers. Dividing the range into a fixed number of slices would print ticks
+ * like 1,5 or 7,5 next to lines that do not sit on them; a step picked from 1/2/5 x 10^n always
+ * labels what it draws.
+ */
+function axisTicks(min, max, target) {
+    const raw = (max - min) / target;
+    if (!(raw > 0))
+        return [min];
+    const magnitude = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 5, 10].map((s) => s * magnitude).find((s) => s >= raw - 1e-12) ?? 10 * magnitude;
+    const ticks = [];
+    for (let v = Math.ceil(min / step) * step; v <= max + step / 1000; v += step)
+        ticks.push(round3(v));
+    return ticks;
+}
+/** Enough decimals for the step, never more. */
+function tickFormatter(ticks) {
+    const smallest = ticks.length > 1 ? Math.abs(ticks[1] - ticks[0]) : 1;
+    const digits = smallest >= 1 ? 0 : smallest >= 0.1 ? 1 : 2;
+    return (t) => num(t, digits);
+}
+/** Day separators plus one centred label per day, the same in every chart. */
+function dayDecorations(height) {
+    const c = cfg();
+    const bottom = height - GEO.marginBottom;
+    let grid = "";
+    let labels = "";
+    for (const date of eachDate(c.start, c.end)) {
+        const from = localMidnightMs(date, c.timezone);
+        const to = localMidnightMs(addDays(date, 1), c.timezone);
+        grid += `<line class="wx-day-line" x1="${xOf(from).toFixed(1)}" x2="${xOf(from).toFixed(1)}" y1="${GEO.marginTop}" y2="${bottom}" />`;
+        const mid = (xOf(from) + xOf(to)) / 2;
+        labels += `<text class="wx-day-label" x="${mid.toFixed(1)}" y="${height - 7}" text-anchor="middle">${esc(dayLabel(date))}</text>`;
+    }
+    grid += `<line class="wx-day-line" x1="${xOf(domain().toMs).toFixed(1)}" x2="${xOf(domain().toMs).toFixed(1)}" y1="${GEO.marginTop}" y2="${bottom}" />`;
+    return { grid, labels };
+}
+/** The 8h of work and the 24h watch period, clipped to the axis. Painted under the data. */
+function windowBands(height) {
+    if (state.startMs === null)
+        return "";
+    const c = cfg();
+    const bottom = height - GEO.marginBottom;
+    const workEnd = state.startMs + c.applicationHours * HOUR_MS;
+    const monitorEnd = workEnd + c.postApplicationHours * HOUR_MS;
+    const { fromMs, toMs } = domain();
+    const band = (from, to, cls) => {
+        const a = Math.max(from, fromMs);
+        const b = Math.min(to, toMs);
+        if (b <= a)
+            return "";
+        return `<rect class="${cls}" x="${xOf(a).toFixed(1)}" y="${GEO.marginTop}" width="${(xOf(b) - xOf(a)).toFixed(1)}" height="${bottom - GEO.marginTop}" />`;
+    };
+    return band(state.startMs, workEnd, "wx-band-work") + band(workEnd, monitorEnd, "wx-band-watch");
+}
+function yAxis(ticks, yOf, unit) {
+    const format = tickFormatter(ticks);
+    let out = `<text class="wx-unit" x="2" y="14">${esc(unit)}</text>`;
+    for (const t of ticks) {
+        const y = yOf(t);
+        out += `<line class="wx-grid" x1="${GEO.marginLeft}" x2="${(state.width - GEO.marginRight).toFixed(1)}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" />`;
+        out += `<text class="wx-tick" x="${GEO.marginLeft - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end">${esc(format(t))}</text>`;
+    }
+    return out;
+}
+function chartFrame(id, height, inner, ariaLabel) {
+    return (`<svg class="wx-svg" viewBox="0 0 ${state.width} ${height}" width="${state.width}" height="${height}" ` +
+        `role="img" aria-label="${esc(ariaLabel)}" data-chart="${id}">${inner}` +
+        `<line class="wx-cursor" data-cursor="${id}" x1="0" x2="0" y1="${GEO.marginTop}" y2="${height - GEO.marginBottom}" style="opacity:0" />` +
+        `<rect class="wx-capture" data-capture="${id}" x="${GEO.marginLeft}" y="${GEO.marginTop}" width="${plotWidth().toFixed(1)}" height="${height - GEO.marginTop - GEO.marginBottom}" />` +
+        `</svg>`);
+}
+// ---------------------------------------------------------------------------
+// The five charts
+// ---------------------------------------------------------------------------
+function renderScoreChart() {
+    const height = GEO.scorePlotHeight + GEO.marginTop + GEO.marginBottom;
+    const bottom = height - GEO.marginBottom;
+    const yOf = (pct) => bottom - (pct / 100) * GEO.scorePlotHeight;
+    const { fromMs, toMs } = domain();
+    const points = state.snapshot.scores.filter((s) => s.startMs >= fromMs && s.startMs <= toMs).map((s) => ({ ms: s.startMs, value: s.score }));
+    const decor = dayDecorations(height);
+    let marker = "";
+    const selected = state.startMs === null ? null : scoreAt(state.startMs);
+    if (selected && selected.score !== null) {
+        marker = `<circle class="wx-marker" cx="${xOf(selected.startMs).toFixed(1)}" cy="${yOf(selected.score).toFixed(1)}" r="4" />`;
+    }
+    const inner = windowBands(height) +
+        yAxis([0, 25, 50, 75, 100], yOf, "%") +
+        decor.grid +
+        `<path class="wx-score-area" d="${areaPath(points, yOf, bottom)}" />` +
+        `<path class="wx-score-line" d="${linePath(points, yOf)}" />` +
+        marker +
+        decor.labels;
+    return chartFrame("score", height, inner, "Graf vhodnosti počasia pre jednotlivé hodiny začiatku, v percentách vyhovujúcich scenárov");
+}
+function renderRainChart() {
+    const height = GEO.plotHeight + GEO.marginTop + GEO.marginBottom;
+    const bottom = height - GEO.marginBottom;
+    const max = state.snapshot.precipAxisMax;
+    const yOf = (mm) => bottom - (mm / max) * GEO.plotHeight;
+    const decor = dayDecorations(height);
+    let bars = "";
+    for (const b of state.snapshot.buckets) {
+        if (b.totalMm === null)
+            continue;
+        const x0 = xOf(b.startMs);
+        const x1 = xOf(b.endMs);
+        const w = Math.max(1, x1 - x0 - 3);
+        const y = yOf(Math.min(b.totalMm, max));
+        const h = Math.max(b.totalMm > 0 ? 1 : 0, bottom - y);
+        if (h <= 0)
+            continue;
+        bars += `<rect class="wx-bar${b.complete ? "" : " wx-bar-partial"}" x="${(x0 + 1.5).toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" />`;
+    }
+    const inner = windowBands(height) +
+        yAxis(axisTicks(0, max, 3), yOf, `mm / 6${NB}h`) +
+        decor.grid +
+        bars +
+        decor.labels;
+    return chartFrame("rain", height, inner, `Graf úhrnov zrážok po šiestich hodinách, os 0 až ${num(max, 0)} milimetrov`);
+}
+function renderTemperatureChart() {
+    const height = GEO.plotHeight + GEO.marginTop + GEO.marginBottom;
+    const bottom = height - GEO.marginBottom;
+    const temp = visiblePoints("temperature");
+    const dew = visiblePoints("dewPoint");
+    const values = [...temp, ...dew].map((p) => p.value).filter((v) => v !== null);
+    const limit = cfg().minimumAirTemperatureC;
+    const max = niceCeil(Math.max(limit + 2, ...values));
+    const min = Math.min(0, Math.floor(Math.min(limit - 2, ...values) / 5) * 5);
+    const yOf = (t) => bottom - ((t - min) / (max - min)) * GEO.plotHeight;
+    const decor = dayDecorations(height);
+    const inner = windowBands(height) +
+        yAxis(axisTicks(min, max, 4), yOf, "°C") +
+        decor.grid +
+        `<line class="wx-limit" x1="${GEO.marginLeft}" x2="${(state.width - GEO.marginRight).toFixed(1)}" y1="${yOf(limit).toFixed(1)}" y2="${yOf(limit).toFixed(1)}" />` +
+        `<text class="wx-limit-label" x="${(state.width - GEO.marginRight - 4).toFixed(1)}" y="${(yOf(limit) - 5).toFixed(1)}" text-anchor="end">hranica ${limit}${NB}°C</text>` +
+        `<path class="wx-dew-line" d="${linePath(dew, yOf)}" />` +
+        `<path class="wx-temp-line" d="${linePath(temp, yOf)}" />` +
+        decor.labels;
+    return chartFrame("temp", height, inner, "Graf teploty vzduchu a rosného bodu v stupňoch Celzia s vyznačenou hranicou 7 stupňov");
+}
+function renderWindChart() {
+    const height = GEO.plotHeight + GEO.marginTop + GEO.marginBottom;
+    const bottom = height - GEO.marginBottom;
+    const wind = visiblePoints("wind");
+    const max = niceCeil(Math.max(10, ...wind.map((p) => p.value).filter((v) => v !== null)));
+    const yOf = (v) => bottom - (v / max) * GEO.plotHeight;
+    const decor = dayDecorations(height);
+    const inner = windowBands(height) +
+        yAxis(axisTicks(0, max, 4), yOf, "km/h") +
+        decor.grid +
+        `<path class="wx-wind-line" d="${linePath(wind, yOf)}" />` +
+        decor.labels;
+    return chartFrame("wind", height, inner, "Graf rýchlosti vetra v kilometroch za hodinu");
+}
+function renderRadiationChart() {
+    const height = GEO.plotHeight + GEO.marginTop + GEO.marginBottom;
+    const bottom = height - GEO.marginBottom;
+    const rad = visiblePoints("radiation");
+    const max = niceCeil(Math.max(100, ...rad.map((p) => p.value).filter((v) => v !== null)));
+    const yOf = (v) => bottom - (v / max) * GEO.plotHeight;
+    const decor = dayDecorations(height);
+    const inner = windowBands(height) +
+        yAxis(axisTicks(0, max, 4), yOf, "W/m²") +
+        decor.grid +
+        `<path class="wx-sun-area" d="${areaPath(rad, yOf, bottom)}" />` +
+        `<path class="wx-sun-line" d="${linePath(rad, yOf)}" />` +
+        decor.labels;
+    return chartFrame("sun", height, inner, "Graf krátkovlnného slnečného žiarenia vo wattoch na meter štvorcový");
+}
+const CHARTS = [
+    { id: "score", render: renderScoreChart },
+    { id: "rain", render: renderRainChart },
+    { id: "temp", render: renderTemperatureChart },
+    { id: "wind", render: renderWindChart },
+    { id: "sun", render: renderRadiationChart },
+];
+// ---------------------------------------------------------------------------
+// Text around the charts
+// ---------------------------------------------------------------------------
+function renderScoreReadout() {
+    const node = document.getElementById("wx-score-value");
+    if (state.startMs === null)
+        return;
+    const s = scoreAt(state.startMs);
+    if (!s || s.score === null) {
+        const why = s && s.reason === "members" ? "ansámbel neprišiel celý" : "predpoveď zatiaľ nesiaha tak ďaleko";
+        node.textContent = `Nedostatok dát (${why})`;
+        node.classList.add("wx-missing");
+        return;
+    }
+    node.classList.remove("wx-missing");
+    node.textContent = `${s.score}${NB}% · ${s.matching} z ${s.expected} scenárov`;
+}
+function renderPlanLine() {
+    const c = cfg();
+    const workEnd = state.startMs + c.applicationHours * HOUR_MS;
+    const monitorEnd = workEnd + c.postApplicationHours * HOUR_MS;
+    const startDate = localDateOf(state.startMs, c.timezone);
+    const endDate = localDateOf(workEnd, c.timezone);
+    const monitorDate = localDateOf(monitorEnd, c.timezone);
+    // Both dates are spelled out whenever the work or the watch period crosses midnight.
+    document.getElementById("wx-plan").textContent =
+        `Natieranie: ${stamp(state.startMs, true)} – ${stamp(workEnd, endDate !== startDate)} · ` +
+            `Počasie sledovať do: ${stamp(monitorEnd, monitorDate !== endDate)}`;
+}
+function renderDailyRain() {
+    const parts = state.snapshot.daily.map((d) => {
+        if (d.totalMm === null)
+            return `${shortDate(d.date)} ${NB}—`;
+        return `${shortDate(d.date)} ${num(d.totalMm, 1)}${NB}mm${d.complete ? "" : `${NB}(neúplné)`}`;
+    });
+    document.getElementById("wx-daily").textContent = `Denné úhrny: ${parts.join(" · ")}`;
+}
+function renderMeta() {
+    const s = state.snapshot;
+    const bits = [`Zdroj: ${cfg().modelLabel} cez Open-Meteo`];
+    // Only when the source really states it - a fetch time is not a model run.
+    if (s.runAtMs)
+        bits.push(`beh modelu ${clockLabel(s.runAtMs)}`);
+    bits.push(`načítané ${clockLabel(s.fetchedAtMs)}`);
+    document.getElementById("wx-meta").textContent = bits.join(" · ");
+    const status = document.getElementById("wx-status");
+    if (state.error) {
+        status.textContent = state.error;
+        status.hidden = false;
+    }
+    else {
+        status.hidden = true;
+    }
+    const past = document.getElementById("wx-past");
+    past.hidden = Date.now() < domain().toMs;
+}
+// ---------------------------------------------------------------------------
+// Cursor and tooltip
+// ---------------------------------------------------------------------------
+function renderCursor() {
+    const visible = state.cursorMs !== null;
+    for (const el of document.querySelectorAll("[data-cursor]")) {
+        el.style.opacity = visible ? "1" : "0";
+        if (visible) {
+            const x = xOf(state.cursorMs).toFixed(1);
+            el.setAttribute("x1", x);
+            el.setAttribute("x2", x);
+        }
+    }
+    const tip = document.getElementById("wx-tooltip");
+    if (!visible) {
+        tip.hidden = true;
+        return;
+    }
+    const ms = state.cursorMs;
+    const rows = [];
+    const s = scoreAt(ms);
+    // The percentage belongs to an hourly start, so the tooltip shows that hour's real value and
+    // never interpolates one between two starts.
+    if (s)
+        rows.push(["Vhodnosť pri štarte", s.score === null ? "Nedostatok dát" : `${s.score}${NB}% (${s.matching} z ${s.expected})`]);
+    const bucket = bucketAt(ms);
+    if (bucket) {
+        const label = `${String(bucket.startHour).padStart(2, "0")}–${bucket.startHour === 18 ? "24" : String(bucket.startHour + 6).padStart(2, "0")}`;
+        const value = bucket.totalMm === null ? "—" : `${num(bucket.totalMm, 1)}${NB}mm${bucket.complete ? "" : `${NB}(neúplné)`}`;
+        rows.push([`Dážď ${label}`, value]);
+    }
+    const fields = [
+        ["Teplota", "temperature", 1, "°C"],
+        ["Rosný bod", "dewPoint", 1, "°C"],
+        ["Vietor", "wind", 0, "km/h"],
+        ["Slnko", "radiation", 0, "W/m²"],
+    ];
+    for (const [label, field, digits, unit] of fields) {
+        const v = valueAt(field, ms);
+        rows.push([label, v === null ? "—" : `${num(v, digits)}${NB}${unit}`]);
+    }
+    tip.innerHTML =
+        `<strong>${esc(clockLabel(ms))}</strong>` +
+            rows.map(([k, v]) => `<span class="wx-tip-row"><span>${esc(k)}</span><span>${esc(v)}</span></span>`).join("");
+    tip.hidden = false;
+    // Placed inside the charts container, next to the chart actually under the pointer, so it never
+    // covers the values it is describing.
+    const wrap = document.getElementById("wx-charts");
+    const x = xOf(ms);
+    const width = tip.offsetWidth || 190;
+    tip.style.left = `${Math.max(8, Math.min(wrap.clientWidth - width - 8, x - width / 2))}px`;
+    const host = state.cursorChart ? document.getElementById(`wx-chart-${state.cursorChart}`) : null;
+    if (host) {
+        const below = host.offsetTop + host.offsetHeight + 6;
+        const above = host.offsetTop - tip.offsetHeight - 6;
+        tip.style.top = `${below + tip.offsetHeight > wrap.clientHeight && above > 0 ? above : below}px`;
+    }
+}
+// ---------------------------------------------------------------------------
+// Interaction
+// ---------------------------------------------------------------------------
+/** The nearest hourly start that actually exists in the window. */
+function snapToStart(ms) {
+    const starts = state.snapshot.scores;
+    let best = starts[0].startMs;
+    let bestDelta = Math.abs(ms - best);
+    for (const s of starts) {
+        const delta = Math.abs(ms - s.startMs);
+        if (delta < bestDelta) {
+            best = s.startMs;
+            bestDelta = delta;
+        }
+    }
+    return best;
+}
+function setStart(ms) {
+    state.startMs = snapToStart(ms);
+    syncControls();
+    renderCharts();
+    renderScoreReadout();
+    renderPlanLine();
+}
+function moveStart(hours) {
+    setStart(state.startMs + hours * HOUR_MS);
+}
+function syncControls() {
+    const date = localDateOf(state.startMs, cfg().timezone);
+    for (const button of document.querySelectorAll("[data-day]")) {
+        const active = button.dataset.day === date;
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    document.getElementById("wx-hour").value = String(localHourOf(state.startMs, cfg().timezone));
+}
+function bindEvents() {
+    for (const button of document.querySelectorAll("[data-day]")) {
+        button.addEventListener("click", () => {
+            setStart(localTimeMs(button.dataset.day, localHourOf(state.startMs, cfg().timezone), cfg().timezone));
+        });
+    }
+    document.getElementById("wx-hour").addEventListener("change", (e) => {
+        setStart(localTimeMs(localDateOf(state.startMs, cfg().timezone), Number(e.target.value), cfg().timezone));
+    });
+    document.getElementById("wx-hour-prev").addEventListener("click", () => moveStart(-1));
+    document.getElementById("wx-hour-next").addEventListener("click", () => moveStart(1));
+    document.getElementById("wx-refresh").addEventListener("click", () => refresh(true));
+    const info = document.getElementById("wx-method-toggle");
+    info.addEventListener("click", () => {
+        const panel = document.getElementById("wx-method");
+        const open = !panel.hidden;
+        panel.hidden = open;
+        info.setAttribute("aria-expanded", open ? "false" : "true");
+    });
+    window.addEventListener("resize", onResize);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible")
+            refreshIfStale();
+    });
+    setInterval(refreshIfStale, 5 * 60 * 1000);
+}
+/** Pointer handling is attached after every render, because the SVGs are rebuilt wholesale. */
+function bindChartPointers() {
+    const wrap = document.getElementById("wx-charts");
+    for (const capture of wrap.querySelectorAll("[data-capture]")) {
+        const svg = capture.closest("svg");
+        const locate = (event) => {
+            const rect = svg.getBoundingClientRect();
+            // The SVG is rendered at its real pixel width, so client pixels map straight onto the axis.
+            return nearestHour(msAtX(event.clientX - rect.left));
+        };
+        capture.addEventListener("pointermove", (event) => {
+            state.cursorMs = locate(event);
+            state.cursorChart = svg.dataset.chart;
+            renderCursor();
+        });
+        capture.addEventListener("pointerleave", () => {
+            state.cursorMs = null;
+            state.cursorChart = null;
+            renderCursor();
+        });
+        capture.addEventListener("pointerdown", (event) => {
+            state.cursorMs = locate(event);
+            state.cursorChart = svg.dataset.chart;
+            if (svg.dataset.chart === "score")
+                setStart(state.cursorMs);
+            renderCursor();
+        });
+    }
+    const score = wrap.querySelector('svg[data-chart="score"]');
+    if (score) {
+        score.setAttribute("tabindex", "0");
+        score.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowRight")
+                moveStart(1);
+            else if (event.key === "ArrowLeft")
+                moveStart(-1);
+            else if (event.key === "ArrowUp")
+                moveStart(24);
+            else if (event.key === "ArrowDown")
+                moveStart(-24);
+            else
+                return;
+            event.preventDefault();
+        });
+    }
+}
+let resizeTimer = null;
+function onResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        const next = measureWidth();
+        if (next === state.width)
+            return;
+        state.width = next;
+        renderCharts();
+        renderCursor();
+    }, 120);
+}
+function measureWidth() {
+    const wrap = document.getElementById("wx-charts");
+    return Math.round(Math.max(GEO.minWidth, Math.min(GEO.maxWidth, wrap.clientWidth || GEO.maxWidth)));
+}
+// ---------------------------------------------------------------------------
+// Data refresh - real fetches, straight from the browser
+// ---------------------------------------------------------------------------
+function refreshIfStale() {
+    if (document.visibilityState !== "visible" || state.pending)
+        return;
+    const age = Date.now() - (state.lastSuccessMs ?? state.snapshot.fetchedAtMs);
+    if (age >= cfg().clientRefreshMinutes * 60 * 1000)
+        refresh(false);
+}
+async function getJson(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok)
+        throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+}
+async function refresh(manual) {
+    if (state.pending)
+        return;
+    state.pending = true;
+    const seq = ++state.seq;
+    const button = document.getElementById("wx-refresh");
+    button.disabled = true;
+    button.textContent = "Sťahujem…";
+    try {
+        const c = cfg();
+        // Sequential on purpose: Open-Meteo answers a burst of parallel requests with an error body and
+        // HTTP 200, and two requests a moment apart cost nothing here.
+        const forecast = await getJson(forecastUrl(c));
+        const ensemble = await getJson(ensembleUrl(c));
+        let meta = null;
+        try {
+            const url = metaUrl(c);
+            if (url)
+                meta = await getJson(url);
+        }
+        catch {
+            meta = null; // The run stamp is a nicety; never fail a refresh over it.
+        }
+        const next = buildSnapshot(forecast, ensemble, meta, c, Date.now());
+        // A slower earlier request must never overwrite a newer answer.
+        if (seq !== state.seq)
+            return;
+        state.snapshot = next;
+        state.lastSuccessMs = next.fetchedAtMs;
+        state.error = null;
+        reindex();
+        renderAll();
+    }
+    catch (err) {
+        if (seq !== state.seq)
+            return;
+        const when = clockLabel(state.lastSuccessMs ?? state.snapshot.fetchedAtMs);
+        state.error = `Predpoveď sa nepodarilo obnoviť (${err && err.message ? err.message : "chyba siete"}). Ukazujem posledné platné dáta z ${when}.`;
+        renderMeta();
+    }
+    finally {
+        if (seq === state.seq) {
+            state.pending = false;
+            button.disabled = false;
+            button.textContent = "Obnoviť predpoveď";
+        }
+    }
+    if (manual && state.error === null)
+        renderMeta();
+}
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+function renderCharts() {
+    const wrap = document.getElementById("wx-charts");
+    for (const chart of CHARTS) {
+        document.getElementById(`wx-chart-${chart.id}`).innerHTML = chart.render();
+    }
+    bindChartPointers();
+    if (wrap)
+        renderCursor();
+}
+function renderAll() {
+    renderMeta();
+    syncControls();
+    renderCharts();
+    renderScoreReadout();
+    renderPlanLine();
+    renderDailyRain();
+}
+function boot() {
+    const raw = document.getElementById("wx-snapshot");
+    if (!raw)
+        return;
+    state.snapshot = JSON.parse(raw.textContent);
+    state.lastSuccessMs = state.snapshot.fetchedAtMs;
+    state.width = measureWidth();
+    reindex();
+    const c = cfg();
+    state.startMs = localTimeMs(c.start, 9, c.timezone);
+    bindEvents();
+    renderAll();
+    refreshIfStale();
+}
+boot();
+{};
+
+</script>
 </body>
 </html>

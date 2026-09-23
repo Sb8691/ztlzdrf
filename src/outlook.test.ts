@@ -1,10 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { OUTLOOK } from "./config.js";
 import { addDays, daysBetween, formatDayLabelLong, formatRunTick, formatShortDate, isIsoDate, localDateOf, localMidnightMs, toLocalWallClock } from "./time.js";
 import { effectiveRunAt, responseToMemberPoints, type EnsembleResponse } from "./openmeteo.js";
@@ -44,7 +39,6 @@ import type { HourEvaluation, OutlookDaySummary, OutlookDigestDay, OutlookHistor
 const PLAIN_BANNED = ["beh", "p50", "p90", "ensembl", "UTC", "p. b.", "%", "členov", "GOOD", "ECMWF", "GEFS", "ICON", "AIFS"];
 /** Non-breaking space the plain layer puts between a number and its unit / "z 10". */
 const NB = " ";
-const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 
 const TZ = "Europe/Vienna";
 const HOUR = 3600_000;
@@ -644,57 +638,9 @@ test("dashboard card, e-mail block and e-mail image all speak the plain layer", 
   assert.equal(renderOutlookPng(null, OUTLOOK), null);
 });
 
-function runOutlookCli(env: Record<string, string>): { status: number | null; stdout: string; stderr: string } {
-  const r = spawnSync(process.execPath, ["--import", "tsx", "src/outlook.ts"], {
-    cwd: REPO_ROOT,
-    env: { ...process.env, ...env },
-    encoding: "utf8",
-    timeout: 60_000,
-  });
-  return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-}
-
-test("outlook.ts: OUTLOOK_DOCS_DIR + OUTLOOK_RENDER_ONLY render a closed window once, into the scratch dir only", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ztlzdrf-outlook-"));
-  mkdirSync(join(dir, "outlook"));
-  const window = { start: "2026-09-01", end: "2026-09-04" };
-  const past = mergeHistory(emptyHistory(OUTLOOK, window), [
-    mkRun("ecmwf_ifs025", "2026-08-25T00:00:00.000Z", { "2026-09-01": 0.5, "2026-09-02": 0.6, "2026-09-03": 0.2, "2026-09-04": 0.1 }),
-    mkRun("ecmwf_ifs025", "2026-08-26T00:00:00.000Z", { "2026-09-01": 0.7, "2026-09-02": 0.4, "2026-09-03": 0.3, "2026-09-04": 0.2 }),
-  ]).history;
-  writeFileSync(join(dir, "outlook", "history.json"), JSON.stringify(past));
-  const env = { OUTLOOK_DOCS_DIR: dir, OUTLOOK_RENDER_ONLY: "true", OUTLOOK_START: window.start, OUTLOOK_END: window.end };
-
-  const first = runOutlookCli(env);
-  assert.equal(first.status, 0, first.stderr);
-  assert.ok(first.stdout.includes("Okno skončilo 2026-09-04"), first.stdout);
-  const html = readFileSync(join(dir, "outlook.html"), "utf8");
-  assert.ok(html.includes("už uplynulo") && html.includes("Podrobnosti pre technika") && html.includes("stav k 05.09.2026 00:00"));
-  // The image is the four-day overview, so a finished window has nothing to draw - and nothing
-  // links to it any more either (the card and the e-mail block are gone with the digest).
-  assert.ok(!existsSync(join(dir, "outlook.png")));
-  assert.match(first.stdout, /outlook\.png nevygenerovaný/);
-  assert.ok(!existsSync(join(dir, "outlook", "history-2026-09-01_2026-09-04.json")), "a matching window must not be archived");
-
-  const second = runOutlookCli(env);
-  assert.equal(second.status, 0, second.stderr);
-  assert.match(second.stdout, /outlook\.html bez zmeny/, "the closed-window page must be byte-stable across runs");
-  assert.equal(readFileSync(join(REPO_ROOT, "docs", "outlook", "history.json"), "utf8").includes('"start": "2026-09-01"'), false, "live docs/ must stay untouched");
-});
-
-test("outlook.ts: OUTLOOK_RENDER_ONLY renders the plain layer for an open window without any network", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ztlzdrf-outlook-"));
-  mkdirSync(join(dir, "outlook"));
-  const window = { start: "2030-10-01", end: "2030-10-04" };
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString();
-  const future = mergeHistory(emptyHistory(OUTLOOK, window), [
-    mkRun("ecmwf_ifs025", yesterday, { "2030-10-01": 0.65, "2030-10-02": 0.4, "2030-10-03": 0.3, "2030-10-04": 0.1 }),
-  ]).history;
-  writeFileSync(join(dir, "outlook", "history.json"), JSON.stringify(future));
-  const r = runOutlookCli({ OUTLOOK_DOCS_DIR: dir, OUTLOOK_RENDER_ONLY: "true", OUTLOOK_START: window.start, OUTLOOK_END: window.end });
-  assert.equal(r.status, 0, r.stderr);
-  assert.ok(r.stdout.includes("nič sa nesťahuje"), r.stdout);
-  const html = readFileSync(join(dir, "outlook.html"), "utf8");
-  assert.ok(html.includes('class="plain-card"') && html.includes("Pravdepodobne áno") && html.includes("Podrobnosti pre technika"));
-  assert.ok(existsSync(join(dir, "outlook.png")));
-});
+/*
+ * The CLI tests that used to live here drove src/outlook.ts while it was the medium-range outlook
+ * runner. That file now generates the painting-window page instead, so the same guarantees - render
+ * into a scratch dir only, never touch live docs/, stay byte-stable across reruns - are covered by
+ * src/window.test.ts. Everything above still exercises the outlook layer's pure functions.
+ */

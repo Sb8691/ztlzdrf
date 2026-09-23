@@ -6,6 +6,61 @@ export const LOCATION = {
 };
 
 /**
+ * The painting window the main page is about (src/window-core.js, src/window-page.ts): a fixed set
+ * of local calendar days, every hour of which is a candidate start for one 8h coat.
+ *
+ * Everything the algorithm needs lives here, so moving the window or switching the monitored period
+ * from 24h to 48h is a config change, never a code change. The request dates are derived from these
+ * numbers too: the last start (end 23:00) plus applicationHours + postApplicationHours decides how
+ * far past the window the forecast has to reach.
+ *
+ * The two thresholds are a deliberately transparent filter over ensemble scenarios, NOT a drying
+ * model and not a manufacturer guarantee: SEFRA Novalux Holztec 80.0 asks for >= 7 C air and
+ * substrate and <= 15 % wood moisture, and wood moisture is something only a meter can tell us.
+ * 0.2 mm over the whole window is this algorithm's working tolerance for "effectively dry", not a
+ * statement that such a shower leaves the coat unharmed.
+ */
+export const PAINT_WINDOW = {
+  /** Local calendar dates, inclusive. Displayed 1 Oct 00:00 -> 6 Oct 00:00 local. */
+  start: "2026-10-01",
+  end: "2026-10-05",
+  /** One coat = 8h of work; the 24h after it is a planning-only watch period, not a cure time. */
+  applicationHours: 8,
+  postApplicationHours: 24,
+  minimumAirTemperatureC: 7,
+  maximumWindowPrecipitationMm: 0.2,
+  /** Explicitly chosen model (no "auto" seamless blend), for both the charts and the members. */
+  model: "ecmwf_ifs025",
+  /** Open-Meteo data domain for the ensemble's run metadata (last_run_initialisation_time). */
+  metaDomain: "ecmwf_ifs025_ensemble",
+  modelLabel: "ECMWF IFS 0,25°",
+  /** Verified live 2026-09-23 against the product schema: `temperature_2m` (control) plus
+   * `_member01..._member50`. The expected count is what the denominator is built from - members are
+   * discovered from the response by pattern, but a response that does not carry all of them yields
+   * "not enough data" rather than a quietly smaller denominator. */
+  expectedEnsembleMembers: 51,
+  /** A generator run reuses a snapshot younger than this instead of re-fetching (the CI job runs
+   * the generator and the e-mail minutes apart, and a cache must never pose as a new model run). */
+  serverMinRefreshMinutes: 20,
+  /** The open page refreshes itself at most this often, and only while it is actually visible. */
+  clientRefreshMinutes: 60,
+};
+
+export type PaintWindowConfig = typeof PAINT_WINDOW;
+
+/** What the page, the generator and the tests all hand to src/window-core.js - the painting window
+ * plus the place it is about. Embedded verbatim in the published page, so the browser recomputes a
+ * refresh with exactly the settings the snapshot was built with. */
+export const WINDOW_CONFIG = {
+  ...PAINT_WINDOW,
+  latitude: LOCATION.latitude,
+  longitude: LOCATION.longitude,
+  timezone: LOCATION.timezone,
+};
+
+export type WindowConfig = typeof WINDOW_CONFIG;
+
+/**
  * Chart/data window: this many hours behind "now" (INCA analysis) and ahead of "now" (AROME
  * forecast + ensemble). The past leg matters because recent rain/overnight humidity determines
  * whether the wood may still be wet; the future leg matters because the coating needs a rain-free
@@ -99,8 +154,9 @@ export interface OutlookModel {
  * The window can be overridden per run with OUTLOOK_START / OUTLOOK_END (ISO dates).
  */
 export const OUTLOOK = {
-  /** Local calendar dates, inclusive. */
-  window: { start: "2026-10-01", end: "2026-10-04" },
+  /** Local calendar dates, inclusive - kept in step with PAINT_WINDOW above, which is what the site
+   * and the e-mail are actually about now. */
+  window: { start: PAINT_WINDOW.start, end: PAINT_WINDOW.end },
   /** Days fetched before/after the window so the 12h dry-before and 12h rain-free-after rules have
    * real data at both edges instead of "unknown". */
   paddingDays: 1,
