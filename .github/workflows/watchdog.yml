@@ -2,15 +2,26 @@ name: Terrace Painting Watchdog
 
 on:
   schedule:
-    # ~09:00 Europe/Vienna, split into two cron entries since a single UTC time can't track the
-    # CEST/CET switch: 07:xx UTC during CEST (Apr-Oct), 08:xx UTC during CET (Nov-Mar). Off by up
-    # to an hour in the DST switchover week, which is fine for a daily weather digest.
+    # The daily e-mail. Nominally 02:13 Europe/Vienna, split into two cron entries since a single
+    # UTC time can't track the CEST/CET switch: 00:13 UTC during CEST (Apr-Oct), 01:13 UTC during
+    # CET (Nov-Mar). Off by an hour in the DST switchover week, which is fine here.
+    #
+    # 02:13 is NOT when the e-mail arrives - it is a deliberate ~5 h head start on GitHub's queue.
+    # Scheduled workflows are queued on a shared pool and public repos have the lowest priority; 26
+    # scheduled runs measured 27 Aug - 22 Sep 2026 started a median of 5.4 h late (min 4.1, max
+    # 12.2), so a 09:13 local cron actually delivered around 14:36 local - long after the 08:00-10:00
+    # starts the e-mail is meant to inform. Subtracting the median puts the median delivery near
+    # 07:40 local, i.e. before the working day.
+    #
+    # The trade-off is honest: this compensates for a queue delay by depending on it. If GitHub's
+    # backlog ever clears, the e-mail arrives at 02:13 local instead. Re-measure before assuming
+    # these numbers still hold - and if you change a cron string, change EMAIL_RUN below with it.
     #
     # Deliberately NOT running at the top of the hour (:00): GitHub's own docs warn that scheduled
     # workflows are queued and can be delayed or silently dropped under load, "especially at the
     # start of the hour" - the busiest moment across all of GitHub Actions. :13 avoids that peak.
-    - cron: "13 7 * 4-10 *"
-    - cron: "13 8 * 11,12,1,2,3 *"
+    - cron: "13 0 * 4-10 *"
+    - cron: "13 1 * 11,12,1,2,3 *"
     # Outlook-only snapshots (no e-mail). UTC-fixed on purpose: the ECMWF ensemble cycles that reach
     # 15 days are 00z and 12z, and Open-Meteo has them roughly 9-10 h after initialisation (~09:30
     # and ~21:30 UTC), so these two runs capture each cycle once. The outlook script is idempotent -
@@ -39,9 +50,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # The e-mail goes out only from the morning schedules or an explicit manual request; the
-  # outlook-only schedules just refresh the published pages.
-  EMAIL_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.send_email == true) || github.event.schedule == '13 7 * 4-10 *' || github.event.schedule == '13 8 * 11,12,1,2,3 *' }}
+  # The e-mail goes out only from the two e-mail schedules or an explicit manual request; the
+  # outlook-only schedules just refresh the published pages. These strings must match the cron
+  # entries above character for character - a mismatch silently stops the e-mail rather than
+  # failing the run.
+  EMAIL_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.send_email == true) || github.event.schedule == '13 0 * 4-10 *' || github.event.schedule == '13 1 * 11,12,1,2,3 *' }}
 
 jobs:
   check-weather:
