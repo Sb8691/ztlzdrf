@@ -4,6 +4,7 @@ import { formatDayLabel } from "./time.js";
 import { bestStartPerDay, localDateOf, localTimeLabel } from "./window-core.js";
 import { windowImageAlt } from "./window-image.js";
 import { renderWindowEmailBlock } from "./window-email.js";
+import { LIGHT } from "./window-theme.js";
 import type { WindowSnapshot } from "./window-data.js";
 
 export interface EmailConfig {
@@ -12,26 +13,25 @@ export interface EmailConfig {
   from: string;
 }
 
-const HEADER = "#54606e";
-const MUTED = "#767268";
-const BORDER = "#e6e3dc";
-
 /**
- * The daily e-mail: the painting window, nothing else.
+ * The daily e-mail: the painting window, nothing else, looking like the page it comes from - same
+ * heading, same calm surface, same colours (src/window-theme.ts), same wording.
  *
- * It used to lead with a "can I paint today" verdict from GeoSphere, but the whole project is now
- * about one question - which hour of 1-5 Oct to start - so the e-mail says exactly what the page
- * says, built from the same snapshot (docs/data/window.json).
+ * Always the light palette: mail clients handle `prefers-color-scheme` inconsistently and some
+ * invert colours on their own, so one high-contrast light card is the reliable choice.
  *
  * Mail-client rules: tables and inline styles only, no <style>, no <details>, no nowrap, and the
- * charts must be one really hosted image - Gmail strips inline <svg> and refuses `data:` URIs.
- * The `t=` parameter cache-busts Gmail's image proxy, which otherwise caches by URL forever.
+ * charts must be one really hosted image - Gmail strips inline <svg> and refuses `data:` URIs. The
+ * `t=` parameter cache-busts Gmail's image proxy, which otherwise caches by URL forever.
  */
+
+const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
 function chartImageUrl(generatedAt: Date): string {
   return `https://sb8691.github.io/ztlzdrf/chart.png?t=${generatedAt.getTime()}`;
 }
 
-function formatGeneratedAt(d: Date): string {
+function formatStamp(d: Date): string {
   const parts = new Intl.DateTimeFormat("sk-SK", {
     timeZone: LOCATION.timezone,
     day: "2-digit",
@@ -42,6 +42,17 @@ function formatGeneratedAt(d: Date): string {
   }).formatToParts(d);
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return `${get("day")}.${get("month")}. ${get("hour")}:${get("minute")}`;
+}
+
+function monthName(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Intl.DateTimeFormat("sk-SK", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
+}
+
+/** The page's own subtitle: "1.–5. október 2026". */
+function periodLabel(snapshot: WindowSnapshot): string {
+  const { start, end } = snapshot.config;
+  return `${Number(start.slice(8))}.–${Number(end.slice(8))}. ${monthName(start)} ${start.slice(0, 4)}`;
 }
 
 /** Subject carries the single most useful fact, so the window can be judged from the inbox list. */
@@ -58,33 +69,27 @@ export function emailSubject(snapshot: WindowSnapshot): string {
 }
 
 export function renderAlertEmail(snapshot: WindowSnapshot, generatedAt: Date): { subject: string; html: string } {
-  const cfg = snapshot.config;
-  const niceNow = formatGeneratedAt(generatedAt);
   const block = renderWindowEmailBlock(snapshot, generatedAt.getTime());
+  const source = `Zdroj: ${snapshot.config.modelLabel} cez Open-Meteo · načítané ${formatStamp(new Date(snapshot.fetchedAtMs))}`;
 
   const html = `
-  <div style="background:#f4f2ee;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid ${BORDER};">
+  <div style="background:${LIGHT.page};padding:32px 16px;font-family:${FONT};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:${LIGHT.surface};border-radius:12px;border:1px solid ${LIGHT.hairline};">
       <tr>
-        <td style="background:${HEADER};padding:20px 28px;">
-          <span style="font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#ffffff;opacity:0.9;">Zedlitzdorf 74</span>
-          <h1 style="margin:6px 0 0;font-size:20px;line-height:1.3;color:#ffffff;font-weight:700;">Okno na natieranie terasy</h1>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding:24px 28px 28px;">
-          <p style="margin:0 0 4px;font-size:13px;color:${MUTED};">${formatDayLabel(cfg.start)} – ${formatDayLabel(cfg.end)} &middot; ${LOCATION.name}</p>
-          <p style="margin:0;font-size:12px;color:${MUTED};">Odoslané ${niceNow}.</p>
+        <td style="padding:30px 28px 26px;">
+          <h1 style="margin:0 0 4px;font-size:22px;line-height:1.25;font-weight:650;color:${LIGHT.text};letter-spacing:-0.01em;">Počasie na natieranie terasy</h1>
+          <p style="margin:0 0 12px;font-size:15px;color:${LIGHT.muted};">Zedlitzdorf · ${periodLabel(snapshot)}</p>
+          <p style="margin:0 0 22px;font-size:12px;color:${LIGHT.muted};">${source}</p>
 
           ${block}
 
-          <img src="${chartImageUrl(generatedAt)}" width="${CHART_WIDTH}" alt="${windowImageAlt(snapshot).replace(/"/g, "&quot;")}" style="width:100%;max-width:${CHART_WIDTH}px;height:auto;display:block;margin-top:20px;border-radius:8px;border:1px solid ${BORDER};" />
+          <img src="${chartImageUrl(generatedAt)}" width="${CHART_WIDTH}" alt="${windowImageAlt(snapshot).replace(/"/g, "&quot;")}" style="width:100%;max-width:${CHART_WIDTH}px;height:auto;display:block;margin-top:24px;border-radius:8px;border:1px solid ${LIGHT.hairline};" />
 
-          <p style="margin:16px 0 0;font-size:12px;color:${MUTED};line-height:1.5;">
-            Pred natieraním zmerajte vlhkosť a teplotu dreva – predpoveď ich nepotvrdzuje. Nasledujúcich 24 h po dokončení je sledované obdobie, nie záruka vyschnutia.
+          <p style="margin:22px 0 0;padding-top:18px;border-top:1px solid ${LIGHT.hairline};font-size:13px;color:${LIGHT.muted};line-height:1.5;">
+            Pred natieraním zmerajte vlhkosť a teplotu dreva. Predpoveď ich nepotvrdzuje. Nasledujúcich ${snapshot.config.postApplicationHours} h je sledované obdobie, nie záruka vyschnutia.
           </p>
-          <p style="margin:16px 0 0;font-size:13px;color:${MUTED};">
-            Automatický report zo <a href="https://sb8691.github.io/ztlzdrf/" style="color:${HEADER};text-decoration:none;font-weight:600;">stránky okna na natieranie</a>.
+          <p style="margin:16px 0 0;font-size:13px;color:${LIGHT.muted};">
+            <a href="https://sb8691.github.io/ztlzdrf/" style="color:${LIGHT.accent};text-decoration:none;font-weight:600;">Otvoriť celý prehľad s piatimi grafmi</a>
           </p>
         </td>
       </tr>

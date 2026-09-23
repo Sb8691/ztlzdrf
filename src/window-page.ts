@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { eachDate } from "./window-core.js";
+import { allowedDurations, eachDate, validStartHours } from "./window-core.js";
+import { cssVariables, DARK, LIGHT } from "./window-theme.js";
 
 /**
  * docs/index.html: the whole application, as one self-contained file.
@@ -45,56 +46,12 @@ function monthName(isoDate: string): string {
 const STYLES = `
 :root {
   color-scheme: light;
-  --page: #f7f7f5;
-  --surface: #ffffff;
-  --text: #1d2125;
-  --muted: #5e6871;
-  --hairline: #e3e5e4;
-  --grid: #ebedec;
-  --day-line: #d8dbda;
-  --accent: #2f6fb0;
-  --accent-soft: #eaf1f8;
-  --score: #2f7d6b;
-  --score-fill: rgba(47, 125, 107, 0.14);
-  --rain: #3d7cb8;
-  --rain-partial: #9dbcd8;
-  --temp: #c1562f;
-  --dew: #5b7a99;
-  --wind: #5a6b7a;
-  --sun: #b07d12;
-  --sun-fill: rgba(176, 125, 18, 0.13);
-  --band-work: rgba(47, 111, 176, 0.13);
-  --band-watch: rgba(214, 138, 51, 0.13);
-  --limit: #b03030;
-  --warn-bg: #fdf3e7;
-  --warn-text: #7a4a12;
+${cssVariables(LIGHT)}
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --page: #14171a;
-    --surface: #1c2024;
-    --text: #e8eaec;
-    --muted: #9aa4ad;
-    --hairline: #2b3137;
-    --grid: #272d33;
-    --day-line: #333b42;
-    --accent: #6fb1e8;
-    --accent-soft: #1f2a34;
-    --score: #5fc3ab;
-    --score-fill: rgba(95, 195, 171, 0.16);
-    --rain: #6fb1e8;
-    --rain-partial: #3f5f7a;
-    --temp: #f0906a;
-    --dew: #9bb6cf;
-    --wind: #a7b8c6;
-    --sun: #e9c46a;
-    --sun-fill: rgba(233, 196, 106, 0.14);
-    --band-work: rgba(111, 177, 232, 0.16);
-    --band-watch: rgba(233, 176, 106, 0.15);
-    --limit: #e8756f;
-    --warn-bg: #33291a;
-    --warn-text: #e8c489;
+${cssVariables(DARK, "    ")}
   }
 }
 
@@ -213,7 +170,14 @@ footer p { margin: 0; }
 `;
 
 interface SnapshotLike {
-  config: { start: string; end: string };
+  config: {
+    start: string;
+    end: string;
+    applicationHours: number;
+    postApplicationHours: number;
+    workDayStartHour: number;
+    workDayEndHour: number;
+  };
 }
 
 function dayButtons(from: string, to: string): string {
@@ -225,20 +189,29 @@ function dayButtons(from: string, to: string): string {
     .join("");
 }
 
-function hourOptions(): string {
-  let out = "";
-  for (let h = 0; h < 24; h++) {
-    const label = `${String(h).padStart(2, "0")}:00`;
-    out += `<option value="${h}"${h === 9 ? " selected" : ""}>${label}</option>`;
-  }
-  return out;
+/** Only the hours at which the default session still ends inside the working day; the page rebuilds
+ * this list whenever the chosen length changes. */
+function hourOptions(snapshot: SnapshotLike): string {
+  const cfg = snapshot.config;
+  return validStartHours(cfg, cfg.applicationHours)
+    .map((h: number) => `<option value="${h}"${h === 9 ? " selected" : ""}>${String(h).padStart(2, "0")}:00</option>`)
+    .join("");
 }
 
-function chartCard(id: string, title: string, extras: { value?: boolean; note?: string; legend?: string; daily?: boolean }): string {
+/** One coat is 8h of work but need not happen in one go - 3h one day and 5h another is fine, so the
+ * length of a single session is the reader's to pick. */
+function durationOptions(snapshot: SnapshotLike): string {
+  const cfg = snapshot.config;
+  return allowedDurations(cfg)
+    .map((h: number) => `<option value="${h}"${h === cfg.applicationHours ? " selected" : ""}>${h} h</option>`)
+    .join("");
+}
+
+function chartCard(id: string, title: string, extras: { value?: boolean; note?: string; legend?: string; daily?: boolean; dynamicNote?: boolean }): string {
   const value = extras.value ? ` <span class="wx-value" id="wx-score-value"></span>` : "";
   const legend = extras.legend ?? "";
   const daily = extras.daily ? `<p class="wx-note" id="wx-daily"></p>` : "";
-  const note = extras.note ? `<p class="wx-note">${esc(extras.note)}</p>` : "";
+  const note = extras.dynamicNote ? `<p class="wx-note" id="wx-score-note"></p>` : extras.note ? `<p class="wx-note">${esc(extras.note)}</p>` : "";
   return `<section class="wx-card"><h2>${esc(title)}${value}</h2><div id="wx-chart-${id}"></div>${legend}${daily}${note}</section>`;
 }
 
@@ -279,8 +252,14 @@ export function renderWindowPage(snapshot: SnapshotLike): string {
     <span class="wx-label"><label for="wx-hour">Hodina začiatku</label></span>
     <div class="wx-hour">
       <button type="button" id="wx-hour-prev" aria-label="O hodinu skôr">◀</button>
-      <select id="wx-hour">${hourOptions()}</select>
+      <select id="wx-hour">${hourOptions(snapshot)}</select>
       <button type="button" id="wx-hour-next" aria-label="O hodinu neskôr">▶</button>
+    </div>
+  </div>
+  <div class="wx-field">
+    <span class="wx-label"><label for="wx-duration">Dĺžka práce</label></span>
+    <div class="wx-hour">
+      <select id="wx-duration">${durationOptions(snapshot)}</select>
     </div>
   </div>
 </div>
@@ -290,10 +269,7 @@ export function renderWindowPage(snapshot: SnapshotLike): string {
 
 <main id="wx-charts">
   <div id="wx-tooltip" hidden></div>
-  ${chartCard("score", "Vhodnosť počasia pri začiatku náteru", {
-    value: true,
-    note: "Viac percent = viac scenárov vyhovuje pre 8 h práce a ďalších 24 h. Hodnotíme dážď a teplotu, nie suchosť dreva.",
-  })}
+  ${chartCard("score", "Vhodnosť počasia pri začiatku náteru", { value: true, dynamicNote: true })}
   ${chartCard("rain", "Dážď", { daily: true, note: "Stĺpec je úhrn za celých šesť hodín (mm / 6 h). Mierka je spoločná pre celé obdobie." })}
   ${chartCard("temp", "Teplota a hranica rosenia", {
     legend:
@@ -309,7 +285,8 @@ export function renderWindowPage(snapshot: SnapshotLike): string {
 <div class="wx-method">
   <button type="button" class="wx-method-toggle" id="wx-method-toggle" aria-expanded="false" aria-controls="wx-method">Ako sa počíta percento?</button>
   <div class="wx-method-panel" id="wx-method" hidden>
-    <p>Pre každú hodinu začiatku prejde každý scenár predpovede tým istým filtrom: teplota vzduchu aspoň 7 °C vo všetkých hodinách 8-hodinovej práce a menej než 0,2 mm zrážok za celý čas práce aj nasledujúcich 24 hodín. Percento je podiel scenárov, ktoré prejdú.</p>
+    <p>Natierať sa dá len v pracovnom čase, preto sa ponúkajú iba začiatky, pri ktorých sa zvolená dĺžka práce do neho zmestí. Pre každý taký začiatok prejde každý scenár predpovede tým istým filtrom: teplota vzduchu aspoň 7 °C vo všetkých hodinách práce a menej než 0,2 mm zrážok za celý čas práce aj nasledujúcich 24 hodín. Percento je podiel scenárov, ktoré prejdú.</p>
+    <p>Jedna vrstva je 8 hodín práce, ale nemusí byť naraz: pokojne 3 hodiny jeden deň a 5 hodín iný. Preto sa dĺžka práce vyberá – každá seansa si nesie vlastných 24 hodín sledovania, lebo to, čo ste práve natreli, ich potrebuje. Koľko hodín vám ešte chýba do ôsmich, si strážte sami; stránka to nepočíta.</p>
     <p>Je to priehľadný filter meteorologických scenárov, nie model schnutia dreva ani pravdepodobnosť úspešného náteru. Hranica 0,2 mm je pracovná tolerancia výpočtu, nie potvrdenie, že taký dážď náteru neuškodí. Teplota sa kontroluje počas nanášania – teplota, rosa a vlhkosť počas následného schnutia tým nie sú overené.</p>
     <p>Ak čo i len jednému scenáru chýba niektorá potrebná hodnota, percento sa nezobrazí a hodina je označená ako nedostatok dát. Chýbajúce údaje sa nikdy nepočítajú ako nula.</p>
     <p>Hodnotenie je čisto meteorologické: nočný začiatok s vysokým percentom nie je odporúčanie pracovať v noci.</p>

@@ -23,7 +23,7 @@ export function readSnapshot(path: string = SNAPSHOT_PATH): WindowSnapshot | nul
   if (!existsSync(path)) return null;
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as WindowSnapshot;
-    if (parsed?.version !== SNAPSHOT_VERSION || !parsed.series || !Array.isArray(parsed.scores)) {
+    if (parsed?.version !== SNAPSHOT_VERSION || !parsed.series || !Array.isArray(parsed.scores) || !parsed.scoresByDuration) {
       console.warn(`Snímka ${path} má neznámy formát – ignorujem.`);
       return null;
     }

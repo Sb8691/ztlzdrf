@@ -24,6 +24,9 @@ skutočne stiahnuť čerstvú predpoveď – priamo z prehliadača, lebo žiadny
 - `src/window-page.ts` – poskladá HTML: shell, štýly, snímka a vložený klientsky kód (`export` sa
   pri vkladaní odstráni, lebo vložený modul nemá komu exportovať).
 - `src/window-data.ts` – sťahovanie a snímka v `docs/data/window.json`.
+- `src/window-theme.ts` – **jediná paleta** pre stránku, e-mail aj obrázok. Tri média nevedia
+  zdieľať štýly (stránka má CSS premenné a sama prepína na tmavý motív, e-mail musí mať každú farbu
+  inline, PNG nemá CSS vôbec), takže farby žijú na jednom mieste, aby sa vzhľad nerozišiel.
 - `src/outlook.ts` – beh generátora (`npm run window`, v CI `node dist/outlook.js`). **Meno súboru
   je historické**: workflow volá `dist/outlook.js` a workflow sa neupravuje.
 
@@ -31,19 +34,34 @@ skutočne stiahnuť čerstvú predpoveď – priamo z prehliadača, lebo žiadny
 
 Päť grafov nad jednou časovou osou 1. 10. 00:00 – 6. 10. 00:00 (Europe/Vienna): vhodnosť počasia
 pri začiatku náteru (%), dážď (mm / 6 h), teplota a rosný bod (°C) s hranicou 7 °C, vietor (km/h) a
-sila slnka (W/m²). Modrý pás je 8 h práce, oranžový nasledujúcich 24 h sledovania; výber dňa a
-hodiny posúva pásy vo všetkých grafoch naraz, ale **nikdy nemení rozsah osí ani mierku zrážok** –
-päť dní musí ostať porovnateľných.
+sila slnka (W/m²). Modrý pás je zvolená dĺžka práce, oranžový nasledujúcich 24 h sledovania; výber
+dňa, hodiny a dĺžky posúva pásy vo všetkých grafoch naraz, ale **nikdy nemení rozsah osí ani mierku
+zrážok** – päť dní musí ostať porovnateľných.
+
+Snímka nesie skóre pre **každú povolenú dĺžku** seansy, nie surových členov ansámblu – preto sa dá
+prepnúť z 8 h na 3 h bez nového sťahovania, a stránka pritom ostáva malá.
+
+### Jedna vrstva nemusí byť naraz
+
+Vrstva je 8 hodín práce, ale pokojne 3 hodiny jeden deň a 5 hodín iný. Preto sa na stránke vyberá
+**dĺžka práce** (1–11 h) a každá takáto seansa sa hodnotí samostatne – nesie si vlastných 24 h
+sledovania, lebo to, čo bolo práve natreté, ich potrebuje. Koľko hodín ešte chýba do ôsmich, si
+stráži človek; aplikácia to nepočíta a nerobí plán za neho.
+
+Natiera sa len **8:00–19:00** (`workDayStartHour` / `workDayEndHour`), takže sa ponúkajú iba
+začiatky, pri ktorých sa zvolená dĺžka do pracovného času zmestí: pri 8 h sú to 8:00–11:00, pri 3 h
+8:00–16:00. Hodina mimo pracovného času nie je „zlé počasie" ani „nedostatok dát" – jednoducho nie
+je možnosťou a graf ju neukazuje.
 
 ### Percento vhodnosti
 
-Priehľadný filter meteorologických scenárov, **nie model schnutia dreva**. Pre každú hodinu
-začiatku prejde každý člen ansámblu tým istým testom (`PAINT_WINDOW` v `src/config.ts`):
+Priehľadný filter meteorologických scenárov, **nie model schnutia dreva**. Pre každý ponúkaný
+začiatok prejde každý člen ansámblu tým istým testom (`PAINT_WINDOW` v `src/config.ts`):
 
-- teplota vzduchu aspoň **7 °C** vo všetkých 9 hodinových bodoch 8-hodinovej práce (obe hranice
-  vrátane),
-- súčet zrážok **< 0,2 mm** za celé okno práce aj nasledujúcich 24 h, čo je 32 hodinových značiek
-  `začiatok+1 h … začiatok+32 h` (hodinové úhrny Open-Meteo sú za *predchádzajúcu* hodinu).
+- teplota vzduchu aspoň **7 °C** vo všetkých hodinových bodoch práce vrátane oboch hraníc (pri 8 h
+  je to 9 bodov, pri 3 h štyri),
+- súčet zrážok **< 0,2 mm** za celý čas práce aj nasledujúcich 24 h, čo je `dĺžka + 24` hodinových
+  značiek od `začiatok+1 h` (hodinové úhrny Open-Meteo sú za *predchádzajúcu* hodinu).
 
 `score = 100 × vyhovujúci / očakávaný počet členov`. Menovateľ je **očakávaná zostava produktu**
 (51 členov ECMWF IFS ENS: control + `member01…member50`), nie počet stĺpcov, ktoré náhodou prišli.
@@ -52,8 +70,8 @@ potichu zmenšený menovateľ. Hranica 0,2 mm je pracovná tolerancia algoritmu,
 dážď náteru neuškodí; teplota sa kontroluje len počas nanášania.
 
 Zmena na 48 h sledovania je zmena jedného čísla v `PAINT_WINDOW.postApplicationHours` – rozsah
-sťahovaných dní sa dopočíta sám (posledný začiatok 5. 10. o 23:00 potrebuje pri 8 + 24 h dáta do
-7. 10. 07:00).
+sťahovaných dní sa dopočíta sám (žiadna seansa nesmie skončiť po 19:00, takže pri 24 h sledovania
+musia dáta siahať do 6. 10. 19:00).
 
 ### Dáta
 

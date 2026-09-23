@@ -28,6 +28,8 @@ const state = {
   snapshot: null,
   /** Selected start, as an instant. Kept across refreshes. */
   startMs: null,
+  /** Length of one work session in hours - a coat need not happen in one go. */
+  durationHours: 8,
   cursorMs: null,
   cursorChart: null,
   width: 900,
@@ -132,8 +134,18 @@ function valueAt(field, ms) {
   return i === undefined ? null : state.snapshot.series[field][i];
 }
 
+/** Scores for the session length currently chosen; the snapshot carries one list per length. */
+function scoresList() {
+  return state.snapshot.scoresByDuration[state.durationHours] || [];
+}
+
 function scoreAt(ms) {
-  return state.snapshot.scores.find((s) => s.startMs === ms) || null;
+  return scoresList().find((s) => s.startMs === ms) || null;
+}
+
+/** True when a session of the chosen length starting at `ms` fits inside the working day. */
+function isWorkingStart(ms) {
+  return validStartHours(cfg(), state.durationHours).includes(localHourOf(ms, cfg().timezone));
 }
 
 function bucketAt(ms) {
@@ -245,7 +257,7 @@ function windowBands(height) {
   if (state.startMs === null) return "";
   const c = cfg();
   const bottom = height - GEO.marginBottom;
-  const workEnd = state.startMs + c.applicationHours * HOUR_MS;
+  const workEnd = state.startMs + state.durationHours * HOUR_MS;
   const monitorEnd = workEnd + c.postApplicationHours * HOUR_MS;
   const { fromMs, toMs } = domain();
   const band = (from, to, cls) => {
@@ -287,7 +299,9 @@ function renderScoreChart() {
   const bottom = height - GEO.marginBottom;
   const yOf = (pct) => bottom - (pct / 100) * GEO.scorePlotHeight;
   const { fromMs, toMs } = domain();
-  const points = state.snapshot.scores.filter((s) => s.startMs >= fromMs && s.startMs <= toMs).map((s) => ({ ms: s.startMs, value: s.score }));
+  const points = scoresList()
+    .filter((s) => s.startMs >= fromMs && s.startMs <= toMs)
+    .map((s) => ({ ms: s.startMs, value: s.score }));
   const decor = dayDecorations(height);
 
   let marker = "";
@@ -412,7 +426,7 @@ function renderScoreReadout() {
   const s = scoreAt(state.startMs);
   if (!s || s.score === null) {
     const why = s && s.reason === "members" ? "ansámbel neprišiel celý" : "predpoveď zatiaľ nesiaha tak ďaleko";
-    node.textContent = `Nedostatok dát (${why})`;
+    node.textContent = isWorkingStart(state.startMs) ? `Nedostatok dát (${why})` : "Mimo pracovného času";
     node.classList.add("wx-missing");
     return;
   }
@@ -422,14 +436,14 @@ function renderScoreReadout() {
 
 function renderPlanLine() {
   const c = cfg();
-  const workEnd = state.startMs + c.applicationHours * HOUR_MS;
+  const workEnd = state.startMs + state.durationHours * HOUR_MS;
   const monitorEnd = workEnd + c.postApplicationHours * HOUR_MS;
   const startDate = localDateOf(state.startMs, c.timezone);
   const endDate = localDateOf(workEnd, c.timezone);
   const monitorDate = localDateOf(monitorEnd, c.timezone);
   // Both dates are spelled out whenever the work or the watch period crosses midnight.
   document.getElementById("wx-plan").textContent =
-    `Natieranie: ${stamp(state.startMs, true)} – ${stamp(workEnd, endDate !== startDate)} · ` +
+    `Natieranie: ${stamp(state.startMs, true)} – ${stamp(workEnd, endDate !== startDate)} (${state.durationHours}${NB}h) · ` +
     `Počasie sledovať do: ${stamp(monitorEnd, monitorDate !== endDate)}`;
 }
 
@@ -486,7 +500,8 @@ function renderCursor() {
   const s = scoreAt(ms);
   // The percentage belongs to an hourly start, so the tooltip shows that hour's real value and
   // never interpolates one between two starts.
-  if (s) rows.push(["Vhodnosť pri štarte", s.score === null ? "Nedostatok dát" : `${s.score}${NB}% (${s.matching} z ${s.expected})`]);
+  const suitability = s === null ? (isWorkingStart(ms) ? "Nedostatok dát" : "mimo pracovného času") : s.score === null ? "Nedostatok dát" : `${s.score}${NB}% (${s.matching} z ${s.expected})`;
+  rows.push([`Vhodnosť pri štarte (${state.durationHours}${NB}h)`, suitability]);
   const bucket = bucketAt(ms);
   if (bucket) {
     const label = `${String(bucket.startHour).padStart(2, "0")}–${bucket.startHour === 18 ? "24" : String(bucket.startHour + 6).padStart(2, "0")}`;
@@ -527,9 +542,10 @@ function renderCursor() {
 // Interaction
 // ---------------------------------------------------------------------------
 
-/** The nearest hourly start that actually exists in the window. */
+/** The nearest start that is actually offered for the chosen session length. */
 function snapToStart(ms) {
-  const starts = state.snapshot.scores;
+  const starts = scoresList();
+  if (starts.length === 0) return ms;
   let best = starts[0].startMs;
   let bestDelta = Math.abs(ms - best);
   for (const s of starts) {
@@ -550,8 +566,17 @@ function setStart(ms) {
   renderPlanLine();
 }
 
-function moveStart(hours) {
-  setStart(state.startMs + hours * HOUR_MS);
+/** Steps through the offered starts rather than the clock, so leaving a working day lands on the
+ * next day's first legal start instead of going nowhere. */
+function moveStart(steps) {
+  const starts = scoresList().map((s) => s.startMs);
+  const here = starts.indexOf(state.startMs);
+  if (here === -1) {
+    setStart(state.startMs + steps * HOUR_MS);
+    return;
+  }
+  const next = Math.max(0, Math.min(starts.length - 1, here + steps));
+  setStart(starts[next]);
 }
 
 function syncControls() {
@@ -560,7 +585,33 @@ function syncControls() {
     const active = button.dataset.day === date;
     button.setAttribute("aria-pressed", active ? "true" : "false");
   }
-  document.getElementById("wx-hour").value = String(localHourOf(state.startMs, cfg().timezone));
+  // The hour list depends on the chosen length: an 8h session can only start 08:00-11:00, a 3h one
+  // up to 16:00. Offering an hour that cannot be worked would be offering a number nobody can use.
+  const hours = validStartHours(cfg(), state.durationHours);
+  const select = document.getElementById("wx-hour");
+  const wanted = String(localHourOf(state.startMs, cfg().timezone));
+  select.innerHTML = hours.map((h) => `<option value="${h}">${String(h).padStart(2, "0")}:00</option>`).join("");
+  select.value = wanted;
+  document.getElementById("wx-duration").value = String(state.durationHours);
+}
+
+function renderScoreNote() {
+  const c = cfg();
+  document.getElementById("wx-score-note").textContent =
+    `Viac percent = viac scenárov vyhovuje pre ${state.durationHours} h práce a ďalších ${c.postApplicationHours} h. ` +
+    `Natierať sa dá ${c.workDayStartHour}:00–${c.workDayEndHour}:00, preto sú v grafe len začiatky, pri ktorých sa práca do tohto času zmestí. ` +
+    `Hodnotíme dážď a teplotu, nie suchosť dreva.`;
+}
+
+/** Keeps the chosen length, moving the start to the nearest one that is still legal for it. */
+function setDuration(hours) {
+  state.durationHours = hours;
+  state.startMs = snapToStart(state.startMs);
+  syncControls();
+  renderCharts();
+  renderScoreReadout();
+  renderScoreNote();
+  renderPlanLine();
 }
 
 function bindEvents() {
@@ -572,6 +623,7 @@ function bindEvents() {
   document.getElementById("wx-hour").addEventListener("change", (e) => {
     setStart(localTimeMs(localDateOf(state.startMs, cfg().timezone), Number(e.target.value), cfg().timezone));
   });
+  document.getElementById("wx-duration").addEventListener("change", (e) => setDuration(Number(e.target.value)));
   document.getElementById("wx-hour-prev").addEventListener("click", () => moveStart(-1));
   document.getElementById("wx-hour-next").addEventListener("click", () => moveStart(1));
   document.getElementById("wx-refresh").addEventListener("click", () => refresh(true));
@@ -729,6 +781,7 @@ function renderAll() {
   syncControls();
   renderCharts();
   renderScoreReadout();
+  renderScoreNote();
   renderPlanLine();
   renderDailyRain();
 }
@@ -742,7 +795,8 @@ function boot() {
   reindex();
 
   const c = cfg();
-  state.startMs = localTimeMs(c.start, 9, c.timezone);
+  state.durationHours = c.applicationHours;
+  state.startMs = snapToStart(localTimeMs(c.start, 9, c.timezone));
 
   bindEvents();
   renderAll();

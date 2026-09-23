@@ -144,13 +144,28 @@ export function round3(x) {
 // ---------------------------------------------------------------------------
 
 /**
- * The local dates the request has to cover. The last candidate start is `end` 23:00, and it needs
- * applicationHours + postApplicationHours beyond that, so with 8 + 24 the data must reach 07:00 two
- * days after the window - all of it derived, so switching to 48h moves the boundary by itself.
+ * The local dates the request has to cover. No session may end later than workDayEndHour, and the
+ * watch period runs from there, so the data has to reach that hour plus postApplicationHours on the
+ * window's last day - all derived, so moving the working hours or the watch period moves this too.
  */
 export function requestDates(cfg) {
-  const reach = 23 + cfg.applicationHours + cfg.postApplicationHours;
+  const reach = cfg.workDayEndHour + cfg.postApplicationHours;
   return { startDate: cfg.start, endDate: addDays(cfg.end, Math.floor(reach / 24)) };
+}
+
+/** Session lengths that fit inside one working day, shortest first. */
+export function allowedDurations(cfg) {
+  const longest = cfg.workDayEndHour - cfg.workDayStartHour;
+  const out = [];
+  for (let h = 1; h <= longest; h++) out.push(h);
+  return out;
+}
+
+/** Start hours at which a session of `durationHours` still ends within the working day. */
+export function validStartHours(cfg, durationHours) {
+  const out = [];
+  for (let h = cfg.workDayStartHour; h + durationHours <= cfg.workDayEndHour; h++) out.push(h);
+  return out;
 }
 
 function baseParams(cfg) {
@@ -298,10 +313,9 @@ export function startTimes(cfg) {
   return starts;
 }
 
-/** The last instant any start needs data for - the horizon the sources have to reach. */
+/** The last instant any session needs data for - the horizon the sources have to reach. */
 export function lastNeededMs(cfg) {
-  const starts = startTimes(cfg);
-  return starts[starts.length - 1] + (cfg.applicationHours + cfg.postApplicationHours) * HOUR_MS;
+  return localTimeMs(cfg.end, cfg.workDayEndHour, cfg.timezone) + cfg.postApplicationHours * HOUR_MS;
 }
 
 function indexByTime(timesMs) {
@@ -311,21 +325,22 @@ function indexByTime(timesMs) {
 }
 
 /**
- * One member against one start: true (fits), false (does not), or null (cannot tell - a value the
+ * One member against one session: true (fits), false (does not), or null (cannot tell - a value the
  * rule needs is missing). Null must never be folded into either of the other two.
  *
- * Temperature is checked at the 9 hourly points from the start to the end of the 8h of work,
- * boundaries included. Precipitation is summed over the 32 hourly accumulations that cover the work
- * plus the 24h watch period, i.e. the stamps start+1h ... start+32h.
+ * Temperature is checked at every hourly point from the start to the end of the work, boundaries
+ * included (a 3h session is 4 points, an 8h one 9). Precipitation is summed over the accumulations
+ * covering the work plus the watch period that follows it, i.e. the stamps start+1h ...
+ * start+(duration+watch)h - 28 stamps for 3h of work, 32 for 8h.
  */
-export function judgeMember(member, startMs, cfg, idx) {
-  for (let k = 0; k <= cfg.applicationHours; k++) {
+export function judgeMember(member, startMs, cfg, idx, durationHours) {
+  for (let k = 0; k <= durationHours; k++) {
     const i = idx.get(startMs + k * HOUR_MS);
     const t = i === undefined ? null : member.temperature[i];
     if (t === null) return null;
     if (round3(t) < cfg.minimumAirTemperatureC) return false;
   }
-  const steps = cfg.applicationHours + cfg.postApplicationHours;
+  const steps = durationHours + cfg.postApplicationHours;
   let sum = 0;
   for (let k = 1; k <= steps; k++) {
     const i = idx.get(startMs + k * HOUR_MS);
@@ -337,27 +352,57 @@ export function judgeMember(member, startMs, cfg, idx) {
 }
 
 /**
+ * One candidate session: the instant it starts and how the ensemble judged it.
+ *
+ * `score` is null whenever no honest percentage exists, and `reason` says which kind of nothing it
+ * is: "hours" (outside the working day - not an option at all), "members" (the ensemble did not
+ * arrive whole) or "horizon" (the forecast does not reach far enough yet).
+ *
+ * @typedef {{ startMs: number, score: number | null, matching: number, expected: number, reason: string | null }} StartScore
+ */
+
+/**
  * Share of ensemble scenarios that fit, per hourly start.
  *
  * The denominator is the expected membership of the product, never "however many columns happened
  * to arrive": a response short of a member, or a member short of one of the values a start needs,
  * makes that start `score: null` ("Nedostatok dát"). Dropping the incomplete member instead would
  * quietly turn thin data into a better-looking percentage.
+ *
+ * @returns {StartScore[]}
  */
-export function scoreStarts(ens, cfg) {
+export function scoreStarts(ens, cfg, durationHours = cfg.applicationHours) {
   const idx = indexByTime(ens.timesMs);
   const expected = cfg.expectedEnsembleMembers;
   const membersMissing = ens.members.length !== expected;
+  const allowed = new Set(validStartHours(cfg, durationHours));
   return startTimes(cfg).map((startMs) => {
+    // Outside the working day is not "bad weather" and not "missing data" - it is simply not an
+    // option, and the page says so rather than showing a percentage nobody can act on.
+    if (!allowed.has(localHourOf(startMs, cfg.timezone))) return { startMs, score: null, matching: 0, expected, reason: "hours" };
     if (membersMissing) return { startMs, score: null, matching: 0, expected, reason: "members" };
     let matching = 0;
     for (const member of ens.members) {
-      const verdict = judgeMember(member, startMs, cfg, idx);
+      const verdict = judgeMember(member, startMs, cfg, idx, durationHours);
       if (verdict === null) return { startMs, score: null, matching: 0, expected, reason: "horizon" };
       if (verdict) matching++;
     }
     return { startMs, score: Math.round((100 * matching) / expected), matching, expected, reason: null };
   });
+}
+
+/** Scores for every session length the working day allows, keyed by hours - what the page needs to
+ * switch the length without re-fetching the ensemble members it never carries.
+ *
+ * @returns {Record<number, StartScore[]>}
+ */
+export function scoresByDuration(ens, cfg) {
+  /** @type {Record<number, StartScore[]>} */
+  const out = {};
+  for (const hours of allowedDurations(cfg)) {
+    out[hours] = scoreStarts(ens, cfg, hours).filter((s) => s.reason !== "hours");
+  }
+  return out;
 }
 
 /** The best scored start of each local day, for the e-mail digest. Days without a single computable
@@ -457,7 +502,10 @@ export function precipAxisMax(buckets) {
 // The snapshot embedded in the page (and re-made in the browser on refresh)
 // ---------------------------------------------------------------------------
 
-export const SNAPSHOT_VERSION = 1;
+/** Bumped whenever the snapshot's shape changes, so a stored one from an older shape is rejected
+ * instead of being read as if it still fitted. Version 2 added scoresByDuration (a session no
+ * longer has to be 8h in one go). */
+export const SNAPSHOT_VERSION = 2;
 
 /** Last instant for which a variable has a value, so the page can say honestly how far the data
  * actually reaches rather than implying the axis is full. */
@@ -486,7 +534,10 @@ export function buildSnapshot(forecastJson, ensembleJson, metaJson, cfg, fetched
   const series = parseForecast(forecastJson);
   const ens = parseEnsemble(ensembleJson);
   const buckets = sixHourBuckets(series, cfg);
-  const scores = scoreStarts(ens, cfg);
+  // Every allowed session length is scored here, because the page never carries the ensemble
+  // members themselves - switching from 8h to 3h has to work without another fetch. It stays small:
+  // longer sessions have fewer legal starts, so all eleven lengths together are a few hundred rows.
+  const byDuration = scoresByDuration(ens, cfg);
   const run = resolveRun(metaJson, lastNeededMs(cfg));
   return {
     version: SNAPSHOT_VERSION,
@@ -505,7 +556,10 @@ export function buildSnapshot(forecastJson, ensembleJson, metaJson, cfg, fetched
       wind: series.wind,
       radiation: series.radiation,
     },
-    scores,
+    scoresByDuration: byDuration,
+    /** The default session length's scores, so anything reading a snapshot without caring about the
+     * picker (the e-mail, the generator's log) needs no special case. */
+    scores: byDuration[cfg.applicationHours] ?? [],
     buckets,
     daily: dailyTotals(buckets),
     precipAxisMax: precipAxisMax(buckets),

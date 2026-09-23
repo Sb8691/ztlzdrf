@@ -24,9 +24,19 @@ export const PAINT_WINDOW = {
   /** Local calendar dates, inclusive. Displayed 1 Oct 00:00 -> 6 Oct 00:00 local. */
   start: "2026-10-01",
   end: "2026-10-05",
-  /** One coat = 8h of work; the 24h after it is a planning-only watch period, not a cure time. */
+  /**
+   * One coat is 8h of work, but it does not have to happen in one go - 3h one day and 5h another is
+   * fine, so the length of a single session is what the reader picks; this is only the default.
+   * Each session carries its own watch period: whatever was just coated needs those hours, so a
+   * shorter session is judged over a correspondingly shorter window.
+   */
   applicationHours: 8,
   postApplicationHours: 24,
+  /** Painting only happens between these local hours, so a session must fit inside them: the
+   * earliest start is workDayStartHour and the latest end is workDayEndHour. With 8h that leaves
+   * starts 08:00-11:00; with 3h it leaves 08:00-16:00. */
+  workDayStartHour: 8,
+  workDayEndHour: 19,
   minimumAirTemperatureC: 7,
   maximumWindowPrecipitationMm: 0.2,
   /** Explicitly chosen model (no "auto" seamless blend), for both the charts and the members. */

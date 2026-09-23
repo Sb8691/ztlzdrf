@@ -10,8 +10,10 @@ import { clientBundle, renderWindowPage } from "./window-page.js";
 import { renderWindowEmailBlock } from "./window-email.js";
 import { renderAlertEmail } from "./email.js";
 import { buildRainPanel, buildScorePanel, renderWindowPng } from "./window-image.js";
+import { LIGHT } from "./window-theme.js";
 import {
   HOUR_MS,
+  allowedDurations,
   bestStartPerDay,
   buildSnapshot,
   dailyTotals,
@@ -28,6 +30,7 @@ import {
   scoreStarts,
   sixHourBuckets,
   startTimes,
+  validStartHours,
 } from "./window-core.js";
 
 /*
@@ -44,10 +47,13 @@ function cfgFor(start: string, end: string, extra: Partial<Cfg> = {}): Cfg {
   return { ...WINDOW_CONFIG, start, end, ...extra };
 }
 
-/** Hourly stamps from the window's first local midnight to the last instant any start needs. */
+/**
+ * Hourly stamps from the window's first local midnight to the last instant any session needs, plus
+ * a few hours beyond - the tests need stamps just outside a window to prove they are not counted.
+ */
 function timeAxis(cfg: Cfg): number[] {
   const times: number[] = [];
-  for (let t = localMidnightMs(cfg.start, cfg.timezone); t <= lastNeededMs(cfg); t += HOUR_MS) times.push(t);
+  for (let t = localMidnightMs(cfg.start, cfg.timezone); t <= lastNeededMs(cfg) + 3 * HOUR_MS; t += HOUR_MS) times.push(t);
   return times;
 }
 
@@ -83,9 +89,36 @@ const ONE_DAY = cfgFor("2026-10-01", "2026-10-01");
 const NINE_AM = Date.UTC(2026, 9, 1, 7);
 
 test("požadované dátumy vychádzajú z konfigurácie, nie z pevného čísla", () => {
-  assert.deepEqual(requestDates(WINDOW_CONFIG), { startDate: "2026-10-01", endDate: "2026-10-07" });
-  // 5 Oct 23:00 + 8h + 48h reaches 8 Oct 07:00, so the request has to stretch one day further.
-  assert.deepEqual(requestDates({ ...WINDOW_CONFIG, postApplicationHours: 48 }), { startDate: "2026-10-01", endDate: "2026-10-08" });
+  // No session may end after 19:00, and the watch period runs from there: 19 + 24 h reaches 6 Oct.
+  assert.deepEqual(requestDates(WINDOW_CONFIG), { startDate: "2026-10-01", endDate: "2026-10-06" });
+  assert.deepEqual(requestDates({ ...WINDOW_CONFIG, postApplicationHours: 48 }), { startDate: "2026-10-01", endDate: "2026-10-07" });
+});
+
+test("pracovný čas 8:00-19:00 určuje, ktoré začiatky sa vôbec ponúkajú", () => {
+  assert.deepEqual(validStartHours(WINDOW_CONFIG, 8), [8, 9, 10, 11], "8 h práce sa musí skončiť do 19:00");
+  assert.deepEqual(validStartHours(WINDOW_CONFIG, 3), [8, 9, 10, 11, 12, 13, 14, 15, 16]);
+  assert.deepEqual(validStartHours(WINDOW_CONFIG, 11), [8], "najdlhšia seansa vyplní celý pracovný deň");
+  assert.deepEqual(validStartHours(WINDOW_CONFIG, 12), [], "dlhšie než pracovný deň sa nezmestí");
+  assert.deepEqual(allowedDurations(WINDOW_CONFIG), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+});
+
+test("jednu vrstvu možno rozdeliť: kratšia seansa sa hodnotí kratším oknom", () => {
+  const cfg = ONE_DAY;
+  const threeHourStart = localTimeMs("2026-10-01", 16, cfg.timezone); // 16:00-19:00, legal only for <= 3 h
+  assert.equal(scoreStarts(ensembleFixture(cfg), cfg, 8).find((s) => s.startMs === threeHourStart)?.reason, "hours");
+
+  // 3 h of work plus 24 h of watching is 27 precipitation stamps and 4 temperature checks.
+  const lastCounted = ensembleFixture(cfg);
+  put(lastCounted, 0, "precipitation", threeHourStart + 27 * HOUR_MS, 5);
+  assert.equal(scoreStarts(lastCounted, cfg, 3).find((s) => s.startMs === threeHourStart)?.matching, cfg.expectedEnsembleMembers - 1);
+
+  const justAfter = ensembleFixture(cfg);
+  put(justAfter, 0, "precipitation", threeHourStart + 28 * HOUR_MS, 5);
+  assert.equal(scoreStarts(justAfter, cfg, 3).find((s) => s.startMs === threeHourStart)?.score, 100);
+
+  const tempEnd = ensembleFixture(cfg);
+  put(tempEnd, 0, "temperature", threeHourStart + 3 * HOUR_MS, 6.9);
+  assert.equal(scoreStarts(tempEnd, cfg, 3).find((s) => s.startMs === threeHourStart)?.matching, cfg.expectedEnsembleMembers - 1);
 });
 
 test("okno má 120 hodinových začiatkov od 1.10. 00:00 do 5.10. 23:00 miestneho času", () => {
@@ -94,7 +127,7 @@ test("okno má 120 hodinových začiatkov od 1.10. 00:00 do 5.10. 23:00 miestneh
   assert.equal(starts[0], Date.UTC(2026, 8, 30, 22));
   assert.equal(localDateOf(starts[0], WINDOW_CONFIG.timezone), "2026-10-01");
   assert.equal(starts[starts.length - 1], Date.UTC(2026, 9, 5, 21));
-  assert.equal(lastNeededMs(WINDOW_CONFIG), Date.UTC(2026, 9, 7, 5)); // 7 Oct 07:00 local
+  assert.equal(lastNeededMs(WINDOW_CONFIG), Date.UTC(2026, 9, 6, 17)); // 6 Oct 19:00 local
 });
 
 test("teplota sa kontroluje v 9 bodoch vrátane oboch hraníc", () => {
@@ -157,21 +190,21 @@ test("hranica 0,2 mm: presne 0,2 nevyhovuje, 0,19 vyhovuje, plávajúci šum nep
 
 test("prechod cez polnoc počíta okno ďalej do ďalších dní", () => {
   const cfg = ONE_DAY;
-  const eightPm = Date.UTC(2026, 9, 1, 18); // 1 Oct 20:00 local -> monitor ends 3 Oct 04:00 local
-  const monitorEnd = eightPm + 32 * HOUR_MS;
-  assert.equal(localDateOf(monitorEnd, cfg.timezone), "2026-10-03");
+  const lastStart = localTimeMs("2026-10-01", 11, cfg.timezone); // 11:00-19:00, watch to 2 Oct 19:00
+  const monitorEnd = lastStart + 32 * HOUR_MS;
+  assert.equal(localDateOf(monitorEnd, cfg.timezone), "2026-10-02");
 
   const inside = ensembleFixture(cfg);
   put(inside, 0, "precipitation", monitorEnd, 5);
-  assert.equal(scoreAt(inside, cfg, eightPm).matching, cfg.expectedEnsembleMembers - 1);
+  assert.equal(scoreAt(inside, cfg, lastStart).matching, cfg.expectedEnsembleMembers - 1);
 
   const outside = ensembleFixture(cfg);
   put(outside, 0, "precipitation", monitorEnd + HOUR_MS, 5);
-  assert.equal(scoreAt(outside, cfg, eightPm).score, 100);
+  assert.equal(scoreAt(outside, cfg, lastStart).score, 100);
 });
 
 test("chýbajúca hodnota robí skóre neúplným, nie lepším ani horším", () => {
-  const cfg = ONE_DAY;
+  const cfg = cfgFor("2026-10-01", "2026-10-02");
 
   const noTemp = ensembleFixture(cfg);
   put(noTemp, 3, "temperature", NINE_AM + 2 * HOUR_MS, null);
@@ -183,15 +216,16 @@ test("chýbajúca hodnota robí skóre neúplným, nie lepším ani horším", (
   put(noRain, 7, "precipitation", NINE_AM + 20 * HOUR_MS, null);
   assert.equal(scoreAt(noRain, cfg, NINE_AM).score, null);
 
-  // The neighbouring start, whose window does not touch the gap, stays computable.
-  const untouched = scoreStarts(noTemp, cfg).find((s) => s.startMs === NINE_AM + 3 * HOUR_MS);
+  // A start on the next day, whose window never touches the gap, stays computable.
+  const untouched = scoreStarts(noTemp, cfg).find((s) => s.startMs === localTimeMs("2026-10-02", 8, cfg.timezone));
   assert.equal(untouched?.score, 100);
 });
 
 test("neúplný ansámbel sa nevydáva za celok", () => {
   const cfg = ONE_DAY;
   const short = ensembleFixture(cfg, { members: cfg.expectedEnsembleMembers - 1 });
-  const scores = scoreStarts(short, cfg);
+  const scores = scoreStarts(short, cfg).filter((s) => s.reason !== "hours");
+  assert.ok(scores.length > 0);
   assert.ok(scores.every((s) => s.score === null && s.reason === "members"), "50 z 51 členov nie je celý ansámbel");
   assert.equal(scores[0].expected, cfg.expectedEnsembleMembers);
 });
@@ -207,17 +241,19 @@ test("skóre je podiel vyhovujúcich členov z očakávaného počtu", () => {
   assert.equal(s.score, 61);
 });
 
-test("večerný začiatok 5.10. pri useknutom ansámbli hlási nedostatok dát", () => {
-  // Exactly what the live API served on 2026-09-23: member precipitation ends 7 Oct 02:00 local.
+test("posledný deň okna hlási nedostatok dát, keď ansámbel nesiaha dosť ďaleko", () => {
+  // The live API really does cut member precipitation short of the horizon (seen 2026-09-23), and
+  // the last day's sessions are the first to feel it.
   const cfg = WINDOW_CONFIG;
-  const ens = ensembleFixture(cfg, { truncateAtMs: localTimeMs("2026-10-07", 2, cfg.timezone) });
+  const ens = ensembleFixture(cfg, { truncateAtMs: localTimeMs("2026-10-06", 16, cfg.timezone) });
   const scores = scoreStarts(ens, cfg);
   const at = (date: string, hour: number) => scores.find((s) => s.startMs === localTimeMs(date, hour, cfg.timezone));
 
-  assert.equal(at("2026-10-05", 18)?.score, 100, "štart 18:00 potrebuje dáta práve do 7.10. 02:00");
-  assert.equal(at("2026-10-05", 19)?.score, null, "štart 19:00 už siaha za horizont");
-  assert.equal(at("2026-10-05", 23)?.score, null);
+  assert.equal(at("2026-10-05", 8)?.score, 100, "štart 8:00 potrebuje dáta práve do 6.10. 16:00");
+  assert.equal(at("2026-10-05", 9)?.reason, "horizon", "o hodinu neskôr už predpoveď nesiaha");
+  assert.equal(at("2026-10-05", 11)?.score, null);
   assert.equal(at("2026-10-01", 9)?.score, 100);
+  assert.equal(at("2026-10-01", 20)?.reason, "hours", "mimo pracovného času nie je nedostatok dát");
 });
 
 test("šesťhodinové intervaly zaraďujú úhrny podľa koncovej značky", () => {
@@ -375,8 +411,14 @@ test("snímka sa poskladá z odpovedí a jej časti si neodporujú", () => {
   const { forecastJson, ensembleJson } = jsonFixtures(cfg);
 
   const snapshot = buildSnapshot(forecastJson, ensembleJson, null, cfg, 1_758_000_000_000);
-  assert.equal(snapshot.scores.length, 48);
+  assert.equal(snapshot.scores.length, 8, "dva dni po štyroch legálnych začiatkoch pre 8 h");
   assert.ok(snapshot.scores.every((s: { score: number | null }) => s.score === 100));
+  assert.deepEqual(Object.keys(snapshot.scoresByDuration).map(Number), allowedDurations(cfg));
+  assert.equal(snapshot.scoresByDuration[3].length, 18, "3 h sa dá začať deväťkrát za deň");
+  assert.ok(
+    Object.values(snapshot.scoresByDuration).every((list) => (list as { reason: string | null }[]).every((s) => s.reason !== "hours")),
+    "v snímke sú len ponúkané začiatky"
+  );
   assert.equal(snapshot.ensemble.discovered, 51);
   assert.equal(snapshot.buckets.length, 8);
   assert.equal(snapshot.precipAxisMax, 1);
@@ -486,7 +528,8 @@ test("blok v e-maile hovorí tou istou rečou ako stránka a rešpektuje pravidl
   for (const day of ["1.10.", "2.10.", "3.10.", "4.10.", "5.10."]) assert.ok(html.includes(day), `chýba deň ${day}`);
   assert.match(html, /100 %/);
   assert.match(html, /z 51/);
-  assert.match(html, /Celý prehľad na stránke/);
+  assert.match(html, /Najlepší začiatok/);
+  assert.match(html, /Dážď za deň/);
 
   // Mail clients strip these, and the old block linked to pages that no longer exist.
   for (const banned of ["<details", "<style", "nowrap", "outlook.html", "outlook.png"]) {
@@ -518,9 +561,20 @@ test("e-mail je celý o okne, nie o dnešku", () => {
 
   assert.match(subject, /Terasa št 1\.10\. – po 5\.10\./);
   assert.match(subject, /najlepší štart/);
-  assert.match(html, /Okno na natieranie terasy/);
   assert.match(html, /chart\.png\?t=\d+/, "obrázok musí byť hosťovaný a cache-busted");
   assert.match(html, /Pred natieraním zmerajte vlhkosť a teplotu dreva/);
+
+  // The e-mail must read as the page, not as a second design: same heading, subtitle, source line
+  // and palette, all from the shared theme.
+  const page = renderWindowPage(snapshot);
+  for (const shared of ["Počasie na natieranie terasy", "Zedlitzdorf · 1.–5. október 2026"]) {
+    assert.ok(html.includes(shared), `e-mail nehovorí ako stránka: "${shared}"`);
+    assert.ok(page.includes(shared), `stránka nehovorí ako e-mail: "${shared}"`);
+  }
+  assert.match(html, /Zdroj: ECMWF IFS 0,25° cez Open-Meteo/);
+  for (const token of [LIGHT.page, LIGHT.surface, LIGHT.text, LIGHT.muted, LIGHT.hairline, LIGHT.score]) {
+    assert.ok(html.includes(token), `e-mail nepoužíva farbu stránky ${token}`);
+  }
 
   // Nothing from the retired daily decision may survive here.
   for (const gone of ["NEMAĽOVAŤ", "DOBRÉ NA MAĽOVANIE", "Vysychanie", "Posledných 24 h", "Stav terasy", "Najlepšie okno"]) {
