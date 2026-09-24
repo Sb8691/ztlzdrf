@@ -2,38 +2,32 @@ name: Terrace Painting Watchdog
 
 on:
   schedule:
-    # The daily e-mail. Nominally 02:13 Europe/Vienna, split into two cron entries since a single
-    # UTC time can't track the CEST/CET switch: 00:13 UTC during CEST (Apr-Oct), 01:13 UTC during
-    # CET (Nov-Mar). Off by an hour in the DST switchover week, which is fine here.
+    # Every entry below is only a wake-up. Each run refreshes the page, and the daily e-mail goes out
+    # from the FIRST scheduled run of the Europe/Vienna day, from 02:00 local on, that finds no record
+    # of today's e-mail (the "gate" step, rule in src/email-gate.ts). So no single cron entry is the
+    # e-mail any more, and a delayed or dropped run costs nothing as long as a later one comes.
     #
-    # 02:13 is NOT when the e-mail arrives - it is a deliberate ~5 h head start on GitHub's queue.
-    # Scheduled workflows are queued on a shared pool and public repos have the lowest priority; 26
-    # scheduled runs measured 27 Aug - 22 Sep 2026 started a median of 5.4 h late (min 4.1, max
-    # 12.2), so a 09:13 local cron actually delivered around 14:36 local - long after the 08:00-10:00
-    # starts the e-mail is meant to inform. Subtracting the median puts the median delivery near
-    # 07:40 local, i.e. before the working day.
+    # Why that matters, measured 28 Aug - 22 Sep 2026: the old 07:13 UTC e-mail slot ran 26 times out
+    # of 26, created a median 5.3 h late (min 4.1, p90 6.9, max 12.2). The 27 Aug slot produced no run
+    # at all - GitHub's docs say that under high load "some queued jobs may be dropped". On 23 Sep the
+    # e-mail slot was moved from 07:13 to 00:13 UTC after that day's 00:13 had already passed, so the
+    # day had no e-mail slot at all. Changing a cron string does not bring back a slot that is gone.
     #
-    # The trade-off is honest: this compensates for a queue delay by depending on it. If GitHub's
-    # backlog ever clears, the e-mail arrives at 02:13 local instead. Re-measure before assuming
-    # these numbers still hold - and if you change a cron string, change EMAIL_RUN below with it.
-    #
-    # Deliberately NOT running at the top of the hour (:00): GitHub's own docs warn that scheduled
-    # workflows are queued and can be delayed or silently dropped under load, "especially at the
-    # start of the hour" - the busiest moment across all of GitHub Actions. :13 avoids that peak.
+    # 11:13 and 23:13 UTC catch the ECMWF 00z and 12z ensemble runs (~9-10 h after initialisation on
+    # Open-Meteo); 00:13 UTC is 02:13 CEST (01:13 UTC = 02:13 CET in Nov-Mar). Which one sends is
+    # simply whichever lands first after 02:00 local: with hours of queue delay that is usually the
+    # late 23:13 run in the early morning, else the 00:13 one, else 11:13 in the evening. None of
+    # them runs at :00, the busiest moment ("High load times include the start of every hour").
     - cron: "13 0 * 4-10 *"
     - cron: "13 1 * 11,12,1,2,3 *"
-    # Outlook-only snapshots (no e-mail). UTC-fixed on purpose: the ECMWF ensemble cycles that reach
-    # 15 days are 00z and 12z, and Open-Meteo has them roughly 9-10 h after initialisation (~09:30
-    # and ~21:30 UTC), so these two runs capture each cycle once. The outlook script is idempotent -
-    # if nothing new has landed yet, it changes nothing and no commit is made.
     - cron: "13 11 * * *"
     - cron: "13 23 * * *"
   workflow_dispatch:
     inputs:
       send_email:
-        description: "Send the daily e-mail (off = only refresh the dashboard and the outlook)"
+        description: "Send the e-mail now - it then counts as today's e-mail (off = only refresh the page)"
         type: boolean
-        default: true
+        default: false
       force_render:
         description: "Re-render the outlook page and image even if no new model run landed (use after changing how they look)"
         type: boolean
@@ -45,16 +39,13 @@ permissions:
 # Serializes runs so two overlapping triggers (e.g. a manual dispatch landing seconds apart from
 # another) never race on the git push in the steps below - queued runs wait their turn instead of
 # one of them failing outright and (previously) skipping the e-mail entirely as a result.
+#
+# queue: max - by default a newly queued run cancels one that is already pending, and that one might
+# have been the run meant to send the day's e-mail. With `max` up to 100 runs wait their turn.
 concurrency:
   group: watchdog
   cancel-in-progress: false
-
-env:
-  # The e-mail goes out only from the two e-mail schedules or an explicit manual request; the
-  # outlook-only schedules just refresh the published pages. These strings must match the cron
-  # entries above character for character - a mismatch silently stops the e-mail rather than
-  # failing the run.
-  EMAIL_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.send_email == true) || github.event.schedule == '13 0 * 4-10 *' || github.event.schedule == '13 1 * 11,12,1,2,3 *' }}
+  queue: max
 
 jobs:
   check-weather:
@@ -69,6 +60,27 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+
+      # Does this run send the day's e-mail? The rule is in src/email-gate.ts; this step only fetches
+      # the record of the last e-mail (docs/data/email-sent.json) from main as it is NOW - not from
+      # the checkout, which for a run that waited in the queue can predate the run that just sent -
+      # and through the API rather than git, so the shallow clone the push loops below rebase in
+      # stays exactly as it was.
+      #
+      # Fails open on purpose: a missing record (404), an API hiccup or a crash all end in send=true.
+      # The steps below test `!= 'false'`, so even an output that was never written means "send".
+      # The worst this step can cause is a second e-mail, never a missing one.
+      - name: Decide whether this run sends the daily e-mail
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANUAL_SEND: ${{ inputs.send_email == true }}
+        run: |
+          marker="$RUNNER_TEMP/email-sent.json"
+          if ! gh api -H "Accept: application/vnd.github.raw+json" "repos/${{ github.repository }}/contents/docs/data/email-sent.json?ref=main" > "$marker" 2>/dev/null; then
+            rm -f "$marker"
+          fi
+          node dist/should-send-email.js "$marker" || echo "send=true" >> "$GITHUB_OUTPUT"
 
       # Medium-range outlook for the configured painting window (src/outlook.ts): appends this
       # model run's summary to docs/outlook/history.json (skipped when already captured) and
@@ -127,7 +139,7 @@ jobs:
           fi
 
       - name: Wait for GitHub Pages to actually serve the new images
-        if: steps.publish.outputs.published == 'true' && env.EMAIL_RUN == 'true'
+        if: steps.publish.outputs.published == 'true' && steps.gate.outputs.send != 'false'
         run: |
           for file in chart.png outlook.png; do
             [ -f "docs/$file" ] || continue
@@ -148,19 +160,25 @@ jobs:
             fi
           done
 
+      # After Resend accepts the e-mail, src/index.ts writes docs/data/email-sent.json for the day the
+      # gate decided on; the next step commits it. If sending fails, the job stops here, nothing is
+      # recorded, and the next scheduled run tries again.
       - name: Send e-mail
-        if: env.EMAIL_RUN == 'true'
+        if: steps.gate.outputs.send != 'false'
         run: node dist/index.js
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
           ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          RECORD_EMAIL: "true"
+          EMAIL_FOR_DATE: ${{ steps.gate.outputs.date }}
 
       # Same non-fatal retry as the publish step above - by this point the e-mail has already been
       # sent, so a push failure here must only ever cost a slightly stale published dashboard until
-      # the next run, never fail the whole job.
+      # the next run, never fail the whole job. It also carries the e-mail record; if all five pushes
+      # fail, the record is lost and the next run sends a second e-mail - never none.
       - name: Commit any dashboard drift from the final run
-        if: env.EMAIL_RUN == 'true'
+        if: steps.gate.outputs.send != 'false'
         run: |
           git add -A docs
           if ! git diff --cached --quiet; then

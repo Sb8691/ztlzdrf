@@ -28,7 +28,7 @@ skutočne stiahnuť čerstvú predpoveď – priamo z prehliadača, lebo žiadny
   zdieľať štýly (stránka má CSS premenné a sama prepína na tmavý motív, e-mail musí mať každú farbu
   inline, PNG nemá CSS vôbec), takže farby žijú na jednom mieste, aby sa vzhľad nerozišiel.
 - `src/outlook.ts` – beh generátora (`npm run window`, v CI `node dist/outlook.js`). **Meno súboru
-  je historické**: workflow volá `dist/outlook.js` a workflow sa neupravuje.
+  je historické**: workflow volá `dist/outlook.js` a premenovanie by ho rozbilo.
 
 ### Čo stránka ukazuje
 
@@ -107,6 +107,13 @@ nový beh modelu.
   servovať.
 - `src/email.ts` – rám e-mailu a predmet s najlepším štartom, aby sa okno dalo posúdiť rovno zo
   zoznamu správ.
+- `src/email-gate.ts` – **ktorý beh pošle dnešný e-mail.** Každý plánovaný beh smie; pošle ho prvý
+  beh viedenského dňa od 02:00, ktorý nenájde záznam `docs/data/email-sent.json` s dnešným
+  dátumom. Záznam sa zapíše až po úspešnom odoslaní a obsahuje len dátum, čas, druh spustenia a
+  číslo behu (je verejný). E-mail poslaný medzi polnocou a 02:00 sa počíta k predošlému dňu, takže
+  neskorý ručný test nezruší ranný e-mail. Každá pochybnosť – chýbajúci či poškodený záznam, chyba API – vedie k odoslaniu:
+  najhoršie, čo sa môže stať, je druhý e-mail, nikdy žiadny. `src/should-send-email.ts` je len
+  jeho obal pre krok `gate` vo workflowe.
 
 ## Odložená vrstva
 
@@ -154,9 +161,16 @@ V nastaveniach repozitára (Settings → Secrets and variables → Actions) treb
 - `ALERT_EMAIL_TO` – e-mail, na ktorý má prísť alert
 - `ALERT_EMAIL_FROM` – odosielajúca adresa overená v Resend
 
-Workflow `.github/workflows/watchdog.yml` beží denne o 9:00 (Europe/Vienna) s e-mailom a ešte o
-11:13 a 23:13 UTC bez e-mailu, aby zachytil 00z a 12z beh ECMWF. Dá sa spustiť aj ručne cez
-*Actions → Terrace Painting Watchdog → Run workflow*.
+Workflow `.github/workflows/watchdog.yml` sa budí trikrát denne: o 00:13 UTC (02:13 letného času;
+v zime 01:13 UTC), o 11:13 a o 23:13 UTC – posledné dva zachytia 00z a 12z beh ECMWF. Každý beh
+obnoví stránku; **e-mail pošle prvý plánovaný beh dňa od 02:00 viedenského času**, ktorý ešte
+nenájde záznam o dnešnom e-maile (`src/email-gate.ts`). GitHub spúšťa plánované behy s meškaním
+(merané 28. 8. – 22. 9. 2026: medián 5,3 h, najviac 12,2 h) a občas niektorý vynechá, preto e-mail
+v praxi chodí zhruba medzi 04:30 a 09:00 a vynechaný beh nahradí ďalší.
+
+Ručne sa dá spustiť cez *Actions → Terrace Painting Watchdog → Run workflow*. Voľba „Send the
+e-mail now“ je predvolene vypnutá; keď ju zaškrtneš, e-mail odíde hneď a **počíta sa ako dnešný**,
+takže plánované behy v ten deň už ďalší nepošlú.
 
 ## Poznámka na záver
 

@@ -9,9 +9,9 @@ import { DOCS_DIR, writeIfChanged } from "./outlook-store.js";
 /**
  * The generator behind the site's main page (npm run window / node dist/outlook.js).
  *
- * The file keeps its old name because the CI workflow invokes `dist/outlook.js` by path, and the
- * workflow is out of scope here - it already runs this on all four schedules, including the 11:13
- * and 23:13 UTC ones timed to ECMWF's 00z/12z cycles, which is exactly when fresh numbers land.
+ * The file keeps its old name because the CI workflow invokes `dist/outlook.js` by path. The
+ * workflow runs this on every schedule, including the 11:13 and 23:13 UTC ones timed to ECMWF's
+ * 00z/12z cycles, which is exactly when fresh numbers land.
  *
  * It fetches Open-Meteo, stores the snapshot and writes docs/index.html. A failed fetch is not fatal
  * while an earlier snapshot exists: the page is then republished unchanged, still stamped with the

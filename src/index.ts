@@ -6,6 +6,7 @@ import { addDays, bestStartPerDay, localMidnightMs, localTimeLabel } from "./win
 import { readSnapshot } from "./window-data.js";
 import { renderWindowPng } from "./window-image.js";
 import { renderAlertEmail, sendAlert } from "./email.js";
+import { recordEmailSent } from "./email-gate.js";
 import { DOCS_DIR } from "./outlook-store.js";
 
 /**
@@ -73,6 +74,19 @@ async function main(): Promise<void> {
   }
   await sendAlert(snapshot, now, { apiKey, to, from });
   console.log("E-mail odoslaný.");
+
+  // Only CI records a send (src/email-gate.ts): the record is what lets later runs of the same day
+  // stand down, so a local test e-mail must never write it.
+  if (process.env.RECORD_EMAIL === "true") {
+    const marker = recordEmailSent({
+      date: process.env.EMAIL_FOR_DATE,
+      nowMs: now.getTime(),
+      timeZone: cfg.timezone,
+      trigger: process.env.GITHUB_EVENT_NAME ?? "local",
+      runId: process.env.GITHUB_RUN_ID ?? null,
+    });
+    console.log(`Zaznamenané: e-mail za ${marker.date} odišiel.`);
+  }
 }
 
 main().catch((err) => {
