@@ -20,7 +20,9 @@ const GEO = {
   marginBottom: 24,
   plotHeight: 112,
   scorePlotHeight: 132,
-  minWidth: 300,
+  // Below the narrowest phone column (320 px screen minus the page gutters), so a phone never gets
+  // a chart drawn wider than its container and then shrunk.
+  minWidth: 240,
   maxWidth: 1000,
 };
 
@@ -32,6 +34,8 @@ const state = {
   durationHours: 8,
   cursorMs: null,
   cursorChart: null,
+  /** "mouse" follows the pointer; "touch" is pinned where the finger was and stays after it lifts. */
+  cursorInput: "mouse",
   width: 900,
   pending: false,
   /** Only the newest request may write to the state - a slow earlier one must not overwrite it. */
@@ -528,9 +532,13 @@ function renderCursor() {
   // covers the values it is describing.
   const wrap = document.getElementById("wx-charts");
   const x = xOf(ms);
+  const host = state.cursorChart ? document.getElementById(`wx-chart-${state.cursorChart}`) : null;
+  if (state.cursorInput !== "mouse") {
+    placeTouchTooltip(tip, wrap, host, x);
+    return;
+  }
   const width = tip.offsetWidth || 190;
   tip.style.left = `${Math.max(8, Math.min(wrap.clientWidth - width - 8, x - width / 2))}px`;
-  const host = state.cursorChart ? document.getElementById(`wx-chart-${state.cursorChart}`) : null;
   if (host) {
     const below = host.offsetTop + host.offsetHeight + 6;
     const above = host.offsetTop - tip.offsetHeight - 6;
@@ -538,9 +546,104 @@ function renderCursor() {
   }
 }
 
+/**
+ * After a touch the tooltip stays where it is, so it has to be readable in full: inside the screen,
+ * next to the chart that was touched. Below the chart when it fits, otherwise above - except for
+ * the score chart, whose "above" is the readout and the controls just used, so there it is pushed
+ * up from the bottom edge of the screen instead.
+ */
+function placeTouchTooltip(tip, wrap, host, x) {
+  const margin = 8;
+  // Measured at the left edge first, so the width is not the squeezed one from the last position.
+  tip.style.left = "0px";
+  const width = tip.offsetWidth;
+  const height = tip.offsetHeight;
+  const svg = host ? host.querySelector("svg") : null;
+  const drawn = svg ? svg.getBoundingClientRect().width : 0;
+  const scale = drawn > 0 ? drawn / state.width : 1;
+  tip.style.left = `${Math.max(margin, Math.min(wrap.clientWidth - width - margin, x * scale - width / 2))}px`;
+  if (!host) return;
+  const chart = host.getBoundingClientRect();
+  const screen = window.innerHeight;
+  const below = chart.bottom + 6;
+  const above = chart.top - height - 6;
+  let top;
+  if (below + height <= screen - margin) top = below;
+  else if (state.cursorChart !== "score" && above >= margin) top = above;
+  else top = Math.max(margin, Math.min(below, screen - height - margin));
+  tip.style.top = `${top - wrap.getBoundingClientRect().top}px`;
+}
+
+function clearCursor() {
+  if (state.cursorMs === null) return;
+  state.cursorMs = null;
+  state.cursorChart = null;
+  renderCursor();
+}
+
 // ---------------------------------------------------------------------------
 // Interaction
 // ---------------------------------------------------------------------------
+
+/** A finger that moved this far sideways (and more sideways than up or down) is reading the chart. */
+const SCRUB_START_PX = 8;
+/** A finger that moved less than this between down and up tapped. */
+const TAP_SLOP_PX = 10;
+/** A touch this soon after the page last scrolled is stopping a flick, not tapping. */
+const SCROLL_SETTLE_MS = 150;
+
+let lastScrollAt = -Infinity;
+
+/**
+ * What one pointer event on a chart means - pure, so the rules are tested without a browser.
+ *
+ * `press` is the touch in progress (or null) and `e` is { type, pointerType, id, x, y, chart,
+ * buttons, scrolling }, where `scrolling` says the page was still scrolling when it arrived.
+ * Returns the next `press`, what happens to the cursor ("move" to this event, "clear", or "keep"),
+ * whether the start is selected, and whether the cursor follows like a mouse's or stays pinned.
+ *
+ * The mouse behaves as it always has, and so does a pen hovering without touching. A finger is
+ * different: the browser only decides after pointerdown whether a touch is a scroll, so nothing may
+ * happen on the way down - a scroll that merely begins on the score chart must never change the
+ * selection. A touch becomes a sideways scrub (the cursor follows) or a tap (the cursor is pinned
+ * there, and on the score chart the start is selected) only once proven. Only a tap selects:
+ * scrubbing to read the values never does, and neither does a touch that only stops a flick.
+ * Touch always sends pointerleave right after pointerup, so that is ignored and the tooltip stays
+ * readable after the finger lifts. A scroll or a pinch (pointercancel) clears it.
+ */
+function chartGesture(press, e) {
+  const keep = { press, cursor: "keep", select: false, input: "touch" };
+  const hover = e.pointerType === "pen" && press === null && !e.buttons && (e.type === "pointermove" || e.type === "pointerleave");
+  if (e.pointerType === "mouse" || hover) {
+    const input = "mouse";
+    if (e.type === "pointermove") return { press: null, cursor: "move", select: false, input };
+    if (e.type === "pointerleave") return { press: null, cursor: "clear", select: false, input };
+    if (e.type === "pointerdown") return { press: null, cursor: "move", select: e.chart === "score", input };
+    return { press: null, cursor: "keep", select: false, input };
+  }
+  const mine = press !== null && press.id === e.id;
+  switch (e.type) {
+    case "pointerdown":
+      return { press: { id: e.id, chart: e.chart, x0: e.x, y0: e.y, scrub: false, stop: Boolean(e.scrolling) }, cursor: "keep", select: false, input: "touch" };
+    case "pointermove": {
+      if (!mine) return keep;
+      const dx = Math.abs(e.x - press.x0);
+      const dy = Math.abs(e.y - press.y0);
+      const scrub = press.scrub || (dx >= SCRUB_START_PX && dx > dy);
+      return { press: scrub === press.scrub ? press : { ...press, scrub }, cursor: scrub ? "move" : "keep", select: false, input: "touch" };
+    }
+    case "pointerup": {
+      if (!mine) return keep;
+      if (press.scrub || press.stop) return { press: null, cursor: "keep", select: false, input: "touch" };
+      const tap = Math.hypot(e.x - press.x0, e.y - press.y0) < TAP_SLOP_PX;
+      return { press: null, cursor: tap ? "move" : "keep", select: tap && press.chart === "score", input: "touch" };
+    }
+    case "pointercancel":
+      return mine ? { press: null, cursor: "clear", select: false, input: "touch" } : keep;
+    default:
+      return keep;
+  }
+}
 
 /** The nearest start that is actually offered for the chosen session length. */
 function snapToStart(ms) {
@@ -636,12 +739,29 @@ function bindEvents() {
     info.setAttribute("aria-expanded", open ? "false" : "true");
   });
 
+  // A tooltip pinned by a finger closes on the next press anywhere but the charts - a finger, or a
+  // mouse click on a touch laptop (a press on the charts moves it, or clears it if it is a scroll).
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target instanceof Element && event.target.closest("[data-capture]")) return;
+    clearCursor();
+  });
+  window.addEventListener(
+    "scroll",
+    () => {
+      lastScrollAt = Date.now();
+    },
+    { passive: true },
+  );
+
   window.addEventListener("resize", onResize);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refreshIfStale();
   });
   setInterval(refreshIfStale, 5 * 60 * 1000);
 }
+
+/** The touch in progress on a chart. Kept out here, because every render rebuilds the SVGs. */
+let press = null;
 
 /** Pointer handling is attached after every render, because the SVGs are rebuilt wholesale. */
 function bindChartPointers() {
@@ -650,25 +770,35 @@ function bindChartPointers() {
     const svg = capture.closest("svg");
     const locate = (event) => {
       const rect = svg.getBoundingClientRect();
-      // The SVG is rendered at its real pixel width, so client pixels map straight onto the axis.
-      return nearestHour(msAtX(event.clientX - rect.left));
+      // The SVG is drawn at its real pixel width, so client pixels map onto the axis one to one -
+      // unless the container is narrower than GEO.minWidth and the drawing is shrunk to fit.
+      const scale = rect.width > 0 ? state.width / rect.width : 1;
+      return nearestHour(msAtX((event.clientX - rect.left) * scale));
     };
-    capture.addEventListener("pointermove", (event) => {
+    const handle = (event) => {
+      const chart = svg.dataset.chart;
+      const step = chartGesture(press, {
+        type: event.type,
+        pointerType: event.pointerType,
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        chart,
+        buttons: event.buttons,
+        scrolling: Date.now() - lastScrollAt < SCROLL_SETTLE_MS,
+      });
+      press = step.press;
+      if (step.cursor === "clear") clearCursor();
+      if (step.cursor !== "move") return;
       state.cursorMs = locate(event);
-      state.cursorChart = svg.dataset.chart;
+      state.cursorChart = chart;
+      state.cursorInput = step.input;
+      if (step.select) setStart(state.cursorMs);
       renderCursor();
-    });
-    capture.addEventListener("pointerleave", () => {
-      state.cursorMs = null;
-      state.cursorChart = null;
-      renderCursor();
-    });
-    capture.addEventListener("pointerdown", (event) => {
-      state.cursorMs = locate(event);
-      state.cursorChart = svg.dataset.chart;
-      if (svg.dataset.chart === "score") setStart(state.cursorMs);
-      renderCursor();
-    });
+    };
+    for (const type of ["pointerdown", "pointermove", "pointerup", "pointercancel", "pointerleave"]) {
+      capture.addEventListener(type, handle);
+    }
   }
 
   const score = wrap.querySelector('svg[data-chart="score"]');

@@ -117,7 +117,15 @@ button:focus-visible, select:focus-visible, svg:focus-visible {
 .wx-legend { display: flex; gap: 16px; margin: 4px 0 0; font-size: 0.8rem; color: var(--muted); }
 .wx-legend i { display: inline-block; width: 14px; height: 2px; margin-right: 6px; vertical-align: middle; }
 
-.wx-svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+/* pan-y: a vertical swipe on a chart scrolls the page, a sideways one reads the chart. pinch-zoom:
+   the page can still be zoomed with two fingers over a chart. No text selection or callout on a long
+   press - the charts are read with the finger. */
+.wx-svg {
+  display: block; width: 100%; height: auto;
+  touch-action: pan-y pinch-zoom;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
 .wx-grid { stroke: var(--grid); stroke-width: 1; }
 .wx-day-line { stroke: var(--day-line); stroke-width: 1; }
 .wx-tick, .wx-day-label { fill: var(--muted); font-size: 11px; }
@@ -140,7 +148,7 @@ button:focus-visible, select:focus-visible, svg:focus-visible {
 .wx-limit-label { fill: var(--limit); font-size: 11px; }
 
 #wx-tooltip {
-  position: absolute; top: 0; left: 0; z-index: 5; min-width: 180px;
+  position: absolute; top: 0; left: 0; z-index: 5; min-width: 180px; width: max-content; max-width: 100%;
   padding: 9px 11px; border: 1px solid var(--hairline); border-radius: 8px;
   background: var(--surface); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
   font-size: 0.82rem; pointer-events: none;

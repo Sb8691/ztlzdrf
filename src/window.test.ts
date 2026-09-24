@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import { WINDOW_CONFIG } from "./config.js";
 import { clientBundle, renderWindowPage } from "./window-page.js";
 import { renderWindowEmailBlock } from "./window-email.js";
@@ -610,4 +611,200 @@ test("chýbajúce skóre robí v obrázku medzeru, nie spojnicu", () => {
   const whole = buildScorePanel(snapshotFor(WINDOW_CONFIG));
   const paths = (svg: string) => [...svg.matchAll(/<path /g)].length;
   assert.ok(paths(withGap) > paths(whole), "chýbajúci deň musí krivku prerušiť na dva úseky");
+});
+
+// ---------------------------------------------------------------------------
+// The page's own script, run without a browser
+// ---------------------------------------------------------------------------
+
+/** The inlined page script in a sandbox with no DOM: boot() finds no snapshot and returns, which
+ * leaves every function of window-ui.js callable - enough for the ones that touch no DOM. */
+function pageSandbox(): vm.Context {
+  const ctx = vm.createContext({ document: { getElementById: () => null } });
+  vm.runInContext(`"use strict";\n${clientBundle()}`, ctx);
+  return ctx;
+}
+
+type GestureEvent = { type: string; pointerType: string; id: number; x: number; y: number; chart: string; buttons?: number; scrolling?: boolean };
+
+/** Feeds a sequence of pointer events through chartGesture and returns what each one did. */
+function gestures(ctx: vm.Context, events: GestureEvent[]): { cursor: string; select: boolean }[] {
+  const script = `(() => { let press = null; const out = [];
+    for (const e of ${JSON.stringify(events)}) { const r = chartGesture(press, e); press = r.press; out.push({ cursor: r.cursor, select: r.select }); }
+    return JSON.stringify(out); })()`;
+  return JSON.parse(vm.runInContext(script, ctx));
+}
+
+const finger = (type: string, x: number, y: number, chart = "score", id = 1): GestureEvent => ({ type, pointerType: "touch", id, x, y, chart });
+const mouse = (type: string, x: number, y: number, chart = "score"): GestureEvent => ({ type, pointerType: "mouse", id: 1, x, y, chart });
+
+test("rolovanie prstom, ktoré začne na hornom grafe, nič nevyberie ani neukáže", () => {
+  // Measured on an emulated phone before this fix: this exact swipe moved the start from
+  // 1.10. 09:00 to 3.10. 11:00, because the page selected on pointerdown.
+  const steps = gestures(pageSandbox(), [
+    finger("pointerdown", 211, 681),
+    finger("pointermove", 211, 651),
+    finger("pointercancel", 211, 651),
+    finger("pointerleave", 211, 651),
+  ]);
+  assert.equal(steps.some((s) => s.select), false, "rolovanie nesmie meniť výber");
+  assert.equal(steps.some((s) => s.cursor === "move"), false, "tooltip nesmie ani bliknúť");
+  assert.equal(steps[2].cursor, "clear", "rolovanie zavrie pripnutý tooltip");
+});
+
+test("ťuknutie na horný graf vyberie začiatok až po zdvihnutí prsta a tooltip ostane", () => {
+  const steps = gestures(pageSandbox(), [
+    finger("pointerdown", 266, 681),
+    finger("pointerup", 268, 682),
+    finger("pointerleave", 268, 682),
+  ]);
+  assert.deepEqual(steps.map((s) => s.select), [false, true, false]);
+  assert.equal(steps[1].cursor, "move");
+  assert.equal(steps[2].cursor, "keep", "pointerleave po zdvihnutí prsta tooltip nezavrie");
+});
+
+test("prechádzanie prstom do strany ukazuje hodnoty, ale nič nevyberie", () => {
+  const steps = gestures(pageSandbox(), [
+    finger("pointerdown", 200, 681),
+    finger("pointermove", 205, 682), // too little to tell yet
+    finger("pointermove", 220, 683),
+    finger("pointermove", 240, 684),
+    finger("pointerup", 240, 684),
+  ]);
+  assert.deepEqual(steps.map((s) => s.cursor), ["keep", "keep", "move", "move", "keep"]);
+  assert.equal(steps.some((s) => s.select), false);
+});
+
+test("ťuknutie na iný graf ukáže hodnoty bez zmeny výberu; cudzí prst sa ignoruje", () => {
+  const ctx = pageSandbox();
+  const rain = gestures(ctx, [finger("pointerdown", 156, 586, "rain"), finger("pointerup", 156, 586, "rain")]);
+  assert.deepEqual(rain, [{ cursor: "keep", select: false }, { cursor: "move", select: false }]);
+  const other = gestures(ctx, [finger("pointerdown", 100, 600, "score", 1), finger("pointerup", 100, 600, "score", 2)]);
+  assert.equal(other[1].select, false);
+});
+
+test("myš sa správa ako doteraz: klik do horného grafu vyberie hneď, odchod tooltip skryje", () => {
+  const steps = gestures(pageSandbox(), [mouse("pointermove", 300, 100), mouse("pointerdown", 300, 100), mouse("pointerup", 300, 100), mouse("pointerleave", 300, 100)]);
+  assert.deepEqual(steps, [
+    { cursor: "move", select: false },
+    { cursor: "move", select: true },
+    { cursor: "keep", select: false },
+    { cursor: "clear", select: false },
+  ]);
+  assert.equal(gestures(pageSandbox(), [mouse("pointerdown", 300, 100, "rain")])[0].select, false);
+});
+
+test("dotyk, ktorý len zastaví dobiehajúce rolovanie, nič nevyberie", () => {
+  const steps = gestures(pageSandbox(), [{ ...finger("pointerdown", 266, 681), scrolling: true }, finger("pointerup", 266, 681)]);
+  assert.deepEqual(steps, [
+    { cursor: "keep", select: false },
+    { cursor: "keep", select: false },
+  ]);
+});
+
+test("pero, ktoré sa grafu nedotýka, ukazuje hodnoty ako myš; dotykom pera sa ťuká ako prstom", () => {
+  const pen = (type: string, x: number, buttons: number): GestureEvent => ({ type, pointerType: "pen", id: 7, x, y: 600, chart: "score", buttons });
+  const steps = gestures(pageSandbox(), [pen("pointermove", 200, 0), pen("pointerleave", 200, 0), pen("pointerdown", 210, 1), pen("pointerup", 210, 0)]);
+  assert.deepEqual(steps, [
+    { cursor: "move", select: false },
+    { cursor: "clear", select: false },
+    { cursor: "keep", select: false },
+    { cursor: "move", select: true },
+  ]);
+});
+
+test("stránka nechá graf posúvať zvislo aj približovať dvoma prstami a počúva pointercancel", () => {
+  const html = renderWindowPage(snapshotFor(WINDOW_CONFIG));
+  assert.match(html, /touch-action: pan-y pinch-zoom/);
+  assert.match(clientBundle(), /"pointercancel"/);
+});
+
+/** A stand-in for any element the page script touches: it takes every write and keeps its listeners. */
+function fakeElement(extra: Record<string, unknown> = {}): Record<string, any> {
+  const listeners: Record<string, ((event: unknown) => void)[]> = {};
+  return {
+    style: {},
+    dataset: {},
+    hidden: true,
+    textContent: "",
+    innerHTML: "",
+    value: "",
+    clientWidth: 358,
+    clientHeight: 1200,
+    offsetWidth: 200,
+    offsetHeight: 150,
+    offsetTop: 0,
+    classList: { add() {}, remove() {} },
+    setAttribute() {},
+    getAttribute: () => null,
+    addEventListener(type: string, fn: (event: unknown) => void) {
+      (listeners[type] ??= []).push(fn);
+    },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 358, bottom: 180, width: 358, height: 180 }),
+    closest: () => null,
+    listeners,
+    ...extra,
+  };
+}
+
+/**
+ * The page script with the real snapshot, wired to fake elements, and the score chart's pointer
+ * handler exactly as bindChartPointers registered it - so a test drives the real wiring, not just
+ * the rule behind it.
+ */
+function wiredPage() {
+  const svg = fakeElement({ dataset: { chart: "score" } });
+  const capture = fakeElement({ closest: () => svg });
+  const elements = new Map<string, Record<string, any>>();
+  const byId = (id: string) => {
+    if (!elements.has(id)) {
+      const wrap = id === "wx-charts" ? { querySelectorAll: (sel: string) => (sel === "[data-capture]" ? [capture] : []) } : {};
+      elements.set(id, fakeElement(wrap));
+    }
+    return elements.get(id);
+  };
+  const document = { getElementById: (): unknown => null, querySelectorAll: () => [] };
+  const ctx = vm.createContext({ document, window: { innerHeight: 844 } });
+  vm.runInContext(`"use strict";\n${clientBundle()}`, ctx);
+  // Elements only from now on: boot() above had to find no snapshot and stop.
+  document.getElementById = byId;
+  ctx.__snapshot = JSON.stringify(snapshotFor(WINDOW_CONFIG));
+  vm.runInContext(
+    `state.snapshot = JSON.parse(__snapshot); state.width = 358; state.durationHours = cfg().applicationHours; reindex();
+     state.startMs = snapToStart(localTimeMs(cfg().start, 9, cfg().timezone)); bindChartPointers();`,
+    ctx,
+  );
+  const handler = capture.listeners.pointerdown[0];
+  const read = (expr: string) => vm.runInContext(expr, ctx);
+  const target = localTimeMs("2026-10-04", 10, WINDOW_CONFIG.timezone);
+  const x = read(`xOf(${target})`) as number;
+  const fire = (type: string, dx = 0, dy = 0) => handler({ type, pointerType: "touch", pointerId: 1, clientX: x + dx, clientY: 100 + dy, buttons: 1 });
+  return { capture, read, fire, target, initial: read("state.startMs") as number };
+}
+
+test("napojenie na stránke: rolovanie z horného grafu výber nezmení, ťuknutie áno", () => {
+  const scroll = wiredPage();
+  assert.deepEqual(Object.keys(scroll.capture.listeners).sort(), ["pointercancel", "pointerdown", "pointerleave", "pointermove", "pointerup"]);
+  assert.notEqual(scroll.initial, scroll.target);
+  scroll.fire("pointerdown");
+  scroll.fire("pointermove", 0, -30);
+  scroll.fire("pointercancel", 0, -30);
+  assert.equal(scroll.read("state.startMs"), scroll.initial, "rolovanie nesmie meniť výber");
+  assert.equal(scroll.read("state.cursorMs"), null);
+
+  const tap = wiredPage();
+  tap.fire("pointerdown");
+  assert.equal(tap.read("state.startMs"), tap.initial, "pri položení prsta sa ešte nič nevyberá");
+  tap.fire("pointerup", 1, 1);
+  tap.fire("pointerleave", 1, 1);
+  assert.equal(tap.read("state.startMs"), tap.target, "ťuknutie vyberie hodinu pod prstom");
+  assert.equal(tap.read("state.cursorMs"), tap.target, "tooltip ostane aj po zdvihnutí prsta");
+
+  const flick = wiredPage();
+  flick.read("lastScrollAt = Date.now()");
+  flick.fire("pointerdown");
+  flick.fire("pointerup");
+  assert.equal(flick.read("state.startMs"), flick.initial, "zastavenie rolovania nie je ťuknutie");
 });
