@@ -187,7 +187,7 @@ async function phaseHist(): Promise<void> {
         try {
           for (const chunk of chunks) {
             const url = `https://historical-forecast-api.open-meteo.com/v1/forecast?${q}&hourly=${chunk.join(",")}&models=${model}&start_date=${start}&end_date=${end}&timeformat=unixtime`;
-            const json = await fetchJsonCached<OmPoint | OmPoint[]>(url, { minIntervalMs: 1300, label: `${model} hist ${start}`, verbose: false });
+            const json = await fetchJsonCached<OmPoint | OmPoint[]>(url, { minIntervalMs: 4500, retries: 4, label: `${model} hist ${start}`, verbose: false });
             const list = Array.isArray(json) ? json : [json];
             if (list.length !== points.length) throw new Error(`${list.length} bodov namiesto ${points.length}`);
             monthTime = list[0].hourly.time;

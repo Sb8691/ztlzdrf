@@ -72,7 +72,17 @@ export async function fetchCached(url: string, opts: FetchCachedOptions = {}): P
         if (res.status !== 429 && res.status < 500) throw err;
         lastError = err;
       } else {
-        rejectApiError(body, url);
+        try {
+          rejectApiError(body, url);
+        } catch (err) {
+          // Open-Meteo's per-minute limit: wait out the minute and retry; other limits propagate.
+          if (err instanceof Error && /Minutely API request limit/i.test(err.message) && attempt < retries) {
+            if (opts.verbose !== false) console.log("  … minútový limit Open-Meteo, čakám 65 s");
+            await sleep(65_000);
+            continue;
+          }
+          throw err;
+        }
         opts.validate?.(body);
         writeFileSync(path, body);
         writeFileSync(`${path}.json`, JSON.stringify({ url, fetchedAt: new Date().toISOString(), bytes: body.length }));

@@ -683,7 +683,7 @@
     "lo": null,
     "hi": null
    },
-   "meanStormCm": 17.499999999999996,
+   "meanStormCm": 17.5,
    "stormsNoCover": 1,
    "stormsWholeWinter": 1
   },
@@ -703,7 +703,7 @@
     "lo": null,
     "hi": null
    },
-   "meanStormCm": 17.366666666666664,
+   "meanStormCm": 17.366666666666667,
    "stormsNoCover": 3,
    "stormsWholeWinter": 3
   },
@@ -2504,8 +2504,8 @@
     "hi": null
    },
    "corr": 0.7470057038377116,
-   "mae": 3.0272727272727282,
-   "biasB": -0.8272727272727276
+   "mae": 3.0272727272727264,
+   "biasB": -0.8272727272727274
   },
   {
    "a": "snowgrid:turracher-hoehe:top",

@@ -220,10 +220,10 @@ for (const l of lwd) {
   for (const d of new Set(l.stamps.map(day))) {
     const vals: number[] = [];
     for (const hm of ["06:40", "06:50", "07:00", "07:10", "07:20", "07:30", "07:40"]) { const v = byStamp.get(`${d}T${hm}`); if (v !== null && v !== undefined) vals.push(Math.max(0, v) * 100); }
-    if (vals.length >= 4) { vals.sort((a, b) => a - b); hs07.set(d, quantile(vals, 0.5)); } else hs07.set(d, null);
+    if (vals.length >= 4) { vals.sort((a, b) => a - b); hs07.set(d, Math.round(quantile(vals, 0.5) * 10) / 10); } else hs07.set(d, null);
   }
   const delta: Daily = new Map();
-  for (const [d, v] of hs07) { const p = hs07.get(addDays(d, -1)); delta.set(d, v === null || p === null || p === undefined ? null : v - p); }
+  for (const [d, v] of hs07) { const p = hs07.get(addDays(d, -1)); delta.set(d, v === null || p === null || p === undefined ? null : Math.round((v - p) * 10) / 10); }
   raw.push({ id: `lwd:${l.id}:auto`, label: `LWD ${l.name} (${l.elevation} m), ΔHS automat`, source: "lwd", kind: "deltaHS", station: l.name, elevation: l.elevation, pointId: `lwd:${l.id}`, value: delta, hsSame: hs07 });
 }
 // SNOWGRID: 24 h change of analysed snow depth at every point.
