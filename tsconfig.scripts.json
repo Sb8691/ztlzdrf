@@ -1,0 +1,7 @@
+{
+  // Type-checks the offline scripts (npm run check:scripts); nothing is emitted. They run with tsx.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "." },
+  "include": ["scripts/**/*.ts", "src/config.ts"],
+  "exclude": ["dist", "node_modules"]
+}

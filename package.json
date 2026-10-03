@@ -7,7 +7,10 @@
   "scripts": {
     "build": "tsc",
     "ski": "tsx src/ski.ts",
-    "test": "tsx --test src/*.test.ts"
+    "test": "tsx --test src/*.test.ts",
+    "check:scripts": "tsc -p tsconfig.scripts.json",
+    "truth:fetch": "tsx scripts/truth-fetch.ts",
+    "truth": "tsx scripts/truth-report.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
