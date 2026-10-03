@@ -514,6 +514,7 @@ export const SKI_SNAPSHOT_VERSION = 1;
  */
 export function buildSkiSnapshot(responses, cfg, fetchedAtMs) {
   const firstDate = firstSkiDate(fetchedAtMs, cfg);
+  /** @type {Record<string, { model: string, label: string, runAtMs: number | null, dates: string[], grids: object[], resorts: { id: string, days: Record<string, any>[], hourly?: object }[] }>} */
   const horizons = {};
   for (const key of HORIZON_KEYS) {
     const h = cfg.horizons[key];

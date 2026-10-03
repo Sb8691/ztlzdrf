@@ -1,8 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SKI_CONFIG } from "./config.js";
+import { clientBundle, clientRender, renderSkiPage } from "./ski-page.js";
+import { readSnapshot } from "./ski.js";
 import {
   HOUR_MS,
   addDays,
@@ -285,4 +290,118 @@ test("strediská majú odkazy na snehovú správu a webkameru", () => {
     assert.match(r.links.snowReport, /^https:\/\//, r.name);
     assert.match(r.links.webcam, /^https:\/\//, r.name);
   }
+});
+
+// ---------------------------------------------------------------------------
+// The page
+// ---------------------------------------------------------------------------
+
+/** A whole snapshot as the generator would build it at 10:00 on DAY, every horizon from `fill`. */
+function snapshotFor(fill: Fill = () => ({}), fetchedAtMs = at(10)) {
+  const range = (key: "now" | "short" | "long") => requestDates(cfg, key, DAY);
+  const data = (key: "now" | "short" | "long", members = 1) => response(range(key).startDate, range(key).endDate, fill, members);
+  return buildSkiSnapshot(
+    {
+      now: { data: data("now"), meta: null },
+      short: { data: data("short"), meta: null },
+      long: { data: data("long", cfg.horizons.long.expectedMembers), meta: null },
+    },
+    cfg,
+    fetchedAtMs
+  );
+}
+
+const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
+
+/** Only the rendered content - the page also inlines the client code, whose source contains the
+ * very class names a whole-page regex would count. */
+function mainOf(html: string): string {
+  return html.match(/<main id="sk-main">([\s\S]*?)<\/main>/)![1];
+}
+
+test("stránka: tri časti, štyri karty, odkazy len na strediská a zdroj dát", () => {
+  const page = renderSkiPage(snapshotFor());
+  const html = mainOf(page);
+  assert.equal([...html.matchAll(/class="sk-section"/g)].length, 3);
+  assert.equal([...html.matchAll(/class="sk-card"/g)].length, cfg.resorts.length);
+  assert.equal([...html.matchAll(/class="sk-hourly"/g)].length, cfg.resorts.length);
+  assert.equal([...html.matchAll(/<tr><th scope="row">/g)].length, cfg.horizons.short.days + cfg.horizons.long.days);
+  const allowed = new Set(["https://open-meteo.com/", ...cfg.resorts.flatMap((r) => [r.links.snowReport, r.links.webcam])]);
+  const markup = page.replace(/<script type="module">[\s\S]*?<\/script>/, "");
+  const hrefs = [...markup.matchAll(/href="([^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, "&"));
+  for (const href of hrefs) assert.ok(allowed.has(href), `neočakávaný odkaz ${href}`);
+  for (const r of cfg.resorts) {
+    assert.ok(hrefs.includes(r.links.snowReport), `${r.name}: snehová správa`);
+    assert.ok(hrefs.includes(r.links.webcam), `${r.name}: webkamera`);
+  }
+});
+
+test("vložená snímka sa dá prečítať späť a vložený kód je bez import/export", () => {
+  const snap = snapshotFor();
+  const html = renderSkiPage(snap);
+  const json = html.match(/<script type="application\/json" id="sk-snapshot">([\s\S]*?)<\/script>/)![1];
+  assert.deepEqual(JSON.parse(json), JSON.parse(JSON.stringify(snap)));
+  assert.doesNotMatch(clientBundle(), /^\s*(import|export)\s/m);
+});
+
+test("rovnaká snímka dá bajt po bajte rovnakú stránku; čas načítania je s dátumom", () => {
+  const snap = snapshotFor();
+  assert.equal(renderSkiPage(snap), renderSkiPage(snap));
+  assert.match(renderSkiPage(snap), /id="sk-meta">Načítané 15\.\u00a01\. 10:00/);
+  assert.match(clientRender().renderMetaText(snap, at(12)), /Načítané dnes 10:00/);
+});
+
+test("neznámy deň je nedostatok dát, prašan sa ukáže a staré dáta sa priznajú", () => {
+  const render = clientRender();
+  const gap = snapshotFor((p, _m, t) => (p === TOP && t === at(12) ? { gust: null } : {}));
+  assert.match(render.renderSki(gap, at(10)), /Nedostatok dát/);
+  const powder = snapshotFor((p, _m, t) => (p === TOP && t === at(3) ? { precip: 20 } : {}));
+  assert.match(render.renderSki(powder, at(10)), /14\u00a0cm · prašan/);
+  const fresh = render.renderSki(snapshotFor(), at(10));
+  assert.doesNotMatch(fresh, /staršie/);
+  assert.match(render.renderSki(snapshotFor(), at(10, addDays(DAY, 1))), /staršie/);
+});
+
+test("medzera v hodinových dátach preruší čiaru grafu, nespojí ju", () => {
+  const snap = snapshotFor((p, _m, t) => (p === TOP && t === at(3, addDays(DAY, 1)) ? { temp: null } : {}));
+  const html = clientRender().renderSki(snap, at(10));
+  const firstTop = html.match(/<path class="sk-line sk-top" d="([^"]+)"/)![1];
+  assert.equal(firstTop.split("M").length - 1, 2);
+});
+
+function runSkiCli(env: Record<string, string>): { status: number | null; stdout: string; stderr: string } {
+  const r = spawnSync(process.execPath, ["--import", "tsx", "src/ski.ts"], {
+    cwd: REPO_ROOT,
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+}
+
+test("generátor renderuje z uloženej snímky bez siete, len do scratch adresára", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ztlzdrf-ski-"));
+  mkdirSync(join(dir, "data"));
+  writeFileSync(join(dir, "data", "ski.json"), `${JSON.stringify(snapshotFor())}\n`);
+  const env = { SKI_DOCS_DIR: dir, SKI_RENDER_ONLY: "true" };
+  const first = runSkiCli(env);
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /nič sa nesťahuje/);
+  assert.match(first.stdout, /index\.html aktualizovaná/);
+  assert.equal([...mainOf(readFileSync(join(dir, "index.html"), "utf8")).matchAll(/class="sk-card"/g)].length, cfg.resorts.length);
+  const second = runSkiCli(env);
+  assert.equal(second.status, 0, second.stderr);
+  assert.match(second.stdout, /index\.html bez zmeny/, "rovnaké dáta nesmú robiť zmenu v gite");
+});
+
+test("snímka iného tvaru sa nepoužije", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ztlzdrf-ski-"));
+  const path = join(dir, "ski.json");
+  writeFileSync(path, JSON.stringify({ ...snapshotFor(), version: 0 }));
+  assert.equal(readSnapshot(path), null);
+  writeFileSync(path, JSON.stringify(snapshotFor()));
+  assert.notEqual(readSnapshot(path), null);
+  const bad = mkdtempSync(join(tmpdir(), "ztlzdrf-ski-"));
+  const r = runSkiCli({ SKI_DOCS_DIR: bad, SKI_RENDER_ONLY: "true" });
+  assert.notEqual(r.status, 0, "bez snímky nemá generátor čo vymyslieť");
 });

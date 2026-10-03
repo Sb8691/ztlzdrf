@@ -214,6 +214,8 @@ export const SKI_RESORTS = [
   {
     id: "bad-kleinkirchheim",
     name: "Bad Kleinkirchheim / St. Oswald",
+    /** Soft hyphen, so the narrow phone table column can break the long word. */
+    shortName: "Bad Klein\u00adkirchheim",
     base: { name: "Sonnwiesenbahn I", latitude: 46.8116, longitude: 13.7727, elevation: 1017 },
     top: { name: "Kaiserburgbahn II", latitude: 46.7835, longitude: 13.8267, elevation: 2043 },
     links: {
@@ -224,6 +226,7 @@ export const SKI_RESORTS = [
   {
     id: "falkert",
     name: "Falkert (Heidi Alm)",
+    shortName: "Falkert",
     base: { name: "Falkertlift, dolná stanica", latitude: 46.8639, longitude: 13.8323, elevation: 1840 },
     top: { name: "Falkertlift, horná stanica", latitude: 46.8702, longitude: 13.8192, elevation: 2107 },
     links: {
@@ -234,6 +237,7 @@ export const SKI_RESORTS = [
   {
     id: "turracher-hoehe",
     name: "Turracher Höhe",
+    shortName: "Turracher Höhe",
     base: { name: "Turrachbahn", latitude: 46.9416, longitude: 13.8901, elevation: 1396 },
     top: { name: "Kornockbahn", latitude: 46.9156, longitude: 13.8559, elevation: 2197 },
     links: {
@@ -244,6 +248,7 @@ export const SKI_RESORTS = [
   {
     id: "hochrindl",
     name: "Hochrindl",
+    shortName: "Hochrindl",
     base: { name: "Sonnenlift", latitude: 46.85, longitude: 13.978, elevation: 1476 },
     top: { name: "Kruckenlift", latitude: 46.8389, longitude: 13.9695, elevation: 1832 },
     links: {
