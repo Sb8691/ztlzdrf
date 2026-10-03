@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PAGE_RULE, RAW_MODEL, amount24Cm, crpsCm, minimize, normalCdf, normalInv, probAtLeast, quantileCm, snowFraction, spreadAt, tobitNll, type ModelHour, type PhysicsParams } from "./powder-model.js";
+import { PAGE_RULE, RAW_MODEL, amount24Cm, crpsCm, minimize, normalCdf, normalInv, probAtLeast, quantileCm, snowFraction, spreadAt, tobitNll, hurdleAt, hurdleAtLead, hurdleCdf, hurdleCrpsCm, hurdleNll, hurdleProbAtLeast, hurdleQuantileCm, type ModelHour, type PhysicsParams } from "./powder-model.js";
 
 const hour = (precip: number, snowfall: number, temp: number, wetBulb: number | null = temp - 0.8, gust: number | null = 20): ModelHour => ({ precip, snowfall, temp, wetBulb, gust });
 
@@ -66,4 +66,40 @@ test("lead law: linear in days, clamped to the fitted range", () => {
   assert.deepEqual(spreadAt(law, -5), spreadAt(law, 0));
   // Longer lead, less certain: P(>= 15) for a 20 cm forecast falls with lead.
   assert.ok(probAtLeast(20, 14.5, spreadAt(law, 23)) > probAtLeast(20, 14.5, spreadAt(law, 131)));
+});
+
+test("two-part model: dry mass, tail probability, quantiles, CDF and likelihood", () => {
+  const p = { h0: -0.3, h1: 0.9, a: 0.1, b: 1, c: 1.2, d: 0.1 };
+  // Dry forecast: mostly no snow, essentially no chance of 15 cm.
+  assert.ok(hurdleAt(0, p).p0 < 0.4);
+  assert.ok(hurdleProbAtLeast(0, 15, p) < 0.01);
+  // 15 cm forecast: location sqrt(15) + 0.1, so a little over half of the wet cases reach 15 cm.
+  const q = hurdleProbAtLeast(15, 15, p);
+  assert.ok(q > 0.5 && q < 0.65, String(q));
+  assert.ok(hurdleProbAtLeast(5, 15, p) < hurdleProbAtLeast(15, 15, p) && hurdleProbAtLeast(15, 15, p) < hurdleProbAtLeast(30, 15, p));
+  // CDF is monotone from the dry mass to one, and the quantile inverts it.
+  assert.ok(Math.abs(hurdleCdf(0, 9, p) - (1 - hurdleAt(9, p).p0)) < 1e-9);
+  assert.ok(hurdleCdf(5, 9, p) < hurdleCdf(10, 9, p) && hurdleCdf(100, 9, p) > 0.999);
+  const med = hurdleQuantileCm(9, 0.5, p);
+  assert.ok(Math.abs(hurdleCdf(med, 9, p) - 0.5) < 1e-6, String(med));
+  assert.equal(hurdleQuantileCm(0, 0.2, p), 0);
+  // Likelihood: the wet part prefers the spread that generated the data, the dry part the right hurdle.
+  const cases = [0, 0, 0, 2, 4, 6, 9, 12, 20].map((y) => ({ x: 6, y }));
+  const wet = (c: number) => hurdleNll(cases, { ...p, c }).wet;
+  assert.ok(wet(1.2) < wet(0.2) && wet(1.2) < wet(5));
+  const dry = (h0: number) => hurdleNll(cases, { ...p, h0 }).dry;
+  // 6 of 9 wet at sqrt(6) = 2.45: Phi(h0 + 0.9 x 2.45) = 2/3 -> h0 = -1.77.
+  assert.ok(dry(-1.77) < dry(0.5) && dry(-1.77) < dry(-4));
+  // CRPS: sharp and right is small, dry forecast against 20 cm is large.
+  assert.ok(hurdleCrpsCm(10, 10, { h0: 3, h1: 0, a: 0, b: 1, c: 0.1, d: 0 }) < 0.5);
+  assert.ok(hurdleCrpsCm(0, 20, { h0: -3, h1: 0, a: 0, b: 1, c: 0.1, d: 0 }) > 15);
+});
+
+test("two-part lead law: coefficients move linearly in days and clamp", () => {
+  const law = { leadRefH: 23, minLeadH: 23, maxLeadH: 131, h00: -0.3, h01: 0, h10: 0.9, h11: -0.05, a0: 0, a1: 0, b0: 1, b1: -0.05, c0: 1.2, c1: 0.1, d0: 0, d1: 0 };
+  assert.deepEqual(hurdleAtLead(law, 23), { h0: -0.3, h1: 0.9, a: 0, b: 1, c: 1.2, d: 0 });
+  const two = hurdleAtLead(law, 71);
+  assert.ok(Math.abs(two.b - 0.9) < 1e-9 && Math.abs(two.c - 1.4) < 1e-9 && Math.abs(two.h1 - 0.8) < 1e-9);
+  assert.deepEqual(hurdleAtLead(law, 500), hurdleAtLead(law, 131));
+  assert.ok(hurdleProbAtLeast(20, 15, hurdleAtLead(law, 23)) > hurdleProbAtLeast(20, 15, hurdleAtLead(law, 131)));
 });

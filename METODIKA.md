@@ -29,6 +29,8 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 4. 10. 2026 | Krok 3: fyzika = dnešné pravidlo stránky (fitované fázy, pomer sneh/voda, výškový faktor a vietor nepridávajú zručnosť; výškový faktor ťahá jediná vrcholová stanica a zhoršuje pásmo 1 700–1 950 m); rozdelenie dvojdielne na √cm; zákon: len sklon b klesá s predstihom (6 parametrov) – zákon bez predstihu má rovnaké CV skóre, zvolený ten so závislosťou kvôli extrapolácii | Fable |
+| 4. 10. 2026 | Krok 3: záporné ΔHS automatov = 0 cm; vzorka fitu = zimné dni, ručné stanice pri akejkoľvek pokrývke, automaty pri ≥ 30 cm; prah udalosti v spojitom rozdelení 15 cm (14,5 dáva to isté); kombinácia IFS + ICON-D2 pri 1 dni neprijatá (v šume) | Fable |
 | 3. 10. 2026 | POWDER = ≥ 15 cm / 24 h; stupne ALERT / POZOR / VÝHĽAD; najprv len POWDER_SNEH pre D0–D+2 | majiteľ (prompt) |
 | 3. 10. 2026 | Krok 0: audit dát bez zmien v repozitári; výsledok v `~/.cache/ztlzdrf/audit-2026-10-03/` | Fable |
 | 3. 10. 2026 | LWD Kärnten: dáta používať, majiteľ píše LWD so žiadosťou o súhlas; kópia ostáva mimo verejného repozitára (`~/.cache/ztlzdrf/lwd-ktn/`) | majiteľ |
@@ -342,9 +344,135 @@ sneženi z toho istého prístroja (pri SNOWGRID z analýzy); búrka = súvislé
 pre nový sneh, výšku snehu a zrážky; LWD výška o 07:00 = medián 06:40–07:40 SEČ, záporné hodnoty = 0,
 aspoň 4 platné z 7; bootstrap po sezónach (nie po búrkach – sezóny sú nezávislé, búrky v sezóne nie).
 
-## 4. Model
+## 4. Model (krok 3, 4. 10. 2026)
 
-Zatiaľ dnešné pravidlá (`src/ski-core.js`, README). Nový model príde v kroku 3 po backteste.
+Všetko počíta `npm run model` (`scripts/model-fit.ts`; čisté funkcie modelu v `scripts/lib/powder-model.ts`,
+bez importov, aby ich stránka mohla prevziať doslovne). Úplné tabuľky sú v `data/model/REPORT.md`,
+koeficienty pre stránku v `data/model/powder-model.json`. Pravda a vzorky ako v §3.9 a §5.1; naviac
+**vzorka fitu** = zimné dni nov–apr s pravdou, ručný nový sneh pri akejkoľvek pokrývke, ΔHS automatov len
+pri pokrývke ≥ 30 cm; záporné ΔHS (sadanie, topenie) = 0 cm. Skóre vždy mimo vzorky (pri predstihu 0
+leave-one-season-out, pri predstihoch zima proti zime) a na primárnej vzorke z kroku 2, aby sa dalo
+porovnať s bránou.
+
+### 4.1 Tvar modelu (výsledok)
+
+1. **Úhrn x** (cm) za 24 h okna = Σ hodín zrážky × 0,7 cm/mm, keď je teplota vo výške stanice
+   (Open-Meteo `elevation=` výška stanice, tak to robí aj stránka) ≤ 1 °C – **presne dnešné pravidlo
+   stránky**. Fitované alternatívy (fáza z wet-bulb, rampa, pomer sneh/voda podľa teploty, výškový
+   faktor, vietor) nepridali zručnosť (§4.2).
+2. **Rozdelenie pozorovaného úhrnu Y pri danom x** je dvojdielne:
+   P(Y > 0) = Φ(h0 + h1·√x) a √Y | Y > 0 ~ N(a + b·√x, c) orezané v nule.
+   **P(POWDER_SNEH) = P(Y > 0) · P(√Y ≥ √15 | Y > 0).** Medián a kvantily úhrnu sú z toho istého
+   rozdelenia (`hurdleQuantileCm`).
+3. **Predstih L** (hodiny od zverejnenia behu do konca okna): len sklon polohy klesá,
+   b = b0 + b1·(L − L_ref)/24 h; ostatné koeficienty sú konštantné. L sa oreže na [0, L_max].
+
+| Zdroj | L_ref | platnosť | h0 | h1 | a | b0 | b1 [/deň] | c | fit na |
+|---|---|---|---|---|---|---|---|---|---|
+| IFS 9 km (`ecmwf_ifs`) | 23 h | 23–131 h (pod 23 h extrapolácia, nad 131 h zafixované) | −1,339 | 0,896 | 1,419 | 0,570 | −0,032 | 0,891 | celé behy 00z/12z, zimy 2024/25 + 2025/26, 6 staníc, 6 460 staničných dní |
+| ICON-D2 (`icon_d2`) | 0 h | 0–47 h | −1,594 | 1,700 | 0,933 | 0,875 | −0,086 | 0,727 | Historical Forecast 2022/23 → (14 staníc) + Previous Runs 1 d (6 staníc) |
+
+Príklady pre IFS: x = 10 cm → P ≈ 0,22 (23 h); x = 20 cm → 0,54 (23 h), 0,41 (71 h), 0,27 (131 h);
+x = 30 cm → 0,77 (23 h). Pri x = 0 je P(Y > 0) = Φ(−1,34) = 9 % a P(≥ 15 cm) ≈ 0.
+
+### 4.2 Ako sa k tomu došlo (overené)
+
+**Fyzika (3a, predstih 0, Historical Forecast IFS 2016/17–2025/26, 13 899 staničných dní, 381 udalostí,
+14 staníc; ICON-D2 2022/23–2025/26, 3 551 dní, 108 udalostí; LOSO, cieľ fitu = stredná kvadratická chyba
+√úhrnu):**
+
+| Variant (IFS) | parametre | RMSE √cm | MAE sneh [cm] | bias [cm] | bias 1 700–1 950 m | bias ≥ 1 950 m | AUC@15 |
+|---|---|---|---|---|---|---|---|
+| surový `snowfall` modelu | 0 | 0,730 | 4,09 | −0,28 | −0,41 | −0,86 | 0,967 |
+| **dnešné pravidlo** | 0 | 0,675 | 3,63 | −0,20 | −0,42 | +0,16 | 0,976 |
+| fáza z T (rampa) | 2 (stred −0,2 °C, polšírka 1,8 °C) | 0,642 | 3,62 | −0,41 | −0,64 | +0,15 | 0,977 |
+| fáza z wet-bulb + pomer podľa T | 4 | 0,642 | 3,63 | −0,41 | −0,68 | +0,16 | 0,977 |
+| … + výškový faktor | 5 (β = −0,48/km) | 0,637 | 3,55 | −0,40 | −0,75 | −0,19 | 0,979 |
+| … + vietor | 6 | 0,636 | 3,53 | −0,40 | −0,86 | −0,12 | 0,978 |
+
+- Vlastný `snowfall` modelu je horší než zrážky × 0,7 pri T stanice ≤ 1 °C: IFS 9 km rozhoduje o fáze
+  v nižšej a teplejšej bunke, teplota prepočítaná na výšku stanice je lepšia. Pri ICON-D2 to isté a navyše
+  surový úhrn podhodnocuje o tretinu (násobok 1,35) – to v §4.1 absorbuje poloha rozdelenia.
+- Rampa okolo 0 °C zlepší RMSE √cm o 5 %, ale na primárnej vzorke MAE snehových dní nie (4,42 → 4,45–4,59),
+  a v pravdepodobnostnej fáze je pravidlo pri každom predstihu rovnako dobré alebo lepšie (cenzurované
+  rozdelenie pri 23 h: BSS 0,22 pravidlo vs 0,14 rampa vs 0,14 wet-bulb + pomer + výška; dvojdielne 0,26 vs
+  0,23 vs 0,23, pri 71 h 0,21 vs 0,18 vs 0,18). Wet-bulb oproti
+  teplote nič nemení. Výškový faktor ťahá jediná vrcholová stanica (Villacher Alpe 2 140 m) a zhoršuje
+  pásmo 1 700–1 950 m, kde ležia naše horné stanice – zamietnutý. Vietor nič.
+- Ostáva nevyriešený bias pásma 1 700–1 950 m (−0,4 až −0,7 cm/deň, model podhodnocuje); spoločné
+  koeficienty opravia len priemer. Overí sa prospektívne.
+
+**Rodina rozdelenia (3b):** cenzurované normálne na √cm (jedna krivka pre nuly aj veľké úhrny) proti
+dvojdielnemu. Empiricky (REPORT.md, tabuľka podľa predpovedaného úhrnu): pri x 1–3 cm je 46 % pozorovaní
+0 cm, pri 3–6 cm 20 %, ale medián pozorovania je ≈ x (19 cm pri x 15–25). Cenzurované rozdelenie to rieši
+strmou polohou (a −2,0, b 1,7) a pri veľkých x prestreľuje (bin p̄ 0,8 → pozorované 0,5–0,65). Dvojdielne
+(fyzika = pravidlo, primárna vzorka, mimo vzorky):
+
+| Zdroj | Predstih | n | udal. | BSS cenzurované (95 % CI) | **BSS dvojdielne** (95 % CI) | CRPSS cenz. | **CRPSS dvojdielne** (95 % CI) |
+|---|---|---|---|---|---|---|---|
+| IFS hist | 0 h | 4265 | 254 | 0,45 (0,36–0,53) | 0,42 (0,35–0,50) | 0,38 | 0,50 (0,47–0,54) |
+| ICON-D2 hist | 0 h | 1572 | 81 | 0,57 (0,44–0,68) | 0,54 (0,43–0,64) | 0,54 | 0,58 (0,55–0,62) |
+| IFS single | 23 h | 646 | 24 | 0,22 (−0,16–0,40) | **0,26 (0,01–0,42)** | 0,38 | 0,51 (0,39–0,57) |
+| IFS single | 35 h | 646 | 24 | 0,23 (−0,10–0,41) | 0,26 (0,06–0,42) | 0,38 | 0,50 (0,41–0,57) |
+| IFS single | 47 h | 646 | 24 | 0,06 (−0,25–0,26) | 0,19 (0,00–0,36) | 0,23 | 0,43 (0,33–0,52) |
+| IFS single | 59 h | 646 | 24 | 0,20 (−0,03–0,34) | 0,25 (0,07–0,39) | 0,27 | 0,39 (0,26–0,51) |
+| IFS single | 71 h | 646 | 24 | 0,16 (−0,15–0,36) | **0,21 (0,00–0,37)** | 0,25 | 0,39 (0,28–0,48) |
+| IFS single | 83 h | 646 | 24 | 0,09 (−0,15–0,22) | 0,12 (−0,01–0,22) | 0,18 | 0,30 (0,18–0,40) |
+| IFS single | 95 h | 646 | 24 | 0,04 (−0,17–0,24) | 0,09 (−0,05–0,26) | 0,22 | 0,33 (0,22–0,44) |
+| IFS single | 107 h | 646 | 24 | 0,06 (−0,21–0,24) | 0,13 (−0,02–0,26) | 0,20 | 0,35 (0,24–0,44) |
+| IFS single | 119 h | 646 | 24 | 0,08 (−0,12–0,26) | 0,10 (−0,02–0,24) | 0,14 | 0,22 (0,09–0,33) |
+| IFS single | 131 h | 646 | 24 | −0,13 (−0,53–0,08) | −0,13 (−0,43–0,08) | 0,03 | 0,08 (−0,10–0,20) |
+| ICON-D2 prev | 1 d (24–47 h) | 637 | 24 | 0,29 (0,01–0,46) | **0,34 (0,16–0,50)** | 0,34 | 0,55 (0,48–0,61) |
+
+Pri predstihu 0 je cenzurované o 0,03 BSS lepšie (a dobre kalibrované), od 23 h je dvojdielne lepšie vo
+všetkom a jeho CI pri 23–71 h neobsahuje nulu. Stránka predstih 0 nepoužíva, preto dvojdielne. Pozn.:
+CRPSS = 1 − CRPS / CRPS nepodmieneného dvojdielneho rozdelenia fitovaného na tréningu; BSS proti LOSO
+klimatológii po mesiacoch ako v §5.1. Prah udalosti v spojitom rozdelení 15 cm (14,5 cm dáva to isté).
+
+**Zákon podľa predstihu (3c, IFS, krížová validácia zima proti zime, zlúčené cez 23–131 h):** voľných
+6 parametrov na predstih vs. jeden fit so sklonmi v predstihu:
+
+| Zákon | parametrov | BSS zlúčené (95 % CI) | CRPSS zlúčené (95 % CI) |
+|---|---|---|---|
+| h0, h1, b, c lineárne; a, d konštantné | 10 | 0,15 (0,02–0,25) | 0,36 (0,27–0,41) |
+| d = 0 | 9 | 0,14 (0,03–0,25) | 0,36 (0,28–0,41) |
+| h0 konštantné | 8 | 0,14 (0,03–0,25) | 0,36 (0,28–0,41) |
+| h1 konštantné | 7 | 0,14 (0,03–0,25) | 0,35 (0,28–0,41) |
+| **len b klesá s predstihom** | **6** | **0,15 (0,04–0,25)** | **0,36 (0,28–0,41)** |
+| bez závislosti od predstihu | 5 | 0,14 (0,02–0,24) | 0,35 (0,27–0,41) |
+
+Voľba: najjednoduchší zákon do 0,01 CRPSS od najlepšieho, ktorý zachováva pokles sklonu b (voľné fity:
+b 0,69 pri 23 h → 0,25 pri 131 h, h1 1,25 → 0,67, c 0,48 → 0,99). Zákon bez predstihu má v dvoch zimách
+rovnaké skóre, ale stránka extrapoluje na predstihy, kde má vzorka málo udalostí; to je rozhodnutie, nie
+meranie, overí ho krok 5. Spoľahlivosť zvoleného zákona (primárna vzorka, všetky predstihy): p̄ 0,09 →
+pozorované 0,21 (n 341), 0,21 → 0,28 (188), 0,39 → 0,30 (114), 0,57 → 0,60 (25), 0,77 → 0,50 (10);
+pri 23–47 h: 0,10 → 0,18 (71), 0,22 → 0,30 (56), 0,40 → 0,41 (34), 0,58 → 0,45 (20), 0,79–0,94 → 0,40–0,50
+(9). Nízke pravdepodobnosti sú podhodnotené, vysoké sú na málo prípadoch; nič sa nedolaďuje ručne.
+
+**Kombinácia modelov (3d, tie isté okná, dvojdielne):** len IFS 35 h BSS 0,26 (0,07–0,41), CRPSS 0,50;
+len ICON-D2 1 d 0,34 (0,17–0,50), 0,55; vážený priemer úhrnov (váha ICON-D2 0,7) 0,35 (0,17–0,49), 0,56.
+Kombinácia je v šume → neprijatá; na D0–D+1 je najlepší samostatný ICON-D2, ďalej IFS.
+
+**Brána z kroku 2:** splnená – pri 23 h 0,26 (0,01–0,42) proti 0,13 surového IFS a −0,04 pravidla;
+pri 71 h 0,21 (0,00–0,37) a 83 h 0,12 (−0,01–0,22) proti −0,04 až −0,26; pri predstihu 0 0,42 (0,35–0,50)
+proti 0,28–0,30. Dolné hranice CI pri 23–71 h ležia na nule, nie nad ňou – s 24 udalosťami viac nejde.
+
+### 4.3 Predpoklady a hranice modelu
+
+- Zverejnenie IFS = inicializácia + 7 h; len behy 00z/12z (predstihy 23, 35, …, 131 h). Stránka počíta
+  predstih ako hodiny od zverejnenia behu, ktorý práve použila, do konca okna D−1 09:00 → D 09:00; pod
+  23 h extrapoluje k predstihu 0 (archív pri 0 h dáva b 0,69, zákon 0,60 – konzistentné), nad 131 h drží
+  hodnoty pre 131 h, kde je zručnosť ≈ 0 (BSS −0,13, CRPSS 0,08) – pre D+5 a ďalej treba v kroku 4
+  rozhodnúť medzi klimatológiou a ensemblom (ENS archív členov neexistuje, nedá sa overiť).
+- Koeficienty sú spoločné pre stanice (3 ručné: Villacher Alpe, Kanzelhöhe, Flattnitz; 3 automaty:
+  Katschberg, LWD Turracher, LWD Falkert) a dve zimy, 24 udalostí na predstih; intervaly sú široké.
+- Okno modelu končí 06 UTC, okno produktu 09:00 SEČ: posun o 2–3 h sa zanedbáva.
+- AROME (dnešný model stránky pre D0) sa overiť nedá; návrh pre krok 4: ICON-D2 pre D0–D+1 (vlastný
+  zákon, 0–47 h), IFS 9 km pre D+1–D+4 (23–131 h). Výber potvrdí majiteľ.
+- Klimatológia v JSON (štyri vysoké ručné stanice): P(≥ 15 cm) po mesiacoch bez podmienky pokrývky
+  (podmienka pokrývky v novembri necháva len dni hneď po búrkach) a sadzba v sezóne prevádzky s pokrývkou.
+- Prah ALERTu p* závisí od pomeru nákladov N (zmeškaný powder deň : zbytočná cesta), p* ≈ 1/(N + 1);
+  majiteľ rozhodne v kroku 4 z tabuľky zásahov/falošných poplachov za sezónu.
 
 ## 5. Výsledky podľa predstihu
 
@@ -468,6 +596,9 @@ ostáva sezóna 2026/27.
 - eHYD končí 31. 8. 2023 (sneh) / 31. 12. 2023 (zrážky, T): použiteľné len na fyziku bez predstihu.
 - Deterministický prah na surovom úhrne nemá zručnosť (BSS ≤ 0,13 pri 23 h, záporná od ~80 h), hoci AUC
   je 0,9–0,98: bez kalibrovanej pravdepodobnosti sa POWDER ALERT postaviť nedá (§5.1).
+- Kalibrovaný model (§4) má pri 23–71 h BSS 0,19–0,26 s dolnou hranicou CI na nule a od ~83 h zručnosť
+  slabne (BSS ≈ 0,1, pri 131 h ≈ 0); jeho spoľahlivosť pri vysokých pravdepodobnostiach stojí na jednotkách
+  prípadov. Rozhodujúce overenie príde až zo sezóny 2026/27.
 
 ## 7. Prekalibrovanie
 
@@ -482,4 +613,5 @@ npm run truth:fetch       # stiahne históriu pravdy do ~/.cache/ztlzdrf (s cach
 npm run truth             # zarovnanie, búrky, klimatológia, zhoda zdrojov → data/truth/{storms,summary}.json, REPORT.md
 npm run backtest:fetch    # archív predpovedí: --only=single,prev,hist (obnoviteľné z cache)
 npm run backtest          # baseline podľa predstihu → data/backtest/{summary.json,REPORT.md}
+npm run model             # fyzika, rozdelenie, zákon podľa predstihu, kombinácia → data/model/{powder-model.json,REPORT.md}; --only=physics,explore,lead,law,blend
 ```

@@ -234,3 +234,97 @@ export function spreadAt(law: LeadLaw, leadH: number): SpreadParams {
   const l = (Math.min(Math.max(leadH, 0), law.maxLeadH) - law.leadRefH) / 24;
   return { a: law.a0 + law.a1 * l, b: law.b0 + law.b1 * l, c: law.c0 + law.c1 * l, d: law.d0 + law.d1 * l };
 }
+
+// ---------------------------------------------------------------------------
+// Two-part ("hurdle") model: P(snow at all) and the amount given snow
+// ---------------------------------------------------------------------------
+//
+// The censored normal above forces one curve to explain both the many zero observations at small
+// forecast amounts and the size of the big falls, and it does so with a steep location that
+// over-forecasts the upper tail (METODIKA §4). The two-part model separates them:
+//   P(Y > 0)          = Phi(h0 + h1 sqrt(x))
+//   sqrt(Y) | Y > 0   ~ N(a + b sqrt(x), c + d sqrt(x)) truncated at 0
+// P(Y >= t) = P(Y > 0) x P(sqrt(Y) >= sqrt(t) | Y > 0).
+
+export interface HurdleParams {
+  h0: number;
+  h1: number;
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+}
+
+export function hurdleAt(xCm: number, p: HurdleParams): { p0: number; mu: number; sigma: number } {
+  const r = Math.sqrt(Math.max(0, xCm));
+  return { p0: normalCdf(p.h0 + p.h1 * r), mu: p.a + p.b * r, sigma: Math.max(0.05, p.c + p.d * r) };
+}
+
+/** P(Y >= thresholdCm | physics amount xCm) under the two-part model. */
+export function hurdleProbAtLeast(xCm: number, thresholdCm: number, p: HurdleParams): number {
+  const { p0, mu, sigma } = hurdleAt(xCm, p);
+  const below0 = normalCdf(-mu / sigma);
+  const tail = 1 - normalCdf((Math.sqrt(thresholdCm) - mu) / sigma);
+  return p0 * Math.min(1, tail / Math.max(1e-12, 1 - below0));
+}
+
+/** CDF of Y at t cm (t >= 0). */
+export function hurdleCdf(tCm: number, xCm: number, p: HurdleParams): number {
+  const { p0, mu, sigma } = hurdleAt(xCm, p);
+  const below0 = normalCdf(-mu / sigma);
+  const inner = (normalCdf((Math.sqrt(Math.max(0, tCm)) - mu) / sigma) - below0) / Math.max(1e-12, 1 - below0);
+  return 1 - p0 + p0 * Math.min(1, Math.max(0, inner));
+}
+
+/** Quantile q of Y in cm (0 inside the dry mass), by bisection on the CDF. */
+export function hurdleQuantileCm(xCm: number, q: number, p: HurdleParams): number {
+  if (hurdleCdf(0, xCm, p) >= q) return 0;
+  let lo = 0, hi = 200;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (hurdleCdf(mid, xCm, p) < q) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
+}
+
+/** Negative log-likelihood of the two-part model; the two parts add, so they can be fitted separately. */
+export function hurdleNll(cases: { x: number; y: number }[], p: HurdleParams): { dry: number; wet: number } {
+  let dry = 0, wet = 0;
+  for (const k of cases) {
+    const { p0, mu, sigma } = hurdleAt(k.x, p);
+    if (k.y <= 0) dry -= Math.log(Math.max(1 - p0, 1e-12));
+    else {
+      dry -= Math.log(Math.max(p0, 1e-12));
+      const z = (Math.sqrt(k.y) - mu) / sigma;
+      wet += 0.5 * z * z + Math.log(sigma) + 0.5 * Math.log(2 * Math.PI) - Math.log(Math.max(1e-12, 1 - normalCdf(-mu / sigma)));
+    }
+  }
+  return { dry, wet };
+}
+
+/** CRPS in cm of the two-part model against an observation, by numerical integration over 0..maxCm. */
+export function hurdleCrpsCm(xCm: number, yCm: number, p: HurdleParams, maxCm = 80, stepCm = 0.25): number {
+  let s = 0;
+  for (let t = 0; t < maxCm; t += stepCm) {
+    const tm = t + stepCm / 2;
+    const F = hurdleCdf(tm, xCm, p);
+    const H = yCm <= tm ? 1 : 0;
+    s += (F - H) * (F - H) * stepCm;
+  }
+  return s;
+}
+
+export interface HurdleLaw {
+  leadRefH: number;
+  minLeadH: number;
+  maxLeadH: number;
+  /** Each coefficient = value at leadRefH + slope x (lead - leadRefH) / 24, lead clamped to [0, maxLeadH]. */
+  h00: number; h01: number;
+  h10: number; h11: number;
+  a0: number; a1: number;
+  b0: number; b1: number;
+  c0: number; c1: number;
+  d0: number; d1: number;
+}
+
+export function hurdleAtLead(law: HurdleLaw, leadH: number): HurdleParams {
+  const l = (Math.min(Math.max(leadH, 0), law.maxLeadH) - law.leadRefH) / 24;
+  return { h0: law.h00 + law.h01 * l, h1: law.h10 + law.h11 * l, a: law.a0 + law.a1 * l, b: law.b0 + law.b1 * l, c: law.c0 + law.c1 * l, d: law.d0 + law.d1 * l };
+}

@@ -72,7 +72,7 @@ len denník.
 | 0 – audit dát | hotovo 3. 10. 2026 | zdroje predpovedí a pravdy, archívy, licencie, CORS: METODIKA §3.1–3.8 |
 | 1 – pravda a klimatológia | hotovo 3. 10. 2026 | `npm run truth:fetch` + `npm run truth`; 10 ručných staníc nového snehu (eHYD, GeoSphere), automaty, LWD, SNOWGRID; dátumové konvencie overené proti INCA; búrky ≥ 15 cm 3–5 za sezónu na stanicu, regionálne 7,4; ΔHS automatov = pravda, SNOWGRID nie: [data/truth](data/truth), METODIKA §3.9 |
 | 2 – backtest a baseline | hotovo 4. 10. 2026 | `npm run backtest:fetch` + `npm run backtest`: IFS 9 km celé behy, Previous Runs ICON-D2/ICON-EU/IFS 0,25°/GFS, Historical Forecast; len predpovede zverejnené pred koncom okna. Výsledok: deterministický prah 15 cm nemá zručnosť (BSS 0,13 pri 23 h, záporný od ~80 h) ani v dnešnom pravidle, ale AUC úhrnu 0,96–0,98 do 35 h a 0,9 do 71 h – informácia je, chýba kalibrácia: [data/backtest](data/backtest), METODIKA §5.1 |
-| 3 – model | čaká | spojitý 24 h úhrn, fáza z wet-bulb, pomer sneh/voda, bias bunka → stanica; výber podľa CRPS |
+| 3 – model | hotovo 4. 10. 2026 | `npm run model`: fyzika pri predstihu 0 na 10 sezónach IFS a 4 ICON-D2 (14 staníc) – dnešné pravidlo stránky je rovnako dobrý vstup ako fitované varianty (wet-bulb, pomer sneh/voda, výška, vietor); zisk dáva kalibrovaná neistota: dvojdielne rozdelenie (P(sneží) a √úhrn okolo √x) so sklonom klesajúcim s predstihom, overené zima proti zime: BSS 0,26 (0,01–0,42) pri 23 h, 0,21 pri 71 h, 0,42 pri 0 h, ICON-D2 0,34 pri 1 dni; kombinácia modelov v šume. Koeficienty v `data/model/powder-model.json`: [data/model](data/model), METODIKA §4 |
 | 4 – zapojenie do stránky | čaká | koeficienty v malom JSON, výpočet v `src/ski-core.js`, nové polia snímky |
 | 5 – prospektívne overovanie | čaká | CI od novembra 2026 loguje každú predpoveď aj ensemble, vyhodnotenie po sezóne 2026/27 |
 | 6 – kvalita powderu, povrch, inverzie, super lyžovačka | čaká na schválenie | |
@@ -88,6 +88,7 @@ npm run truth:fetch      # história pravdy do cache (s cache zadarmo)
 npm run truth            # búrky, klimatológia, zhoda zdrojov → data/truth/
 npm run backtest:fetch   # archív predpovedí s predstihom do cache
 npm run backtest         # baseline podľa predstihu → data/backtest/
+npm run model            # fit a výber modelu úhrnu → data/model/
 ```
 
 ## Lokálne
