@@ -10,7 +10,9 @@
     "test": "tsx --test src/*.test.ts scripts/lib/*.test.ts",
     "check:scripts": "tsc -p tsconfig.scripts.json",
     "truth:fetch": "tsx scripts/truth-fetch.ts",
-    "truth": "tsx scripts/truth-report.ts"
+    "truth": "tsx scripts/truth-report.ts",
+    "backtest:fetch": "tsx scripts/backtest-fetch.ts",
+    "backtest": "tsx scripts/backtest-report.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
