@@ -1,11 +1,10 @@
 /**
  * Everything the ski-conditions page computes, as plain ESM JavaScript with no imports at all.
  *
- * Same reason and same shape as src/window-core.js: the site is static, so the page's refresh button
- * can only re-fetch Open-Meteo from the browser, and the only way to keep one algorithm instead of
- * two is to ship this exact source to the generator, the tests and the page. tsc copies it to dist/
- * (allowJs); the page renderer inlines it. The local-time helpers below are therefore copies of the
- * ones in window-core.js, which goes away together with the rest of the terrace code.
+ * The site is static (GitHub Pages), so the page's refresh button can only re-fetch Open-Meteo from
+ * the browser, and the only way to keep one algorithm instead of two is to ship this exact source to
+ * the generator, the tests and the page. tsc copies it to dist/ (allowJs); the page renderer
+ * inlines it - which is also why it carries its own local-time helpers instead of importing any.
  *
  * Conventions the rest of the code depends on:
  *   - Instants are UTC epoch milliseconds. Local time exists only for labels and day boundaries and
@@ -42,7 +41,7 @@ export const EXPECTED_UNITS = {
 export const HORIZON_KEYS = ["now", "short", "long"];
 
 // ---------------------------------------------------------------------------
-// Local time (copies of window-core.js - DST-safe, no offset tables)
+// Local time (DST-safe, no offset tables)
 // ---------------------------------------------------------------------------
 
 const partsCache = new Map();

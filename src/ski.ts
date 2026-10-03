@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SKI_CONFIG, type SkiConfig } from "./config.js";
-import { fetchJson } from "./openmeteo.js";
+import { fetchJson } from "./fetch-json.js";
 import { buildSkiSnapshot, HORIZON_KEYS, firstSkiDate, horizonUrl, metaUrl, SKI_SNAPSHOT_VERSION } from "./ski-core.js";
 import { renderSkiPage } from "./ski-page.js";
 

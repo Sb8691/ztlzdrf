@@ -1,0 +1,69 @@
+name: Ski Conditions
+
+on:
+  schedule:
+    # November-April only: outside the season there is nothing to ski. Three wake-ups a day, never
+    # at :00 (GitHub's busiest moment, when queued runs get delayed or dropped). Times are UTC:
+    # 04:13 catches the overnight AROME/ECMWF runs for the morning decision, 10:13 the 00z ECMWF
+    # ensemble, 16:13 the midday AROME run for planning tomorrow. A run that comes hours late costs
+    # little: the open page re-fetches by itself once its data is older than an hour.
+    - cron: "13 4,10,16 * 11,12,1,2,3,4 *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Serializes runs so two overlapping triggers never race on the git push below; with queue: max a
+# new run waits instead of cancelling the pending one.
+concurrency:
+  group: ski
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+      # Fetches the three horizons, stores docs/data/ski.json and writes docs/index.html. If
+      # Open-Meteo fails, the last valid snapshot is republished as it was (src/ski.ts).
+      - name: Generate the page
+        run: node dist/ski.js
+
+      # `git add -A docs` + `git diff --cached` is what makes brand-new files count. A rejected push
+      # is rebased onto the new tip with conflicts in docs/ resolved in favour of this run's output
+      # (`-X theirs` = the commit being replayed, i.e. ours).
+      - name: Publish
+        run: |
+          git add -A docs
+          if git diff --cached --quiet; then
+            echo "docs/ bez zmeny."
+            exit 0
+          fi
+          git config user.name "ski-conditions-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "chore: update ski conditions"
+          for i in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+            if [ "$i" = "5" ]; then
+              echo "::warning::Could not push the page after 5 attempts."
+              exit 0
+            fi
+            echo "Push rejected (attempt $i/5) - rebasing onto the latest main and retrying..."
+            git fetch origin
+            if ! git rebase -X theirs origin/main; then
+              git rebase --abort
+              echo "::warning::Rebase onto origin/main failed (attempt $i/5)."
+            fi
+          done

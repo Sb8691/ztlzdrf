@@ -3,21 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Rozhodovacia pomocka pre malovanie terasy (Zedlitzdorf 74, Rakusko): denne rozhodnutie z GeoSphere AROME/INCA (-24h/+60h) a strednodoby ensemble vyhlad na zvolene dni",
+  "description": "Lyžiarske podmienky v strediskách pri Gnesau (Bad Kleinkirchheim, Falkert, Turracher Höhe, Hochrindl): najbližší deň, 3 dni a 10-dňový výhľad z Open-Meteo",
   "scripts": {
     "build": "tsc",
-    "start": "node --env-file=.env dist/index.js",
-    "dev": "tsx --env-file=.env src/index.ts",
-    "window": "tsx src/outlook.ts",
-    "test": "tsx --test src/*.test.ts",
-    "ski": "tsx src/ski.ts"
+    "ski": "tsx src/ski.ts",
+    "test": "tsx --test src/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
-  },
-  "dependencies": {
-    "@resvg/resvg-js": "^2.6.2"
   }
 }
