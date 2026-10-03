@@ -21,26 +21,23 @@ export const RESORT_POINTS: Point[] = SKI_RESORTS.flatMap((r) => [
   { ...r.base, id: `${r.id}:base`, name: `${r.name} – ${r.base.name}` },
 ]).map(({ id, name, latitude, longitude, elevation }) => ({ id, name, latitude, longitude, elevation }));
 
-/** eHYD (Hydrographischer Dienst), CC BY 4.0, "Datenquelle: ehyd.gv.at". Files per station are the
- * `file=N` numbers of MessstellenExtraData/nlv as found on 3 Oct 2026. Data end 2023. */
+/** eHYD (Hydrographischer Dienst), CC BY 4.0, "Datenquelle: ehyd.gv.at". Precipitation/snow stations
+ * (NLV) within 25 km of the resorts that measure new snow by hand at 07:00, plus the higher
+ * precipitation-only stations for the rain/snow phase. Data end 31 Aug / 31 Dec 2023. Which export files
+ * a station offers is read from Messstellen/info at fetch time. Coordinates are the eHYD map points
+ * (WebMercator → WGS84). */
 export const EHYD_STATIONS = [
-  {
-    hzb: 123133,
-    name: "Turracher Höhe",
-    elevation: 1777,
-    // 46°55'11" N, 13°52'46" E (MGI/Bessel; the datum shift is ~0.001°, irrelevant here).
-    latitude: 46.9197,
-    longitude: 13.8794,
-    files: { stammdaten: 1, precipDaily: 2, newSnowDaily: 3, snowDepthDaily: 4, precip5min: 5, tempDaily: 6 },
-  },
-  {
-    hzb: 114652,
-    name: "Falkert",
-    elevation: 1887,
-    latitude: 46.8586,
-    longitude: 13.8317,
-    files: { stammdaten: 1, precipDaily: 2, tempDaily: 3 },
-  },
+  { hzb: 123133, name: "Turracher Höhe", elevation: 1777, latitude: 46.9197, longitude: 13.8794, note: "ručný nový sneh a výška snehu 1998–2023, zrážky aj 5-min, denná T; 1,8 km od Kornockbahn" },
+  { hzb: 114652, name: "Falkert", elevation: 1887, latitude: 46.8581, longitude: 13.8309, note: "len zrážky 1985–2023 a denná T; 1,6 km od hornej stanice Falkertlift" },
+  { hzb: 114447, name: "St. Oswald", elevation: 1373, latitude: 46.8472, longitude: 13.7647, note: "zrážky 1974–2023 a denná T; dolina pod Falkertom a BKK (fáza zrážok dole)" },
+  { hzb: 113332, name: "Innerkrems", elevation: 1567, latitude: 46.9711, longitude: 13.7506, note: "zrážky 1971–2023 a denná T; severne pod Turracher Höhe" },
+  { hzb: 113548, name: "Afritz", elevation: 712, latitude: 46.7271, longitude: 13.7947, note: "zrážky 1971–2023 vrátane 5-min, denná T; 6,7 km od dolnej stanice BKK" },
+  { hzb: 114694, name: "Maitratten-Sonnleiten", elevation: 976, latitude: 46.7863, longitude: 13.9318, note: "ručný nový sneh a výška snehu 1988–2023; údolie pod Hochrindlom" },
+  { hzb: 113936, name: "Sirnitz", elevation: 823, latitude: 46.8229, longitude: 14.0584, note: "ručný nový sneh a výška snehu 1970–2023; údolie pod Hochrindlom" },
+  { hzb: 111591, name: "Thomatal", elevation: 1071, latitude: 47.0771, longitude: 13.7337, note: "ručný nový sneh, výška snehu, 5-min zrážky 1970–2023; Lungau, severná strana Nockbergov" },
+  { hzb: 115055, name: "Kendlbruck", elevation: 940, latitude: 47.0696, longitude: 13.8817, note: "ručný nový sneh, výška snehu, 5-min zrážky 2006–2023; údolie Mury, sever" },
+  { hzb: 113464, name: "Hochegg", elevation: 1026, latitude: 46.7329, longitude: 13.5656, note: "ručný nový sneh a výška snehu 1970–2023; juhozápadne od BKK" },
+  { hzb: 114165, name: "Dreifaltigkeit", elevation: 1096, latitude: 46.8038, longitude: 14.2698, note: "ručný nový sneh a výška snehu 1970–2023; Gurktal, východne od Hochrindlu" },
 ] as const;
 
 /** GeoSphere Austria Data Hub, CC BY 4.0. `manual` = daily hand measurements (shneu_manu,
@@ -64,4 +61,5 @@ export const LWD_STATIONS = [
 
 export const GEOSPHERE_HUB = "https://dataset.api.hub.geosphere.at/v1";
 export const EHYD_EXTRA = "https://ehyd.gv.at/services/MessstellenExtraData/nlv";
+export const EHYD_INFO = "https://ehyd.gv.at/services/Messstellen/info";
 export const LWD_SMET = "https://smet.hydrographie.info";
