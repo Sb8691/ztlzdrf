@@ -59,6 +59,35 @@ percentá ansámblu majú vždy menovateľ 51.
 16:13 UTC): build, testy, `node dist/ski.js` a commit `docs/`, ak sa niečo zmenilo. Dá sa spustiť aj
 ručne (Actions → Ski Conditions → Run workflow). Žiadne e-maily sa neposielajú.
 
+## Presnejšia predpoveď a POWDER ALERT (prebieha)
+
+Cieľ: kalibrovaná pravdepodobnosť **POWDER_SNEH** (aspoň 15 cm nového snehu za 24 h) pre štyri strediská
+na 10 lyžiarskych dní dopredu, overená na minulých sezónach mimo vzorky a zvlášť pre každý predstih,
+neskôr aj kvalita powderu a „super lyžovačka“. Postup ide po krokoch, každý krok je samostatný commit
+schválený majiteľom. Definície, rozhodnutia, dáta a všetky čísla sú v [METODIKA.md](METODIKA.md); tu je
+len denník.
+
+| Krok | Stav | Čo vzniklo |
+|---|---|---|
+| 0 – audit dát | hotovo 3. 10. 2026 | zdroje predpovedí a pravdy, archívy, licencie, CORS: METODIKA §3.1–3.8 |
+| 1 – pravda a klimatológia | hotovo 3. 10. 2026 | `npm run truth:fetch` + `npm run truth`; 10 ručných staníc nového snehu (eHYD, GeoSphere), automaty, LWD, SNOWGRID; dátumové konvencie overené proti INCA; búrky ≥ 15 cm 3–5 za sezónu na stanicu, regionálne 7,4; ΔHS automatov = pravda, SNOWGRID nie: [data/truth](data/truth), METODIKA §3.9 |
+| 2 – backtest a baseline | prebieha | harness „len to, čo bolo v čase vydania známe“: Single Runs IFS 9 km, Previous Runs ICON-D2/ICON-EU/IFS 0,25°/GFS, Historical Forecast bez predstihu; klimatológia, surové `snowfall`, dnešné pravidlá; Brier, BSS, ROC, bias/MAE podľa predstihu |
+| 3 – model | čaká | spojitý 24 h úhrn, fáza z wet-bulb, pomer sneh/voda, bias bunka → stanica; výber podľa CRPS |
+| 4 – zapojenie do stránky | čaká | koeficienty v malom JSON, výpočet v `src/ski-core.js`, nové polia snímky |
+| 5 – prospektívne overovanie | čaká | CI od novembra 2026 loguje každú predpoveď aj ensemble, vyhodnotenie po sezóne 2026/27 |
+| 6 – kvalita powderu, povrch, inverzie, super lyžovačka | čaká na schválenie | |
+
+Offline skripty bežia cez `npm run` (tsx), surové dáta držia v `~/.cache/ztlzdrf` mimo gitu
+(`ZTLZDRF_CACHE` ho presmeruje), do gitu idú len malé odvodené JSON a správy. Dáta: Open-Meteo (CC BY 4.0,
+nekomerčne), GeoSphere Austria Data Hub (CC BY 4.0), eHYD („Datenquelle: ehyd.gv.at“, CC BY 4.0), LWD
+Kärnten (bez zverejnenej licencie – používa sa súkromne, majiteľ žiada o súhlas; súbory nie sú v gite).
+
+```sh
+npm test                 # testy stránky aj parserov
+npm run truth:fetch      # história pravdy do cache (s cache zadarmo)
+npm run truth            # búrky, klimatológia, zhoda zdrojov → data/truth/
+```
+
 ## Lokálne
 
 ```sh
