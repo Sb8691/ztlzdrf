@@ -22,6 +22,11 @@ import {
   metaUrl,
   parsePoints,
   percentile,
+  powderLawAt,
+  powderProbAtLeast,
+  powderQuantileCm,
+  powderWindow,
+  publishedAtMs,
   requestDates,
   requestPoints,
   resolveRun,
@@ -110,7 +115,7 @@ test("každé stredisko má dva body, vrchol pred dolnou stanicou, v jednej pož
   assert.equal(url.searchParams.get("timeformat"), "unixtime");
   assert.match(horizonUrl(cfg, "long", DAY), /^https:\/\/ensemble-api\.open-meteo\.com\/v1\/ensemble\?/);
   assert.match(metaUrl(cfg, "long"), /^https:\/\/ensemble-api\.open-meteo\.com\/data\/ecmwf_ifs025_ensemble\//);
-  assert.match(metaUrl(cfg, "now"), /^https:\/\/api\.open-meteo\.com\/data\/geosphere_arome_austria\//);
+  assert.match(metaUrl(cfg, "now"), /^https:\/\/api\.open-meteo\.com\/data\/dwd_icon_d2\//);
 });
 
 test("deterministické horizonty siahajú 72 h pred otvorenie, ansámbel nie; všetky o deň za koniec", () => {
@@ -290,6 +295,88 @@ test("strediská majú odkazy na snehovú správu a webkameru", () => {
     assert.match(r.links.snowReport, /^https:\/\//, r.name);
     assert.match(r.links.webcam, /^https:\/\//, r.name);
   }
+});
+
+// ---------------------------------------------------------------------------
+// POWDER_SNEH
+// ---------------------------------------------------------------------------
+
+const IFS_LAW = cfg.powder.laws.ecmwf_ifs;
+
+/** The short horizon's first resort on DAY from a response built with `fill`, run metadata optional. */
+function shortDay(fill: Fill, meta: object | null = null, fetchedAtMs = at(10)) {
+  const range = requestDates(cfg, "short", DAY);
+  const points = parsePoints(response(range.startDate, range.endDate, fill), "test");
+  const idx = new Map(points[0].timesMs.map((t, i) => [t, i] as const));
+  const snap = buildSkiSnapshot({ now: { data: response(requestDates(cfg, "now", DAY).startDate, requestDates(cfg, "now", DAY).endDate, fill), meta: null }, short: { data: response(range.startDate, range.endDate, fill), meta }, long: { data: response(DAY, addDays(DAY, 10), fill, cfg.horizons.long.expectedMembers), meta: null } }, cfg, fetchedAtMs);
+  void idx;
+  return snap.horizons.short.resorts[0].days[0] as { powderSnow: { forecastCm: number; leadH: number; probability: number; medianCm: number; p90Cm: number } | null };
+}
+
+test("POWDER_SNEH: okno je D−1 09:00 → D 09:00 na vrchole, hranice presne", () => {
+  const w = powderWindow(DAY, cfg);
+  assert.equal(w.startMs, at(cfg.powder.windowHour, addDays(DAY, -1)));
+  assert.equal(w.endMs, at(cfg.powder.windowHour, DAY));
+  const snowAt = (ms: number) => shortDay((p, _m, t) => (p === TOP && t === ms ? { precip: 10 } : {})).powderSnow!.forecastCm;
+  // Stamps are "preceding hour": the 09:00 stamp of D−1 belongs to 08:00-09:00 and is outside, 10:00 inside; 09:00 on D inside, 10:00 outside.
+  assert.equal(snowAt(w.startMs), 0);
+  assert.equal(snowAt(w.startMs + HOUR_MS), 7);
+  assert.equal(snowAt(w.endMs), 7);
+  assert.equal(snowAt(w.endMs + HOUR_MS), 0);
+  // Rain (above 1 °C) is not snow, a gap makes the whole thing unknown.
+  assert.equal(shortDay((p, _m, t) => (p === TOP && t === w.endMs ? { precip: 10, temp: 2 } : {})).powderSnow!.forecastCm, 0);
+  assert.equal(shortDay((p, _m, t) => (p === TOP && t === w.endMs ? { precip: null } : {})).powderSnow, null);
+});
+
+test("POWDER_SNEH: pravdepodobnosť rastie s úhrnom, klesá s predstihom, zákon sa oreže na fitovaný rozsah", () => {
+  const p23 = powderLawAt(IFS_LAW, 23);
+  const prob = (x: number, p = p23) => powderProbAtLeast(x, cfg.powder.thresholdCm, p);
+  assert.ok(prob(0) < 0.001, String(prob(0)));
+  assert.ok(prob(5) < prob(10) && prob(10) < prob(20) && prob(20) < prob(30));
+  // The numbers METODIKA §4.1 quotes for the IFS law.
+  assert.ok(Math.abs(prob(20) - 0.54) < 0.02, String(prob(20)));
+  assert.ok(Math.abs(prob(20, powderLawAt(IFS_LAW, 71)) - 0.41) < 0.02);
+  assert.ok(Math.abs(prob(20, powderLawAt(IFS_LAW, 131)) - 0.27) < 0.02);
+  assert.deepEqual(powderLawAt(IFS_LAW, 200), powderLawAt(IFS_LAW, IFS_LAW.maxLeadH));
+  assert.deepEqual(powderLawAt(IFS_LAW, -3), powderLawAt(IFS_LAW, 0));
+  // Median of a 20 cm forecast is near 20 cm a day ahead and lower five days ahead; p90 above the median.
+  const med23 = powderQuantileCm(20, 0.5, p23);
+  assert.ok(med23 > 14 && med23 < 22, String(med23));
+  assert.ok(powderQuantileCm(20, 0.5, powderLawAt(IFS_LAW, 131)) < med23);
+  assert.ok(powderQuantileCm(20, 0.9, p23) > med23);
+  assert.equal(powderQuantileCm(0, 0.5, p23), 0);
+});
+
+test("POWDER_SNEH: predstih z času behu a oneskorenia zverejnenia, bez metadát z času načítania", () => {
+  assert.equal(publishedAtMs(1_000 * HOUR_MS, 5_000 * HOUR_MS, 7), 1_007 * HOUR_MS);
+  assert.equal(publishedAtMs(null, 5_000 * HOUR_MS, 7), 5_000 * HOUR_MS);
+  const endMs = powderWindow(DAY, cfg).endMs;
+  // A run initialised 30 h before the window end, published 7 h later: lead 23 h.
+  const init = (endMs - 30 * HOUR_MS) / 1000;
+  const meta = { last_run_initialisation_time: init, data_end_time: init + 240 * 3600, update_interval_seconds: 21_600 };
+  const day = shortDay((p, _m, t) => (p === TOP && t === endMs ? { precip: 20 } : {}), meta);
+  assert.equal(day.powderSnow!.leadH, 30 - cfg.powder.publishDelayH.ecmwf_ifs);
+  assert.equal(day.powderSnow!.forecastCm, 14);
+  // Without metadata the fetch time (10:00 on DAY, an hour after the window closed) stands in.
+  assert.equal(shortDay(() => ({}), null, at(10)).powderSnow!.leadH, -1);
+});
+
+test("snímka v2: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
+  const snap = snapshotFor();
+  assert.equal(snap.version, 2);
+  assert.equal(snap.horizons.short.powderLaw, "ecmwf_ifs");
+  assert.equal(snap.horizons.now.powderLaw, "icon_d2");
+  assert.equal(snap.horizons.long.powderLaw, null);
+  for (const key of ["now", "short"] as const) {
+    for (const r of snap.horizons[key].resorts) for (const d of r.days as { powderSnow: { probability: number } | null }[]) assert.ok(d.powderSnow && d.powderSnow.probability >= 0 && d.powderSnow.probability <= 1);
+  }
+  for (const d of snap.horizons.long.resorts[0].days as { powderSnow?: unknown }[]) assert.equal(d.powderSnow, undefined);
+  const fitted = JSON.parse(readFileSync(join(REPO_ROOT, "data", "model", "powder-model.json"), "utf8"));
+  assert.deepEqual(cfg.powder.laws.ecmwf_ifs, fitted.sources.ecmwf_ifs.law);
+  assert.deepEqual(cfg.powder.laws.icon_d2, fitted.sources.icon_d2.law);
+  assert.equal(cfg.powder.thresholdCm, fitted.event.thresholdCm);
+  assert.equal(cfg.rules.snowMaxTempC, fitted.physics.phaseMidC);
+  assert.equal(cfg.rules.snowCmPerMm, fitted.physics.slr0 / 10);
 });
 
 // ---------------------------------------------------------------------------

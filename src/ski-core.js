@@ -15,6 +15,10 @@
  *   - Missing and zero are different things. A gap never becomes 0 mm, never improves a verdict and
  *     never shrinks a denominator.
  *
+ * POWDER_SNEH (step 4 of the powder model, 4 Oct 2026): each deterministic day also carries the
+ * calibrated probability of >= 15 cm of new snow in the 24 h to 09:00 at the top station, from the
+ * two-part distribution in src/powder-model.ts (fitted in scripts/model-fit.ts, METODIKA §4).
+ *
  * What the data can and cannot say (verified live 2026-10-03): Open-Meteo's `elevation=` only
  * re-computes temperature for the given height. Precipitation, gusts and sunshine are the model
  * cell's values, identical for a resort's base and top. So whether a millimetre falls as rain or as
@@ -409,6 +413,129 @@ export function daySnowCm(point, date, cfg, idx) {
 }
 
 // ---------------------------------------------------------------------------
+// POWDER_SNEH: the 24 h new snow at the top station as a calibrated probability (METODIKA §4)
+// ---------------------------------------------------------------------------
+//
+// The amount x is the page rule summed over the window D-1 09:00 -> D 09:00 (the same rule as
+// freshSnowCm, over a different window). The observed amount Y given x follows a two-part
+// distribution fitted on station truth: P(Y > 0) = Phi(h0 + h1 sqrt x) and, given snow,
+// sqrt Y ~ Normal(a + b sqrt x, c + d sqrt x) truncated at 0. The coefficients move linearly with
+// the lead time (hours from the run's publication to the end of the window) and are clamped to the
+// range the fit covered. These functions mirror scripts/lib/powder-model.ts; a test keeps them equal.
+
+/** Standard normal CDF, absolute error < 1.5e-7 (Abramowitz & Stegun 7.1.26). */
+export function normalCdf(z) {
+  if (z < -8) return 0;
+  if (z > 8) return 1;
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  const tail = Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI) * poly;
+  return z >= 0 ? 1 - tail : tail;
+}
+
+/** The law's coefficients at a lead time (hours). */
+export function powderLawAt(law, leadH) {
+  const l = (Math.min(Math.max(leadH, 0), law.maxLeadH) - law.leadRefH) / 24;
+  return { h0: law.h00 + law.h01 * l, h1: law.h10 + law.h11 * l, a: law.a0 + law.a1 * l, b: law.b0 + law.b1 * l, c: law.c0 + law.c1 * l, d: law.d0 + law.d1 * l };
+}
+
+/** P(snow at all), and the location and spread of sqrt(Y) given snow, for a forecast amount x (cm). */
+export function powderDistribution(xCm, p) {
+  const r = Math.sqrt(Math.max(0, xCm));
+  return { p0: normalCdf(p.h0 + p.h1 * r), mu: p.a + p.b * r, sigma: Math.max(0.05, p.c + p.d * r) };
+}
+
+/** P(Y >= thresholdCm | x). */
+export function powderProbAtLeast(xCm, thresholdCm, p) {
+  const { p0, mu, sigma } = powderDistribution(xCm, p);
+  const below0 = normalCdf(-mu / sigma);
+  const tail = 1 - normalCdf((Math.sqrt(thresholdCm) - mu) / sigma);
+  return p0 * Math.min(1, tail / Math.max(1e-12, 1 - below0));
+}
+
+/** P(Y <= tCm | x). */
+export function powderCdf(tCm, xCm, p) {
+  const { p0, mu, sigma } = powderDistribution(xCm, p);
+  const below0 = normalCdf(-mu / sigma);
+  const inner = (normalCdf((Math.sqrt(Math.max(0, tCm)) - mu) / sigma) - below0) / Math.max(1e-12, 1 - below0);
+  return 1 - p0 + p0 * Math.min(1, Math.max(0, inner));
+}
+
+/** Quantile q of Y in cm (0 while the dry mass covers q), by bisection on the CDF. */
+export function powderQuantileCm(xCm, q, p) {
+  if (powderCdf(0, xCm, p) >= q) return 0;
+  let lo = 0;
+  let hi = 200;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (powderCdf(mid, xCm, p) < q) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * When the forecast could first be read: the run's initialisation plus the model's typical delay.
+ * Without run metadata the fetch time stands in - it is later than the real publication, so the
+ * lead comes out shorter and the probability a little sharper than calibrated.
+ */
+export function publishedAtMs(runAtMs, fetchedAtMs, delayH) {
+  return runAtMs === null || runAtMs === undefined ? fetchedAtMs : runAtMs + (delayH ?? 0) * HOUR_MS;
+}
+
+/** The window of ski day `date`: from windowHour the day before to windowHour on the day. */
+export function powderWindow(date, cfg) {
+  return { startMs: localTimeMs(addDays(date, -1), cfg.powder.windowHour, cfg.timezone), endMs: localTimeMs(date, cfg.powder.windowHour, cfg.timezone) };
+}
+
+/** The page rule's snow (cm) at the top over the window; null when any hour is missing. */
+export function windowSnowCm(top, date, cfg, idx) {
+  const { startMs, endMs } = powderWindow(date, cfg);
+  let sum = 0;
+  for (const t of stamps(startMs, endMs)) {
+    const i = idx.get(t);
+    const p = i === undefined ? null : top.precipitation[i];
+    const temp = i === undefined ? null : top.temperature[i];
+    if (p === null || temp === null) return null;
+    sum += snowCm(p, temp, cfg.rules);
+  }
+  return round3(sum);
+}
+
+/**
+ * @typedef {{
+ *   forecastCm: number,
+ *   leadH: number,
+ *   probability: number,
+ *   medianCm: number,
+ *   p90Cm: number,
+ * }} PowderSnow
+ */
+
+/**
+ * POWDER_SNEH for one ski day at one resort: the window's forecast amount, the lead time and the
+ * calibrated probability of at least cfg.powder.thresholdCm, with the median and 90th percentile of
+ * the amount. Null when the model has no law or the window has a gap.
+ *
+ * @returns {PowderSnow | null}
+ */
+export function powderSnow(top, date, cfg, idx, law, publishedMs) {
+  if (!law) return null;
+  const x = windowSnowCm(top, date, cfg, idx);
+  if (x === null) return null;
+  const leadH = (powderWindow(date, cfg).endMs - publishedMs) / HOUR_MS;
+  const p = powderLawAt(law, leadH);
+  const tenth = (v) => Math.round(v * 10) / 10;
+  return {
+    forecastCm: x,
+    leadH: tenth(leadH),
+    probability: round3(powderProbAtLeast(x, cfg.powder.thresholdCm, p)),
+    medianCm: tenth(powderQuantileCm(x, 0.5, p)),
+    p90Cm: tenth(powderQuantileCm(x, 0.9, p)),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Horizons
 // ---------------------------------------------------------------------------
 
@@ -438,14 +565,17 @@ function hourlyFor(top, base, dates, cfg) {
   return out;
 }
 
-/** A deterministic horizon: one verdict per resort and day, plus the hourly lines behind it. */
-export function judgeDeterministic(points, cfg, dates) {
+/**
+ * A deterministic horizon: one verdict per resort and day, the POWDER_SNEH probability of the day
+ * (null without a law for the model), plus the hourly lines behind it.
+ */
+export function judgeDeterministic(points, cfg, dates, law = null, publishedMs = 0) {
   return cfg.resorts.map((resort, r) => {
     const { top, base } = resortPoints(points, cfg, r);
     const idx = indexByTime(top.timesMs);
     return {
       id: resort.id,
-      days: dates.map((date) => ({ date, ...judgeDay(top.members[0], base.members[0], date, cfg, idx) })),
+      days: dates.map((date) => ({ date, ...judgeDay(top.members[0], base.members[0], date, cfg, idx), powderSnow: powderSnow(top.members[0], date, cfg, idx, law, publishedMs) })),
       hourly: hourlyFor(top, base, dates, cfg),
     };
   });
@@ -504,8 +634,9 @@ export function summarizeEnsemble(points, cfg, dates) {
 // The snapshot embedded in the page (and re-made in the browser on refresh)
 // ---------------------------------------------------------------------------
 
-/** Bumped whenever the snapshot's shape changes, so an older stored one is rejected, not misread. */
-export const SKI_SNAPSHOT_VERSION = 1;
+/** Bumped whenever the snapshot's shape changes, so an older stored one is rejected, not misread.
+ * 2 (4 Oct 2026): powderSnow on deterministic days, powderLaw and publishedAtMs on horizons. */
+export const SKI_SNAPSHOT_VERSION = 2;
 
 /**
  * Everything the page draws, derived once by whoever has the raw responses - the generator, or the
@@ -513,20 +644,26 @@ export const SKI_SNAPSHOT_VERSION = 1;
  */
 export function buildSkiSnapshot(responses, cfg, fetchedAtMs) {
   const firstDate = firstSkiDate(fetchedAtMs, cfg);
-  /** @type {Record<string, { model: string, label: string, runAtMs: number | null, dates: string[], grids: object[], resorts: { id: string, days: Record<string, any>[], hourly?: object }[] }>} */
+  /** @type {Record<string, { model: string, label: string, runAtMs: number | null, publishedAtMs: number | null, powderLaw: string | null, dates: string[], grids: object[], resorts: { id: string, days: Record<string, any>[], hourly?: object }[] }>} */
   const horizons = {};
   for (const key of HORIZON_KEYS) {
     const h = cfg.horizons[key];
     const dates = horizonDates(cfg, key, firstDate);
     const points = parsePoints(responses[key].data, h.label);
     const lastNeeded = localTimeMs(dates[dates.length - 1], cfg.liftCloseHour, cfg.timezone);
+    const runAtMs = resolveRun(responses[key].meta, lastNeeded);
+    // The ensemble has no calibrated law yet (no member archive to fit one on), so its days carry none.
+    const law = h.ensemble ? null : cfg.powder.laws[h.model] ?? null;
+    const publishedMs = law ? publishedAtMs(runAtMs, fetchedAtMs, cfg.powder.publishDelayH[h.model]) : null;
     horizons[key] = {
       model: h.model,
       label: h.label,
-      runAtMs: resolveRun(responses[key].meta, lastNeeded),
+      runAtMs,
+      publishedAtMs: publishedMs,
+      powderLaw: law ? h.model : null,
       dates,
       grids: points.map((p) => p.grid),
-      resorts: h.ensemble ? summarizeEnsemble(points, cfg, dates) : judgeDeterministic(points, cfg, dates),
+      resorts: h.ensemble ? summarizeEnsemble(points, cfg, dates) : judgeDeterministic(points, cfg, dates, law, publishedMs),
     };
   }
   return { version: SKI_SNAPSHOT_VERSION, fetchedAtMs, firstDate, config: cfg, horizons };

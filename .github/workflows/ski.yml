@@ -4,8 +4,8 @@ on:
   schedule:
     # November-April only: outside the season there is nothing to ski. Three wake-ups a day, never
     # at :00 (GitHub's busiest moment, when queued runs get delayed or dropped). Times are UTC:
-    # 04:13 catches the overnight AROME/ECMWF runs for the morning decision, 10:13 the 00z ECMWF
-    # ensemble, 16:13 the midday AROME run for planning tomorrow. A run that comes hours late costs
+    # 04:13 catches the overnight ICON-D2/ECMWF runs for the morning decision, 10:13 the 00z ECMWF
+    # ensemble, 16:13 the midday ICON-D2 run for planning tomorrow. A run that comes hours late costs
     # little: the open page re-fetches by itself once its data is older than an hour.
     - cron: "13 4,10,16 * 11,12,1,2,3,4 *"
   workflow_dispatch:

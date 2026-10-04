@@ -185,7 +185,7 @@ export function renderSkiPage(snapshot: SnapshotLike): string {
 <main id="sk-main">${main}</main>
 <footer>
   <p>Predpoveď nevie, či je stredisko otvorené ani aký je sneh na zjazdovke. Pred cestou pozrite snehovú správu a webkameru.</p>
-  <p>Dáta: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (GeoSphere Austria AROME, ECMWF IFS a ensemble).</p>
+  <p>Dáta: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (DWD ICON-D2, ECMWF IFS a ensemble).</p>
 </footer>
 </div>
 <script type="application/json" id="sk-snapshot">${json}</script>

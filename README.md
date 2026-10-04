@@ -6,7 +6,7 @@ Hochrindl** – v troch horizontoch:
 
 | Časť stránky | Model (cez [Open-Meteo](https://open-meteo.com/)) | Čo ukazuje |
 |---|---|---|
-| Najbližší lyžiarsky deň | GeoSphere Austria AROME 2,5 km | kartu na stredisko: verdikt, dôvod, nový sneh, teploty, vietor, slnko, odkazy na snehovú správu a webkameru |
+| Najbližší lyžiarsky deň | DWD ICON-D2 2,2 km (do 4. 10. 2026 GeoSphere AROME; ICON-D2 je jediný krátkodobý model so zimným archívom, takže jeho POWDER_SNEH je overený) | kartu na stredisko: verdikt, dôvod, nový sneh, teploty, vietor, slnko, odkazy na snehovú správu a webkameru |
 | Najbližšie 3 dni | ECMWF IFS 9 km | tabuľku deň × stredisko a hodinový graf (teplota hore/dole, sneh, nárazy) |
 | Výhľad na 10 dní | ECMWF ensemble 0,25°, 51 scenárov | podiel scenárov s dobrým / priemerným / zlým dňom a rozpätie snehu |
 
@@ -73,7 +73,7 @@ len denník.
 | 1 – pravda a klimatológia | hotovo 3. 10. 2026 | `npm run truth:fetch` + `npm run truth`; 10 ručných staníc nového snehu (eHYD, GeoSphere), automaty, LWD, SNOWGRID; dátumové konvencie overené proti INCA; búrky ≥ 15 cm 3–5 za sezónu na stanicu, regionálne 7,4; ΔHS automatov = pravda, SNOWGRID nie: [data/truth](data/truth), METODIKA §3.9 |
 | 2 – backtest a baseline | hotovo 4. 10. 2026 | `npm run backtest:fetch` + `npm run backtest`: IFS 9 km celé behy, Previous Runs ICON-D2/ICON-EU/IFS 0,25°/GFS, Historical Forecast; len predpovede zverejnené pred koncom okna. Výsledok: deterministický prah 15 cm nemá zručnosť (BSS 0,13 pri 23 h, záporný od ~80 h) ani v dnešnom pravidle, ale AUC úhrnu 0,96–0,98 do 35 h a 0,9 do 71 h – informácia je, chýba kalibrácia: [data/backtest](data/backtest), METODIKA §5.1 |
 | 3 – model | hotovo 4. 10. 2026 | `npm run model`: fyzika pri predstihu 0 na 10 sezónach IFS a 4 ICON-D2 (14 staníc) – dnešné pravidlo stránky je rovnako dobrý vstup ako fitované varianty (wet-bulb, pomer sneh/voda, výška, vietor); zisk dáva kalibrovaná neistota: dvojdielne rozdelenie (P(sneží) a √úhrn okolo √x) so sklonom klesajúcim s predstihom, overené zima proti zime: BSS 0,26 (0,01–0,42) pri 23 h, 0,21 pri 71 h, 0,42 pri 0 h, ICON-D2 0,34 pri 1 dni; kombinácia modelov v šume. Koeficienty v `data/model/powder-model.json`: [data/model](data/model), METODIKA §4 |
-| 4 – zapojenie do stránky | čaká | koeficienty v malom JSON, výpočet v `src/ski-core.js`, nové polia snímky |
+| 4 – zapojenie do stránky | 4a hotovo 4. 10. 2026, 4b čaká na voľbu N | snímka v2: každý deň horizontov D0 (ICON-D2, nahradil AROME) a D0–D+2 (IFS 9 km) nesie `powderSnow` – úhrn okna D−1 09:00 → D 09:00, predstih, P(≥ 15 cm), medián a 90. percentil; koeficienty v `src/powder-model.ts` (kópia `data/model/powder-model.json`, test rovnosti); stupne ALERT a prah p* po voľbe N: METODIKA §4.4 |
 | 5 – prospektívne overovanie | čaká | CI od novembra 2026 loguje každú predpoveď aj ensemble, vyhodnotenie po sezóne 2026/27 |
 | 6 – kvalita powderu, povrch, inverzie, super lyžovačka | čaká na schválenie | |
 

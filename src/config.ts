@@ -11,6 +11,8 @@
  * Snow report links go to the resort's own lift/piste status where one exists, else to bergfex
  * (Falkert has none; Hochrindl's own page only links to bergfex).
  */
+import { POWDER_MODEL } from "./powder-model.js";
+
 export const SKI_RESORTS = [
   {
     id: "bad-kleinkirchheim",
@@ -67,6 +69,10 @@ export const SKI_RESORTS = [
  * deliberately transparent filter, not a guarantee: the models know nothing about grooming,
  * snowmaking or whether a resort is open, and their gust is the model cell's 10 m gust, not the
  * summit's.
+ *
+ * The first day runs on ICON-D2 since step 4 of the powder model (4 Oct 2026): it is the only
+ * short-range model with a winter archive, so its POWDER_SNEH probability is verified (BSS 0.34 one
+ * day ahead, METODIKA §4); AROME has no archive and cannot be checked.
  */
 export const SKI_CONFIG = {
   timezone: "Europe/Vienna",
@@ -76,7 +82,7 @@ export const SKI_CONFIG = {
   liftCloseHour: 16,
   resorts: SKI_RESORTS,
   horizons: {
-    now: { days: 1, model: "geosphere_arome_austria", metaDomain: "geosphere_arome_austria", label: "GeoSphere AROME 2,5 km", ensemble: false },
+    now: { days: 1, model: "icon_d2", metaDomain: "dwd_icon_d2", label: "DWD ICON-D2 2,2 km", ensemble: false },
     short: { days: 3, model: "ecmwf_ifs", metaDomain: "ecmwf_ifs", label: "ECMWF IFS 9 km", ensemble: false },
     long: {
       days: 10,
@@ -115,6 +121,8 @@ export const SKI_CONFIG = {
   serverMinRefreshMinutes: 20,
   /** The open page refreshes itself at most this often, and only while it is visible. */
   clientRefreshMinutes: 60,
+  /** The calibrated POWDER_SNEH model (src/powder-model.ts, METODIKA §4). */
+  powder: POWDER_MODEL,
 };
 
 export type SkiConfig = typeof SKI_CONFIG;

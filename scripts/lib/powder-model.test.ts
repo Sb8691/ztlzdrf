@@ -103,3 +103,16 @@ test("two-part lead law: coefficients move linearly in days and clamp", () => {
   assert.deepEqual(hurdleAtLead(law, 500), hurdleAtLead(law, 131));
   assert.ok(hurdleProbAtLeast(20, 15, hurdleAtLead(law, 23)) > hurdleProbAtLeast(20, 15, hurdleAtLead(law, 131)));
 });
+
+test("the page's copy of the model (src/ski-core.js) agrees with the library", async () => {
+  const core = await import("../../src/ski-core.js");
+  const law = { leadRefH: 23, minLeadH: 23, maxLeadH: 131, h00: -1.339, h01: 0, h10: 0.896, h11: 0, a0: 1.419, a1: 0, b0: 0.57, b1: -0.032, c0: 0.891, c1: 0, d0: 0, d1: 0 };
+  for (const lead of [0, 23, 71, 131, 200]) {
+    const lib = hurdleAtLead(law, lead), page = core.powderLawAt(law, lead);
+    assert.deepEqual(page, lib);
+    for (const x of [0, 0.5, 3, 10, 20, 45]) {
+      assert.ok(Math.abs(core.powderProbAtLeast(x, 15, page) - hurdleProbAtLeast(x, 15, lib)) < 1e-12, `${lead} h, ${x} cm`);
+      assert.ok(Math.abs(core.powderQuantileCm(x, 0.9, page) - hurdleQuantileCm(x, 0.9, lib)) < 1e-9);
+    }
+  }
+});

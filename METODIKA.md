@@ -29,6 +29,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 4. 10. 2026 | Krok 4a: horizont D0 prepnutý z AROME na ICON-D2 (jediný krátkodobý model s overiteľným archívom); predstih od zverejnenia behu (IFS +7 h, ICON-D2 +1,5 h), bez metadát od času načítania; ansámbel zatiaľ bez pravdepodobnosti; snímka v2 s `powderSnow` | majiteľ (áno 4. 10.), Fable |
 | 4. 10. 2026 | Krok 3: fyzika = dnešné pravidlo stránky (fitované fázy, pomer sneh/voda, výškový faktor a vietor nepridávajú zručnosť; výškový faktor ťahá jediná vrcholová stanica a zhoršuje pásmo 1 700–1 950 m); rozdelenie dvojdielne na √cm; zákon: len sklon b klesá s predstihom (6 parametrov) – zákon bez predstihu má rovnaké CV skóre, zvolený ten so závislosťou kvôli extrapolácii | Fable |
 | 4. 10. 2026 | Krok 3: záporné ΔHS automatov = 0 cm; vzorka fitu = zimné dni, ručné stanice pri akejkoľvek pokrývke, automaty pri ≥ 30 cm; prah udalosti v spojitom rozdelení 15 cm (14,5 dáva to isté); kombinácia IFS + ICON-D2 pri 1 dni neprijatá (v šume) | Fable |
 | 3. 10. 2026 | POWDER = ≥ 15 cm / 24 h; stupne ALERT / POZOR / VÝHĽAD; najprv len POWDER_SNEH pre D0–D+2 | majiteľ (prompt) |
@@ -473,6 +474,33 @@ proti 0,28–0,30. Dolné hranice CI pri 23–71 h ležia na nule, nie nad ňou 
   (podmienka pokrývky v novembri necháva len dni hneď po búrkach) a sadzba v sezóne prevádzky s pokrývkou.
 - Prah ALERTu p* závisí od pomeru nákladov N (zmeškaný powder deň : zbytočná cesta), p* ≈ 1/(N + 1);
   majiteľ rozhodne v kroku 4 z tabuľky zásahov/falošných poplachov za sezónu.
+
+### 4.4 Zapojenie do stránky (krok 4a, 4. 10. 2026)
+
+- **Kód:** funkcie modelu sú prenesené do `src/ski-core.js` (`normalCdf`, `powderLawAt`,
+  `powderDistribution`, `powderProbAtLeast`, `powderCdf`, `powderQuantileCm`, `publishedAtMs`,
+  `powderWindow`, `windowSnowCm`, `powderSnow`); test v `scripts/lib/powder-model.test.ts` porovnáva
+  kópiu so `scripts/lib/powder-model.ts` na mriežke predstihov a úhrnov.
+- **Koeficienty:** `src/powder-model.ts` (`version` 1, `fittedOn` 2026-10-04) je kópia zákonov z
+  `data/model/powder-model.json`; test v `src/ski.test.ts` kontroluje rovnosť, a tiež že fyzika modelu
+  (T ≤ 1 °C, 0,7 cm/mm) je presne pravidlo stránky. Do stránky idú v konfigurácii snímky.
+- **Snímka v2:** každý deň deterministických horizontov má `powderSnow = { forecastCm, leadH,
+  probability, medianCm, p90Cm }`, alebo `null` (medzera v okne, model bez zákona); horizont nesie
+  `powderLaw` a `publishedAtMs`. Ansámbel (D+3–D+9) zatiaľ bez pravdepodobnosti – nemá archív členov,
+  z ktorého by sa dal fitovať zákon.
+- **Okno:** D−1 09:00 → D 09:00 miestneho času na hornej stanici, značky (začiatok, koniec] ako
+  „predchádzajúca hodina“ Open-Meteo; úhrn = pravidlo stránky (ako `freshSnowCm`, iné okno).
+- **Predstih** = koniec okna − (inicializácia behu + oneskorenie zverejnenia: IFS 7 h ako v backteste,
+  ICON-D2 1,5 h, z meta.json); bez metadát behu sa použije čas načítania (predstih vyjde kratší, model
+  mierne ostrejší, než je kalibrovaný). Záporný predstih znamená, že okno už skončilo (D0 doobeda) –
+  zákon ho oreže na 0.
+- **Zdroje:** horizont `now` (D0) prepnutý z GeoSphere AROME na **DWD ICON-D2 2,2 km** – jediný
+  krátkodobý model s overiteľným zimným archívom (zákon 0–47 h); AROME archív nemá. Horizont `short`
+  (IFS 9 km, D0–D+2) používa zákon IFS (23–131 h, pod 23 h extrapolácia). Overené naživo 4. 10. 2026:
+  ICON-D2 cez forecast API vracia všetky štyri premenné v očakávaných jednotkách, minulé dni aj 48 h
+  dopredu, CORS `*`, oneskorenie zverejnenia 1,4 h, beh každé 3 h.
+- **Ešte nie je (4b):** stupne ALERT / POZOR / VÝHĽAD a prah p* (čaká na N majiteľa, rozhodovacia
+  tabuľka v `data/model/REPORT.md`), zobrazenie v UI, pravdepodobnosť pre ansámbel.
 
 ## 5. Výsledky podľa predstihu
 
