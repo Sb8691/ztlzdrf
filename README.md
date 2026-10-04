@@ -89,6 +89,7 @@ npm run truth            # búrky, klimatológia, zhoda zdrojov → data/truth/
 npm run backtest:fetch   # archív predpovedí s predstihom do cache
 npm run backtest         # baseline podľa predstihu → data/backtest/
 npm run model            # fit a výber modelu úhrnu → data/model/
+npm run verify           # po sezóne: log predpovedí proti pravde → data/prospective/REPORT-*.md
 ```
 
 ## Lokálne

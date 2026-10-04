@@ -13,7 +13,8 @@
     "truth": "tsx scripts/truth-report.ts",
     "backtest:fetch": "tsx scripts/backtest-fetch.ts",
     "backtest": "tsx scripts/backtest-report.ts",
-    "model": "tsx scripts/model-fit.ts"
+    "model": "tsx scripts/model-fit.ts",
+    "verify": "tsx scripts/verify-prospective.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

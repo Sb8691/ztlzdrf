@@ -645,7 +645,7 @@ stránkou). Riadok (`src/prospective.ts`, formát `v: 1`):
 Veľkosť: ~20 kB na riadok, ~3 riadky denne, ~10 MB za sezónu v jednom textovom súbore. Riadok
 s rovnakým `fetchedAtMs` sa nezdvojí. Overené naživo 4. 10. 2026 (`SKI_LOG_DIR` do scratch adresára).
 
-**Čo sa z toho po sezóne vyhodnotí (5b, `npm run verify`):** pravda zo staníc (GeoSphere ručný nový
+**Čo sa z toho po sezóne vyhodnotí (5b, `npm run verify`, skript napísaný 4. 10. 2026 a testovaný na syntetických riadkoch; ostré spustenie po sezóne 2026/27):** pravda zo staníc (GeoSphere ručný nový
 sneh a ΔHS automatov o 06 UTC, LWD po súhlase) cez `npm run truth:fetch`; pre každý horizont, deň
 poradia (D0, D+1, D+2) a stanicu BSS proti klimatológii, spoľahlivosť, CRPS a rozhodovacia tabuľka
 pri použitom p*, s blokovým bootstrapom po dňoch ako v §5.1; stupne ALERT/POZOR a značka presne tak,
@@ -688,4 +688,5 @@ npm run truth             # zarovnanie, búrky, klimatológia, zhoda zdrojov →
 npm run backtest:fetch    # archív predpovedí: --only=single,prev,hist (obnoviteľné z cache)
 npm run backtest          # baseline podľa predstihu → data/backtest/{summary.json,REPORT.md}
 npm run model             # fyzika, rozdelenie, zákon podľa predstihu, kombinácia → data/model/{powder-model.json,REPORT.md}; --only=physics,explore,lead,law,blend
+npm run verify            # po sezóne: data/prospective/<sezóna>.jsonl proti pravde → data/prospective/REPORT-<sezóna>.md; --season=2026-27, --log=súbor
 ```
