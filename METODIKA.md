@@ -29,6 +29,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 4. 10. 2026 | Krok 5a: každý čerstvý beh generátora pripíše riadok do `data/prospective/<sezóna>.jsonl` (strediská, šesť overovacích staníc, členovia ansámblu v okne); CI commituje `data/prospective`; vyhodnotenie až po sezóne 2026/27 | majiteľ (áno na plán), Fable |
 | 4. 10. 2026 | Krok 4b: prah ALERTu p* = 0,20 (N = 4) ako predvolená hodnota, lebo majiteľ N nevedel určiť; stupne podľa poradia dňa (ALERT D0–D+1, POZOR D+2–D+3, VÝHĽAD D+4–D+9); horizont `short` ostáva 3 dni (D+3 bez stupňa) | Fable (majiteľ: „neviem“) |
 | 4. 10. 2026 | Krok 4a: horizont D0 prepnutý z AROME na ICON-D2 (jediný krátkodobý model s overiteľným archívom); predstih od zverejnenia behu (IFS +7 h, ICON-D2 +1,5 h), bez metadát od času načítania; ansámbel zatiaľ bez pravdepodobnosti; snímka v2 s `powderSnow` | majiteľ (áno 4. 10.), Fable |
 | 4. 10. 2026 | Krok 3: fyzika = dnešné pravidlo stránky (fitované fázy, pomer sneh/voda, výškový faktor a vietor nepridávajú zručnosť; výškový faktor ťahá jediná vrcholová stanica a zhoršuje pásmo 1 700–1 950 m); rozdelenie dvojdielne na √cm; zákon: len sklon b klesá s predstihom (6 parametrov) – zákon bez predstihu má rovnaké CV skóre, zvolený ten so závislosťou kvôli extrapolácii | Fable |
@@ -620,6 +621,39 @@ miešajú predstihy v rámci dňa; ICON-D2 Historical Forecast zatiaľ len do 12
 Open-Meteo, dokončiť); 24 udalostí v primárnej vzorke – všetky intervaly sú široké a rozhodujúci test
 ostáva sezóna 2026/27.
 
+
+### 5.2 Krok 5 – prospektívne overovanie (od 11/2026, vyhodnotenie po sezóne 2026/27)
+
+**5a – log predpovedí (4. 10. 2026).** Každý beh generátora, ktorý stiahol čerstvé dáta (CI 04:13,
+10:13, 16:13 UTC, november–apríl; nie opakované renderovanie zo snímky), pripíše jeden riadok JSON do
+`data/prospective/<sezóna>.jsonl` (sezóna „2026-27“ = august 2026 – júl 2027; CI ho commituje spolu so
+stránkou). Riadok (`src/prospective.ts`, formát `v: 1`):
+
+- `fetchedAtMs`, `firstDate`, `snapshotVersion`, `modelVersion` (verzia koeficientov);
+- pre každý horizont `model`, `runAtMs`, `publishedAtMs`;
+- `resorts`: pre každé stredisko a deň `date`, `status`, `freshSnowCm`, `rainBaseMm`, `maxGustKmh`,
+  `sunHours` a celý `powderSnow` (úhrn okna, predstih, pravdepodobnosť, medián, p90, stupeň, značka);
+  pri ansámbli `goodPct/fairPct/badPct`, `snowCm` (p10/p50/p90) a **`members`** – úhrn okna D−1 09:00
+  → D 09:00 pre každého z 51 členov na 0,1 cm (D0 má `null`, ansámbel sa nesťahuje spätne); z toho sa
+  po sezóne dá fitovať zákon pre D+3–D+9;
+- `stations`: tá istá predpoveď (rovnaké premenné, dátumy, `elevation=` výška stanice, ten istý beh)
+  pre šesť staníc s pravdou – Villacher Alpe 2 140 m, Kanzelhöhe 1 520 m, Flattnitz 1 437 m,
+  Katschberg 1 635 m, LWD Turracherhoehe 1 795 m, LWD Falkert 1 886 m – s `powderSnow` na deň, pre
+  horizonty ICON-D2 a IFS (dve požiadavky navyše na beh, 6 bodov, v limitoch). Keď sa stanice
+  nepodarí stiahnuť, riadok sa zapíše bez nich a generátor to vypíše; log nikdy nezastaví stránku.
+
+Veľkosť: ~20 kB na riadok, ~3 riadky denne, ~10 MB za sezónu v jednom textovom súbore. Riadok
+s rovnakým `fetchedAtMs` sa nezdvojí. Overené naživo 4. 10. 2026 (`SKI_LOG_DIR` do scratch adresára).
+
+**Čo sa z toho po sezóne vyhodnotí (5b, `npm run verify`):** pravda zo staníc (GeoSphere ručný nový
+sneh a ΔHS automatov o 06 UTC, LWD po súhlase) cez `npm run truth:fetch`; pre každý horizont, deň
+poradia (D0, D+1, D+2) a stanicu BSS proti klimatológii, spoľahlivosť, CRPS a rozhodovacia tabuľka
+pri použitom p*, s blokovým bootstrapom po dňoch ako v §5.1; stupne ALERT/POZOR a značka presne tak,
+ako ich stránka mala v čase behu (nič sa neprepočítava z neskorších dát). Horné stanice lanoviek
+nemajú vlastnú pravdu: Turracher Höhe a Falkert sa porovnajú s LWD stanicami 1,4–1,6 km od lanoviek,
+Hochrindl a Bad Kleinkirchheim len orientačne s najbližšími stanicami (10–15 km, viď §3.9 – polovica
+udalostí sa nezdieľa). Počas sezóny sa nič nefituje; prekalibrovanie (§7) až po sezóne.
+
 ## 6. Limity
 
 - Žiadny dlhý rad pravdy neleží na hornej stanici lanovky; LWD body sú 1,4–1,6 km od nich a existujú len
@@ -639,7 +673,10 @@ ostáva sezóna 2026/27.
 
 ## 7. Prekalibrovanie
 
-Doplní krok 5 (prospektívne overovanie od novembra 2026, vyhodnotenie po sezóne 2026/27).
+Po sezóne 2026/27: `npm run verify` nad `data/prospective/2026-27.jsonl` (§5.2) rozhodne, či koeficienty
+v `src/powder-model.ts` ostanú (BSS a spoľahlivosť v medziach §4), alebo sa `npm run model` spustí znova
+aj s novou zimou v archíve a `version` koeficientov sa zvýši. Prah p* (§4.4) sa zmení len rozhodnutím
+majiteľa z rozhodovacej tabuľky. Počas sezóny sa nič nemení.
 
 ## 8. Reprodukcia
 

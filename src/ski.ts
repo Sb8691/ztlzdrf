@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SKI_CONFIG, type SkiConfig } from "./config.js";
 import { fetchJson } from "./fetch-json.js";
+import { appendForecastLog, buildForecastLog, fetchStationResponses, type Responses, type StationResponses } from "./prospective.js";
 import { buildSkiSnapshot, HORIZON_KEYS, firstSkiDate, horizonUrl, metaUrl, SKI_SNAPSHOT_VERSION } from "./ski-core.js";
 import { renderSkiPage } from "./ski-page.js";
 
@@ -15,13 +16,19 @@ import { renderSkiPage } from "./ski-page.js";
  * A snapshot younger than serverMinRefreshMinutes is reused as-is, so a re-run minutes later
  * changes no byte.
  *
+ * Every fresh fetch also appends one line to data/prospective/<season>.jsonl (src/prospective.ts),
+ * the record the 2026/27 verification will be scored from; a failure there is a warning, never a
+ * missing page.
+ *
  * Env knobs for local work: SKI_DOCS_DIR (write into a scratch directory instead of docs/),
- * SKI_RENDER_ONLY=true (no network - re-render the page from the stored snapshot).
+ * SKI_LOG_DIR (the forecast log elsewhere than data/prospective/), SKI_RENDER_ONLY=true (no network -
+ * re-render the page from the stored snapshot, no log line).
  */
 
 export const DOCS_DIR = process.env.SKI_DOCS_DIR ? resolve(process.env.SKI_DOCS_DIR) : fileURLToPath(new URL("../docs", import.meta.url));
 const SNAPSHOT_PATH = join(DOCS_DIR, "data", "ski.json");
 const PAGE_PATH = join(DOCS_DIR, "index.html");
+export const LOG_DIR = process.env.SKI_LOG_DIR ? resolve(process.env.SKI_LOG_DIR) : fileURLToPath(new URL("../data/prospective", import.meta.url));
 
 export type SkiSnapshot = ReturnType<typeof buildSkiSnapshot>;
 
@@ -50,9 +57,9 @@ export function readSnapshot(path: string = SNAPSHOT_PATH): SkiSnapshot | null {
 
 /** Sequential on purpose: Open-Meteo answers a burst of parallel requests with an error body under
  * HTTP 200. The run metadata is best effort - without it the page just omits the run time. */
-export async function fetchSkiSnapshot(cfg: SkiConfig = SKI_CONFIG, nowMs = Date.now()): Promise<SkiSnapshot> {
+export async function fetchSkiResponses(cfg: SkiConfig = SKI_CONFIG, nowMs = Date.now()): Promise<Responses> {
   const first = firstSkiDate(nowMs, cfg);
-  const responses: Record<string, { data: unknown; meta: unknown }> = {};
+  const responses: Responses = {};
   for (const key of HORIZON_KEYS) {
     const data = await fetchJson<unknown>(horizonUrl(cfg, key, first), { timeoutMs: 60_000 });
     let meta: unknown = null;
@@ -63,7 +70,23 @@ export async function fetchSkiSnapshot(cfg: SkiConfig = SKI_CONFIG, nowMs = Date
     }
     responses[key] = { data, meta };
   }
-  return buildSkiSnapshot(responses, cfg, nowMs);
+  return responses;
+}
+
+export async function fetchSkiSnapshot(cfg: SkiConfig = SKI_CONFIG, nowMs = Date.now()): Promise<SkiSnapshot> {
+  return buildSkiSnapshot(await fetchSkiResponses(cfg, nowMs), cfg, nowMs);
+}
+
+/** The prospective log line for a fresh fetch: stations are fetched best effort, the line is written either way. */
+async function logForecasts(snapshot: SkiSnapshot, responses: Responses, cfg: SkiConfig): Promise<void> {
+  let stations: StationResponses | null = null;
+  try {
+    stations = await fetchStationResponses(cfg, snapshot.firstDate);
+  } catch (err) {
+    console.warn(`Predpoveď pre overovacie stanice sa nepodarilo stiahnuť (${err instanceof Error ? err.message : String(err)}) – log bude bez staníc.`);
+  }
+  const { path, written } = appendForecastLog(buildForecastLog(snapshot, responses, stations, cfg), LOG_DIR);
+  console.log(written ? `Predpoveď zapísaná do ${path}${stations ? "" : " (bez staníc)"}.` : `${path} už má riadok z tohto načítania.`);
 }
 
 function logSummary(s: SkiSnapshot): void {
@@ -94,9 +117,15 @@ async function main(): Promise<void> {
     console.log(`Snímka je stará ${ageMin.toFixed(0)} min – nesťahujem znova (limit ${cfg.serverMinRefreshMinutes} min).`);
   } else {
     try {
-      snapshot = await fetchSkiSnapshot(cfg, now);
+      const responses = await fetchSkiResponses(cfg, now);
+      snapshot = buildSkiSnapshot(responses, cfg, now);
       writeIfChanged(SNAPSHOT_PATH, `${JSON.stringify(snapshot)}\n`);
       console.log("Stiahnuté z Open-Meteo, snímka uložená.");
+      try {
+        await logForecasts(snapshot, responses, cfg);
+      } catch (err) {
+        console.warn(`Log predpovedí sa nepodarilo zapísať: ${err instanceof Error ? err.message : String(err)}`);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (!stored) throw new Error(`Predpoveď sa nepodarilo stiahnuť a žiadna staršia snímka neexistuje: ${message}`);

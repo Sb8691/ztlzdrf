@@ -74,7 +74,7 @@ len denník.
 | 2 – backtest a baseline | hotovo 4. 10. 2026 | `npm run backtest:fetch` + `npm run backtest`: IFS 9 km celé behy, Previous Runs ICON-D2/ICON-EU/IFS 0,25°/GFS, Historical Forecast; len predpovede zverejnené pred koncom okna. Výsledok: deterministický prah 15 cm nemá zručnosť (BSS 0,13 pri 23 h, záporný od ~80 h) ani v dnešnom pravidle, ale AUC úhrnu 0,96–0,98 do 35 h a 0,9 do 71 h – informácia je, chýba kalibrácia: [data/backtest](data/backtest), METODIKA §5.1 |
 | 3 – model | hotovo 4. 10. 2026 | `npm run model`: fyzika pri predstihu 0 na 10 sezónach IFS a 4 ICON-D2 (14 staníc) – dnešné pravidlo stránky je rovnako dobrý vstup ako fitované varianty (wet-bulb, pomer sneh/voda, výška, vietor); zisk dáva kalibrovaná neistota: dvojdielne rozdelenie (P(sneží) a √úhrn okolo √x) so sklonom klesajúcim s predstihom, overené zima proti zime: BSS 0,26 (0,01–0,42) pri 23 h, 0,21 pri 71 h, 0,42 pri 0 h, ICON-D2 0,34 pri 1 dni; kombinácia modelov v šume. Koeficienty v `data/model/powder-model.json`: [data/model](data/model), METODIKA §4 |
 | 4 – zapojenie do stránky | hotovo 4. 10. 2026 | snímka v2: každý deň horizontov D0 (ICON-D2, nahradil AROME) a D0–D+2 (IFS 9 km) nesie `powderSnow` – úhrn okna D−1 09:00 → D 09:00, predstih, P(≥ 15 cm), medián a 90. percentil; koeficienty v `src/powder-model.ts` (kópia `data/model/powder-model.json`, test rovnosti); stupeň dňa (ALERT D0–D+1, POZOR D+2–D+3) a značka `alert` od p* = 0,20 (predvolené N = 4, majiteľ N neurčil; jedno číslo v `src/powder-model.ts`): METODIKA §4.4 |
-| 5 – prospektívne overovanie | čaká | CI od novembra 2026 loguje každú predpoveď aj ensemble, vyhodnotenie po sezóne 2026/27 |
+| 5 – prospektívne overovanie | 5a hotovo 4. 10. 2026, vyhodnotenie po sezóne 2026/27 | každý čerstvý beh CI pripíše riadok do `data/prospective/<sezóna>.jsonl`: strediská, šesť staníc s pravdou (rovnaká požiadavka, ten istý beh), 51 členov ansámblu v okne; `npm run verify` po sezóne: METODIKA §5.2 |
 | 6 – kvalita powderu, povrch, inverzie, super lyžovačka | čaká na schválenie | |
 
 Offline skripty bežia cez `npm run` (tsx), surové dáta držia v `~/.cache/ztlzdrf` mimo gitu
@@ -98,6 +98,7 @@ npm ci
 npm test
 npm run ski                                     # stiahne a zapíše docs/
 SKI_DOCS_DIR=/tmp/ski npm run ski               # zapíše inam ako do docs/
+SKI_DOCS_DIR=/tmp/ski SKI_LOG_DIR=/tmp/ski/log npm run ski   # aj log predpovedí mimo data/prospective/
 SKI_DOCS_DIR=/tmp/ski SKI_RENDER_ONLY=true npm run ski   # bez siete, z uloženej snímky
 ```
 

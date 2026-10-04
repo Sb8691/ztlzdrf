@@ -34,8 +34,9 @@ jobs:
       - run: npm run build
       - run: npm test
 
-      # Fetches the three horizons, stores docs/data/ski.json and writes docs/index.html. If
-      # Open-Meteo fails, the last valid snapshot is republished as it was (src/ski.ts).
+      # Fetches the three horizons, stores docs/data/ski.json, writes docs/index.html and appends the
+      # run to data/prospective/<season>.jsonl for the season-end verification (src/prospective.ts).
+      # If Open-Meteo fails, the last valid snapshot is republished as it was (src/ski.ts).
       - name: Generate the page
         run: node dist/ski.js
 
@@ -44,7 +45,7 @@ jobs:
       # (`-X theirs` = the commit being replayed, i.e. ours).
       - name: Publish
         run: |
-          git add -A docs
+          git add -A docs data/prospective
           if git diff --cached --quiet; then
             echo "docs/ bez zmeny."
             exit 0

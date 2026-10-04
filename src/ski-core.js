@@ -165,8 +165,13 @@ function withQuery(base, params) {
 }
 
 export function horizonUrl(cfg, key, firstDate) {
+  return pointsUrl(cfg, key, firstDate, requestPoints(cfg));
+}
+
+/** The same request as the horizon makes, for any list of points (the prospective log asks for the
+ * verification stations this way, so their numbers are produced exactly like the resorts'). */
+export function pointsUrl(cfg, key, firstDate, pts) {
   const h = cfg.horizons[key];
-  const pts = requestPoints(cfg);
   const { startDate, endDate } = requestDates(cfg, key, firstDate);
   return withQuery(h.ensemble ? ENSEMBLE_ENDPOINT : FORECAST_ENDPOINT, {
     latitude: pts.map((p) => p.latitude).join(","),
@@ -267,7 +272,7 @@ export function parsePoints(json, what) {
 // One day at one resort
 // ---------------------------------------------------------------------------
 
-function indexByTime(timesMs) {
+export function indexByTime(timesMs) {
   const idx = new Map();
   for (let i = 0; i < timesMs.length; i++) idx.set(timesMs[i], i);
   return idx;
