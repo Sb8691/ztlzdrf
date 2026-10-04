@@ -502,6 +502,12 @@ export function windowSnowCm(top, date, cfg, idx) {
   return round3(sum);
 }
 
+/** The stage a day belongs to by its offset from the first ski day; null beyond the last stage. */
+export function powderStage(dayOffset, cfg) {
+  for (const s of cfg.powder.stages) if (dayOffset <= s.maxDayOffset) return s.stage;
+  return null;
+}
+
 /**
  * @typedef {{
  *   forecastCm: number,
@@ -509,29 +515,36 @@ export function windowSnowCm(top, date, cfg, idx) {
  *   probability: number,
  *   medianCm: number,
  *   p90Cm: number,
+ *   stage: "alert" | "pozor" | "vyhlad" | null,
+ *   alert: boolean,
  * }} PowderSnow
  */
 
 /**
  * POWDER_SNEH for one ski day at one resort: the window's forecast amount, the lead time and the
  * calibrated probability of at least cfg.powder.thresholdCm, with the median and 90th percentile of
- * the amount. Null when the model has no law or the window has a gap.
+ * the amount; the day's stage (ALERT / POZOR / VÝHĽAD by its offset from the first ski day) and
+ * whether the probability reaches the flag threshold. Null when the model has no law or the window
+ * has a gap - a gap never becomes a quiet "no powder".
  *
  * @returns {PowderSnow | null}
  */
-export function powderSnow(top, date, cfg, idx, law, publishedMs) {
+export function powderSnow(top, date, cfg, idx, law, publishedMs, dayOffset = 0) {
   if (!law) return null;
   const x = windowSnowCm(top, date, cfg, idx);
   if (x === null) return null;
   const leadH = (powderWindow(date, cfg).endMs - publishedMs) / HOUR_MS;
   const p = powderLawAt(law, leadH);
   const tenth = (v) => Math.round(v * 10) / 10;
+  const probability = round3(powderProbAtLeast(x, cfg.powder.thresholdCm, p));
   return {
     forecastCm: x,
     leadH: tenth(leadH),
-    probability: round3(powderProbAtLeast(x, cfg.powder.thresholdCm, p)),
+    probability,
     medianCm: tenth(powderQuantileCm(x, 0.5, p)),
     p90Cm: tenth(powderQuantileCm(x, 0.9, p)),
+    stage: powderStage(dayOffset, cfg),
+    alert: probability >= cfg.powder.alert.minProb,
   };
 }
 
@@ -575,7 +588,7 @@ export function judgeDeterministic(points, cfg, dates, law = null, publishedMs =
     const idx = indexByTime(top.timesMs);
     return {
       id: resort.id,
-      days: dates.map((date) => ({ date, ...judgeDay(top.members[0], base.members[0], date, cfg, idx), powderSnow: powderSnow(top.members[0], date, cfg, idx, law, publishedMs) })),
+      days: dates.map((date, i) => ({ date, ...judgeDay(top.members[0], base.members[0], date, cfg, idx), powderSnow: powderSnow(top.members[0], date, cfg, idx, law, publishedMs, i) })),
       hourly: hourlyFor(top, base, dates, cfg),
     };
   });
@@ -635,7 +648,8 @@ export function summarizeEnsemble(points, cfg, dates) {
 // ---------------------------------------------------------------------------
 
 /** Bumped whenever the snapshot's shape changes, so an older stored one is rejected, not misread.
- * 2 (4 Oct 2026): powderSnow on deterministic days, powderLaw and publishedAtMs on horizons. */
+ * 2 (4 Oct 2026): powderSnow (amount, lead, probability, median, p90, stage, alert flag) on deterministic
+ * days, powderLaw and publishedAtMs on horizons. */
 export const SKI_SNAPSHOT_VERSION = 2;
 
 /**

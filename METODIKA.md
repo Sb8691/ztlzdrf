@@ -29,6 +29,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 4. 10. 2026 | Krok 4b: prah ALERTu p* = 0,20 (N = 4) ako predvolená hodnota, lebo majiteľ N nevedel určiť; stupne podľa poradia dňa (ALERT D0–D+1, POZOR D+2–D+3, VÝHĽAD D+4–D+9); horizont `short` ostáva 3 dni (D+3 bez stupňa) | Fable (majiteľ: „neviem“) |
 | 4. 10. 2026 | Krok 4a: horizont D0 prepnutý z AROME na ICON-D2 (jediný krátkodobý model s overiteľným archívom); predstih od zverejnenia behu (IFS +7 h, ICON-D2 +1,5 h), bez metadát od času načítania; ansámbel zatiaľ bez pravdepodobnosti; snímka v2 s `powderSnow` | majiteľ (áno 4. 10.), Fable |
 | 4. 10. 2026 | Krok 3: fyzika = dnešné pravidlo stránky (fitované fázy, pomer sneh/voda, výškový faktor a vietor nepridávajú zručnosť; výškový faktor ťahá jediná vrcholová stanica a zhoršuje pásmo 1 700–1 950 m); rozdelenie dvojdielne na √cm; zákon: len sklon b klesá s predstihom (6 parametrov) – zákon bez predstihu má rovnaké CV skóre, zvolený ten so závislosťou kvôli extrapolácii | Fable |
 | 4. 10. 2026 | Krok 3: záporné ΔHS automatov = 0 cm; vzorka fitu = zimné dni, ručné stanice pri akejkoľvek pokrývke, automaty pri ≥ 30 cm; prah udalosti v spojitom rozdelení 15 cm (14,5 dáva to isté); kombinácia IFS + ICON-D2 pri 1 dni neprijatá (v šume) | Fable |
@@ -499,8 +500,16 @@ proti 0,28–0,30. Dolné hranice CI pri 23–71 h ležia na nule, nie nad ňou 
   (IFS 9 km, D0–D+2) používa zákon IFS (23–131 h, pod 23 h extrapolácia). Overené naživo 4. 10. 2026:
   ICON-D2 cez forecast API vracia všetky štyri premenné v očakávaných jednotkách, minulé dni aj 48 h
   dopredu, CORS `*`, oneskorenie zverejnenia 1,4 h, beh každé 3 h.
-- **Ešte nie je (4b):** stupne ALERT / POZOR / VÝHĽAD a prah p* (čaká na N majiteľa, rozhodovacia
-  tabuľka v `data/model/REPORT.md`), zobrazenie v UI, pravdepodobnosť pre ansámbel.
+- **Stupne a prah (4b, 4. 10. 2026):** `powderSnow.stage` = ALERT (D0–D+1), POZOR (D+2–D+3), VÝHĽAD
+  (D+4–D+9) podľa poradia dňa od prvého lyžiarskeho dňa; `powderSnow.alert` = pravdepodobnosť ≥ p*.
+  Majiteľ pomer nákladov N nevedel určiť („neviem“, 4. 10. 2026), preto je p* **predvolená hodnota,
+  nie meranie**: strediská sú na krátku cestu od domu, zbytočná cesta je lacná a zmeškaný deň drahý,
+  N = 4 → p* = 1/(N + 1) = 0,20. Mimo vzorky to deň vopred zachytí 3 zo 4 powder dní (POD 0,75) za
+  cenu asi 2,7 falošného poplachu na stanicu a sezónu, tri dni vopred POD 0,38 pri 1,4 falošného
+  (rozhodovacia tabuľka v `data/model/REPORT.md`). Jedno číslo v `src/powder-model.ts` (`alert`).
+  Pokryté dni: D0 (ICON-D2 aj IFS), D+1 a D+2 (IFS); D+3 by potreboval štvrtý deň horizontu `short`
+  (zmena tabuľky stránky), D+4–D+9 ansámbel bez zákona.
+- **Ešte nie je:** zobrazenie v UI, pravdepodobnosť pre ansámbel, D+3.
 
 ## 5. Výsledky podľa predstihu
 

@@ -45,6 +45,21 @@ export const POWDER_MODEL = {
     /** ICON-D2: Historical Forecast 2022/23-2025/26 at 14 stations (lead 0) and Previous Runs one day ahead; lead 0-47 h. */
     icon_d2: { leadRefH: 0, minLeadH: 0, maxLeadH: 47, h00: -1.594, h01: 0, h10: 1.7, h11: 0, a0: 0.933, a1: 0, b0: 0.875, b1: -0.086, c0: 0.727, c1: 0, d0: 0, d1: 0 },
   } as Record<string, PowderLaw>,
+  /**
+   * When the probability becomes a POWDER flag. The owner left the cost ratio N (a missed powder
+   * day against a wasted trip) open on 4 Oct 2026, so this is a default, not a measurement: with the
+   * resorts a short drive from home a wasted trip is cheap and a missed day expensive, N = 4, and the
+   * decision-theory threshold is p* = 1 / (N + 1) = 0.2. Out of sample (data/model/REPORT.md) that
+   * catches 3 of 4 powder days a day ahead at the price of about 2.7 false alerts per station and
+   * season. One number to change.
+   */
+  alert: { costRatioN: 4, minProb: 0.2 },
+  /** Stage of a flagged day by its offset from the first ski day (brief of 3 Oct 2026): ALERT D0-D+1, POZOR D+2-D+3, VÝHĽAD D+4-D+9. */
+  stages: [
+    { maxDayOffset: 1, stage: "alert" },
+    { maxDayOffset: 3, stage: "pozor" },
+    { maxDayOffset: 9, stage: "vyhlad" },
+  ] as { maxDayOffset: number; stage: "alert" | "pozor" | "vyhlad" }[],
 };
 
 export type PowderModel = typeof POWDER_MODEL;

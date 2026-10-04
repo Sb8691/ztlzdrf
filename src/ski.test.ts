@@ -25,6 +25,7 @@ import {
   powderLawAt,
   powderProbAtLeast,
   powderQuantileCm,
+  powderStage,
   powderWindow,
   publishedAtMs,
   requestDates,
@@ -359,6 +360,33 @@ test("POWDER_SNEH: predstih z času behu a oneskorenia zverejnenia, bez metadát
   assert.equal(day.powderSnow!.forecastCm, 14);
   // Without metadata the fetch time (10:00 on DAY, an hour after the window closed) stands in.
   assert.equal(shortDay(() => ({}), null, at(10)).powderSnow!.leadH, -1);
+});
+
+test("POWDER_SNEH: stupeň podľa poradia dňa, značka ALERT od prahu p* = 1 / (N + 1)", () => {
+  assert.equal(powderStage(0, cfg), "alert");
+  assert.equal(powderStage(1, cfg), "alert");
+  assert.equal(powderStage(2, cfg), "pozor");
+  assert.equal(powderStage(3, cfg), "pozor");
+  assert.equal(powderStage(4, cfg), "vyhlad");
+  assert.equal(powderStage(9, cfg), "vyhlad");
+  assert.equal(powderStage(10, cfg), null);
+  assert.ok(Math.abs(cfg.powder.alert.minProb - 1 / (cfg.powder.alert.costRatioN + 1)) < 1e-9);
+  // A dry window is never flagged; a 40 mm cold night (28 cm) a day ahead is; the flag is exactly probability >= p*.
+  const w = powderWindow(DAY, cfg);
+  const init = (w.endMs - 30 * HOUR_MS) / 1000;
+  const meta = { last_run_initialisation_time: init, data_end_time: init + 240 * 3600, update_interval_seconds: 21_600 };
+  const dry = shortDay(() => ({}), meta).powderSnow!;
+  assert.equal(dry.alert, false);
+  assert.equal(dry.stage, "alert");
+  for (const mm of [5, 12, 20, 40]) {
+    const d = shortDay((p, _m, t) => (p === TOP && t === w.endMs ? { precip: mm } : {}), meta).powderSnow!;
+    assert.equal(d.alert, d.probability >= cfg.powder.alert.minProb, `${mm} mm`);
+  }
+  assert.equal(shortDay((p, _m, t) => (p === TOP && t === w.endMs ? { precip: 40 } : {}), meta).powderSnow!.alert, true);
+  // The third day of the short horizon is POZOR.
+  const snap = snapshotFor();
+  const stages = (snap.horizons.short.resorts[0].days as { powderSnow: { stage: string } }[]).map((d) => d.powderSnow.stage);
+  assert.deepEqual(stages, ["alert", "alert", "pozor"]);
 });
 
 test("snímka v2: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
