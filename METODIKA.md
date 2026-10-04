@@ -29,6 +29,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 4. 10. 2026 | Krok 6a: hodinové značky GeoSphere = predchádzajúca hodina (overené krížovou koreláciou); áno/nie pravidlá stránky nahradia kalibrované pravdepodobnosti (6d); nárazy z IFS bez zručnosti → vietor len z ICON-D2 do 47 h alebo klimatológia; prahy stránky ostávajú definíciami | Fable (krok 6 schválený majiteľom 4. 10.) |
 | 4. 10. 2026 | Krok 5a: každý čerstvý beh generátora pripíše riadok do `data/prospective/<sezóna>.jsonl` (strediská, šesť overovacích staníc, členovia ansámblu v okne); CI commituje `data/prospective`; vyhodnotenie až po sezóne 2026/27 | majiteľ (áno na plán), Fable |
 | 4. 10. 2026 | Krok 4b: prah ALERTu p* = 0,20 (N = 4) ako predvolená hodnota, lebo majiteľ N nevedel určiť; stupne podľa poradia dňa (ALERT D0–D+1, POZOR D+2–D+3, VÝHĽAD D+4–D+9); horizont `short` ostáva 3 dni (D+3 bez stupňa) | Fable (majiteľ: „neviem“) |
 | 4. 10. 2026 | Krok 4a: horizont D0 prepnutý z AROME na ICON-D2 (jediný krátkodobý model s overiteľným archívom); predstih od zverejnenia behu (IFS +7 h, ICON-D2 +1,5 h), bez metadát od času načítania; ansámbel zatiaľ bez pravdepodobnosti; snímka v2 s `powderSnow` | majiteľ (áno 4. 10.), Fable |
@@ -512,6 +513,33 @@ proti 0,28–0,30. Dolné hranice CI pri 23–71 h ležia na nule, nie nad ňou 
   (zmena tabuľky stránky), D+4–D+9 ansámbel bez zákona.
 - **Ešte nie je:** zobrazenie v UI, pravdepodobnosť pre ansámbel, D+3.
 
+
+### 4.5 Zložky lyžiarskeho dňa (krok 6)
+
+**6a – dnešné pravidlá stránky proti staniciam (4. 10. 2026).** `npm run rules`
+(`scripts/rules-verify.ts`, kalibrácia `scripts/lib/calibrate.ts`), úplné tabuľky v
+`data/rules/REPORT.md`, čísla v `data/rules/rules-verification.json`; výsledky v §5.3.
+
+- **Pravda** = hodinové dáta šiestich automatov GeoSphere (Weitensfeld 704 m, Arriach 890 m,
+  Flattnitz 1 437 m, Kanzelhöhe 1 520 m, Katschberg 1 635 m, Villacher Alpe 2 117 m; rr, tl, ffx,
+  so_h; zimy 2022/23–2025/26) zhrnuté na lyžiarsky deň 10:00–16:00 presne ako na stránke. Dážď na
+  stanici = zrážky v hodinách s T > 1 °C (rovnaké pravidlo ako na model; zrážkomer typ nepozná).
+  Hodinové značky GeoSphere sú „predchádzajúca hodina“ ako Open-Meteo (krížová korelácia s modelom má
+  maximum pri posune 0 pre zrážky, slnko aj nárazy; denné zrážky 06–06 UTC sedia so súčtom značiek
+  07..06 na r = 1,000) – overené, nie predpoklad.
+- **Čo sa hodnotí:** každé pravidlo ako áno/nie na prahu stránky (deterministicky) a ako logistická
+  krivka na hodnote modelu (dve čísla, fit bez testovanej sezóny). Nárazy len na horských staniciach.
+- **Rozhodnutia:** (1) áno/nie pravidlá nahradia v kroku 6d kalibrované pravdepodobnosti podľa
+  modelu a predstihu – vo všetkých piatich zložkách majú vyšší BSS, deterministické sú väčšinou pod
+  nulou (§5.3). (2) Nárazy z IFS 9 km nemajú na vrcholoch zručnosť (AUC 0,74–0,79, bias −5,5 až −6,9
+  km/h, kalibrovaný BSS ≈ 0 pri každom predstihu) – zložku vetra pre D+1 a ďalej treba buď vypustiť,
+  alebo brať z ICON-D2 len do 47 h a potom z klimatológie; rozhodne 6d. (3) Prahy stránky ostávajú
+  (sú to definície „zlého“ a „ujde“ dňa), mení sa len to, že sa k nim dá pravdepodobnosť.
+- **Predpoklady:** stanice nestoja na vrcholoch lanoviek (Villacher Alpe je exponovaný vrchol, kde
+  deterministický prah 60 km/h funguje, FAR 0,11; na 1 437–1 635 m má FAR 0,71–0,87 – naše horné
+  stanice 1 832–2 197 m sú niekde medzi); slnko na stanici meria heliograf, model dáva
+  `sunshine_duration`; predstih IFS +7 h ako v §5.1.
+
 ## 5. Výsledky podľa predstihu
 
 ### 5.1 Krok 2 – backtest a baseline (4. 10. 2026)
@@ -654,6 +682,49 @@ nemajú vlastnú pravdu: Turracher Höhe a Falkert sa porovnajú s LWD stanicami
 Hochrindl a Bad Kleinkirchheim len orientačne s najbližšími stanicami (10–15 km, viď §3.9 – polovica
 udalostí sa nezdieľa). Počas sezóny sa nič nefituje; prekalibrovanie (§7) až po sezóne.
 
+
+### 5.3 Krok 6a – dnešné pravidlá stránky podľa predstihu (4. 10. 2026)
+
+Sezóna prevádzky, zimy 2022/23–2025/26 (IFS celé behy a ICON-D2 previous runs len 2024/25–2025/26,
+štyri horské stanice); „det.“ = BSS áno/nie na prahu stránky, „kal.“ = BSS logistickej kalibrácie mimo
+vzorky; klimatológia = početnosť udalosti na stanici a v mesiaci z ostatných sezón.
+
+| Zložka | Zdroj | Predstih | n | udal. | POD | FAR | **BSS det.** (CI) | AUC | bias | **BSS kal.** (CI) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| dážď ≥ 1 mm | IFS hist | 0 h | 3215 | 108 | 0,84 | 0,61 | −0,55 (−1,21–−0,12) | 0,94 | +0,2 mm | 0,40 (0,30–0,50) |
+| dážď ≥ 1 mm | ICON-D2 hist | 0 h | 3209 | 108 | 0,74 | 0,34 | 0,34 (0,10–0,53) | 0,95 | 0,0 | **0,56 (0,42–0,68)** |
+| dážď ≥ 1 mm | ICON-D2 prev | 1 d | 1071 | 24 | 0,58 | 0,53 | −0,09 (−0,59–0,26) | 0,93 | 0,0 | 0,34 (0,15–0,56) |
+| dážď ≥ 1 mm | IFS behy | 12 h | 1079 | 24 | 0,63 | 0,65 | −0,55 (−1,64–0,02) | 0,92 | +0,1 | 0,24 (0,08–0,40) |
+| dážď ≥ 1 mm | IFS behy | 24 h | 1079 | 24 | 0,71 | 0,60 | −0,38 (−1,33–0,11) | 0,94 | +0,1 | 0,18 (0,04–0,30) |
+| dážď ≥ 1 mm | IFS behy | 72 h | 1079 | 24 | 0,54 | 0,73 | −0,93 (−1,74–−0,35) | 0,82 | +0,1 | 0,21 (0,10–0,32) |
+| dážď ≥ 1 mm | IFS behy | 120 h | 1079 | 24 | 0,38 | 0,78 | −0,93 (−2,15–−0,24) | 0,78 | 0,0 | −0,06 (−0,15–0,03) |
+| dážď ≥ 0,2 mm | IFS hist | 0 h | 3215 | 202 | 0,87 | 0,67 | −1,06 (−1,63–−0,67) | 0,92 | +0,2 | 0,37 (0,27–0,44) |
+| dážď ≥ 0,2 mm | ICON-D2 hist | 0 h | 3209 | 202 | 0,72 | 0,37 | 0,23 (0,03–0,39) | 0,87 | 0,0 | 0,45 (0,34–0,54) |
+| dážď ≥ 0,2 mm | ICON-D2 prev | 1 d | 1071 | 52 | 0,63 | 0,41 | 0,12 (−0,15–0,44) | 0,82 | 0,0 | 0,41 (0,23–0,59) |
+| náraz > 60 km/h | IFS hist | 0 h | 2161 | 214 | 0,18 | 0,61 | −0,37 (−0,55–−0,22) | 0,74 | −5,5 km/h | −0,03 (−0,10–0,06) |
+| náraz > 60 km/h | ICON-D2 hist | 0 h | 2161 | 214 | 0,64 | 0,55 | −0,43 (−0,62–−0,25) | 0,91 | +3,4 | 0,18 (0,11–0,26) |
+| náraz > 60 km/h | ICON-D2 prev | 1 d | 1088 | 102 | 0,59 | 0,52 | −0,30 (−0,57–−0,04) | 0,91 | +1,1 | 0,17 (0,05–0,30) |
+| náraz > 60 km/h | IFS behy | 12–72 h | 1088 | 102 | 0,14–0,20 | 0,49–0,59 | −0,23 až −0,32 | 0,76 | −6,5 | −0,01 až −0,03 |
+| náraz > 40 km/h | IFS hist | 0 h | 2161 | 676 | 0,44 | 0,32 | −0,35 (−0,48–−0,21) | 0,75 | −5,5 | 0,03 (−0,06–0,12) |
+| náraz > 40 km/h | ICON-D2 hist | 0 h | 2161 | 676 | 0,77 | 0,35 | −0,11 (−0,25–0,03) | 0,88 | +3,4 | 0,26 (0,18–0,35) |
+| náraz > 40 km/h | ICON-D2 prev | 1 d | 1088 | 321 | 0,76 | 0,30 | 0,05 (−0,10–0,20) | 0,90 | +1,1 | 0,34 (0,25–0,43) |
+| náraz > 40 km/h | IFS behy | 12–72 h | 1088 | 321 | 0,38–0,45 | 0,26–0,30 | −0,19 až −0,30 | 0,76–0,79 | −6,5 | 0,06–0,11 |
+| slnko < 1 h | IFS hist | 0 h | 3253 | 996 | 0,52 | 0,07 | 0,27 (0,17–0,34) | 0,91 | +1,4 h | **0,54 (0,47–0,59)** |
+| slnko < 1 h | ICON-D2 hist | 0 h | 3253 | 996 | 0,34 | 0,02 | 0,07 (−0,01–0,15) | 0,91 | +1,9 h | 0,54 (0,47–0,59) |
+| slnko < 1 h | ICON-D2 prev | 1 d | 1087 | 316 | 0,33 | 0,10 | 0,01 (−0,10–0,11) | 0,87 | +1,9 h | 0,41 (0,32–0,48) |
+
+Po staniciach (ICON-D2, predstih 0): dážď ≥ 1 mm je najlepší v údolí (Weitensfeld det. 0,43, kal.
+0,50; Arriach 0,25 / 0,62), kde na tom záleží; náraz > 60 km/h deterministicky funguje len na Villacher
+Alpe (det. 0,36, FAR 0,11, bias −8 km/h), na Flattnitzi, Kanzelhöhe a Katschbergu má FAR 0,71–0,87
+(bias +7 až +9 km/h; det. −0,99 až −4,70, kal. 0,09–0,41); zamračenie má kalibrované 0,46–0,62 všade.
+
+**Čo z toho plynie (overené):** áno/nie pravidlá stránky sú zle kalibrované – dážď varuje príliš
+často (IFS FAR 0,6), vietor je bez zručnosti z IFS a s vysokým FAR z ICON-D2 pod 1 700 m, zamračenie
+varuje príliš málo (modely majú o 1,4–1,9 h slnka viac než stanice). Kalibrovaná pravdepodobnosť má
+pri predstihu 0 a 1 d kladný BSS s intervalom nad nulou pre dážď, zamračenie a náraz z ICON-D2;
+z IFS má zmysel pre dážď do ~3 dní a pre zamračenie pri predstihu 0 (pre dlhšie predstihy slnko v archíve
+behov nie je). Slnko z IFS celých behov sa nedá overiť podľa predstihu (premenná v Single Runs chýba).
+
 ## 6. Limity
 
 - Žiadny dlhý rad pravdy neleží na hornej stanici lanovky; LWD body sú 1,4–1,6 km od nich a existujú len
@@ -689,4 +760,5 @@ npm run backtest:fetch    # archív predpovedí: --only=single,prev,hist (obnovi
 npm run backtest          # baseline podľa predstihu → data/backtest/{summary.json,REPORT.md}
 npm run model             # fyzika, rozdelenie, zákon podľa predstihu, kombinácia → data/model/{powder-model.json,REPORT.md}; --only=physics,explore,lead,law,blend
 npm run verify            # po sezóne: data/prospective/<sezóna>.jsonl proti pravde → data/prospective/REPORT-<sezóna>.md; --season=2026-27, --log=súbor
+npm run rules             # krok 6a: pravidlá stránky (dážď, nárazy, slnko) proti staniciam podľa predstihu → data/rules/{REPORT.md,rules-verification.json}
 ```

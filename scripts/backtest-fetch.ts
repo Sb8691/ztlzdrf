@@ -111,8 +111,10 @@ async function phaseSingle(): Promise<void> {
 // prev: Previous Runs
 // ---------------------------------------------------------------------------
 
-const PREV_MODELS: { model: string; days: number[]; vars: string[] }[] = [
+const PREV_MODELS: { model: string; days: number[]; vars: string[]; file?: string }[] = [
   { model: "icon_d2", days: [1], vars: ["snowfall", "precipitation", "temperature_2m"] },
+  // Step 6a: the only archive with a lead for sunshine; gusts and humidity ride along.
+  { model: "icon_d2", days: [1], vars: ["wind_gusts_10m", "sunshine_duration", "relative_humidity_2m"], file: "prev-icon_d2-rules.json" },
   { model: "icon_eu", days: [1, 2, 3, 4], vars: ["snowfall", "precipitation", "temperature_2m"] },
   { model: "ecmwf_ifs025", days: [1, 2, 3, 4, 5, 6, 7], vars: ["precipitation", "temperature_2m"] },
   { model: "gfs_global", days: [1, 2, 3], vars: ["snowfall", "precipitation", "temperature_2m"] },
@@ -121,8 +123,8 @@ const PREV_MODELS: { model: string; days: number[]; vars: string[] }[] = [
 async function phasePrev(): Promise<void> {
   console.log("== Previous Runs:", PREV_MODELS.map((m) => `${m.model} N=${m.days.join("/")}`).join("; "));
   const q = coordQuery(verifyPoints);
-  for (const { model, days, vars } of PREV_MODELS) {
-    const name = `prev-${model}.json`;
+  for (const { model, days, vars, file } of PREV_MODELS) {
+    const name = file ?? `prev-${model}.json`;
     const stored = readDerived<{ time: number[]; cells: number[]; data: Record<string, (number | null)[][]> }>(name);
     const time: number[] = stored?.time ?? [];
     const data: Record<string, (number | null)[][]> = stored?.data ?? {};
