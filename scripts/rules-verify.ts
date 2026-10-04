@@ -12,49 +12,21 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { SKI_CONFIG } from "../src/config.js";
-import { addDays as addDaysCore, localTimeMs } from "../src/ski-core.js";
-import { readDerived } from "./lib/cache.js";
 import { fitLogistic, logisticProb, type Logistic } from "./lib/calibrate.js";
-import type { Point } from "./lib/points.js";
+import { HOUR, IFS_DELAY_H, STATIONS, addDays, histGetters, liftStamps, loadTruth, prevGetters, singleRuns, type Getter } from "./lib/hourly.js";
 import { inOperatingWindow, seasonOf } from "./lib/season.js";
 import { auc as aucOf, bootstrapBlocks, reliability, scores, type Case, type Interval } from "./lib/verify.js";
 
 const cfg = SKI_CONFIG;
 const R = cfg.rules;
-const TZ = cfg.timezone;
-const HOUR = 3600;
-const IFS_DELAY_H = 7;
 const OUT_DIR = new URL("../data/rules/", import.meta.url);
 
 // ---------------------------------------------------------------------------
-// Truth: lift-day aggregates at the automatic stations
+// Truth: lift-day aggregates at the automatic stations (scripts/lib/hourly.ts)
 // ---------------------------------------------------------------------------
-
-interface HourlySeries { timestamps: string[]; values: Record<string, (number | null)[]>; units: Record<string, string> }
-const hourly = (readDerived<{ series: Record<string, HourlySeries> }>("geosphere-hourly.json") ?? (() => { throw new Error("geosphere-hourly.json chýba – spusti npm run truth:fetch"); })()).series;
-const points: Point[] = readDerived<Point[]>("points.json") ?? [];
-
-/** Station key in the hourly file -> point id in the forecast files; Villacher Alpe's automatic station (20021) is 23 m below the manual one (20020) the single runs were fetched for. */
-const STATIONS: { key: string; id: string; single: string; name: string; elevation: number; group: "údolie" | "hory" }[] = [
-  { key: "103", id: "geosphere:103", single: "", name: "Weitensfeld", elevation: 704, group: "údolie" },
-  { key: "20105", id: "geosphere:20105", single: "", name: "Arriach", elevation: 890, group: "údolie" },
-  { key: "186", id: "geosphere:186", single: "geosphere:186", name: "Flattnitz", elevation: 1437, group: "hory" },
-  { key: "122", id: "geosphere:122", single: "geosphere:122", name: "Kanzelhöhe", elevation: 1520, group: "hory" },
-  { key: "15715", id: "geosphere:15715", single: "geosphere:15715", name: "Katschberg", elevation: 1635, group: "hory" },
-  { key: "20021", id: "geosphere:20021", single: "geosphere:20020", name: "Villacher Alpe", elevation: 2117, group: "hory" },
-];
 
 interface DayValues { rain: number | null; precip: number | null; gust: number | null; sun: number | null }
 
-/** Stamps of the lift day: 10:00 .. 16:00 local, each the preceding hour (epoch seconds). */
-function liftStamps(date: string): number[] {
-  const open = localTimeMs(date, cfg.liftOpenHour, TZ) / 1000, close = localTimeMs(date, cfg.liftCloseHour, TZ) / 1000;
-  const out: number[] = [];
-  for (let t = open + HOUR; t <= close; t += HOUR) out.push(t);
-  return out;
-}
-
-type Getter = (v: string, stamp: number) => number | null | undefined;
 /** Lift-day aggregates from hourly getters named like Open-Meteo: precipitation (mm), temperature_2m (°C), wind_gusts_10m (km/h), sunshine_duration (s). Each component is null when any of its hours is missing. */
 function dayValues(get: Getter, stamps: number[]): DayValues {
   let rain = 0, precip = 0, gust = -Infinity, sun = 0, rainOk = true, gustOk = true, sunOk = true;
@@ -67,26 +39,13 @@ function dayValues(get: Getter, stamps: number[]): DayValues {
   return { rain: rainOk ? rain : null, precip: rainOk ? precip : null, gust: gustOk ? gust : null, sun: sunOk ? sun : null };
 }
 
-const truthIndex = new Map<string, Map<number, number>>();
-for (const st of STATIONS) {
-  const s = hourly[st.key];
-  if (!s) continue;
-  truthIndex.set(st.key, new Map(s.timestamps.map((t, i) => [Date.parse(t) / 1000, i])));
-}
-function truthGetter(st: typeof STATIONS[number]): Getter | null {
-  const s = hourly[st.key], idx = truthIndex.get(st.key);
-  if (!s || !idx) return null;
-  const col: Record<string, { name: string; scale: number }> = { precipitation: { name: "rr", scale: 1 }, temperature_2m: { name: "tl", scale: 1 }, wind_gusts_10m: { name: "ffx", scale: 3.6 }, sunshine_duration: { name: "so_h", scale: 3600 } };
-  return (v, stamp) => { const i = idx.get(stamp); const c = col[v]; if (i === undefined || !c) return undefined; const x = s.values[c.name]?.[i]; return x == null ? null : x * c.scale; };
-}
-
+const truth = loadTruth();
 const truthDays = new Map<string, Map<string, DayValues>>();
-const firstDay = "2022-11-01", lastDay = "2026-04-30";
 for (const st of STATIONS) {
-  const get = truthGetter(st);
+  const get = truth.getter(st);
   if (!get) continue;
   const m = new Map<string, DayValues>();
-  for (let d = firstDay; d <= lastDay; d = addDaysCore(d, 1)) {
+  for (let d = truth.firstDay; d <= truth.lastDay; d = addDays(d, 1)) {
     const mo = Number(d.slice(5, 7));
     if (mo > 4 && mo < 11) continue;
     const v = dayValues(get, liftStamps(d));
@@ -103,59 +62,41 @@ interface Fc { date: string; station: string; lead: number; label: string; value
 const forecasts: Record<string, Fc[]> = {};
 const push = (source: string, fc: Fc) => (forecasts[source] ??= []).push(fc);
 
-interface SeriesFile { points: Point[]; time: number[]; data: Record<string, (number | null)[][]> }
 for (const model of ["ecmwf_ifs", "icon_d2"]) {
-  const file = readDerived<SeriesFile>(`hist-${model}.json`);
-  if (!file) continue;
-  const index = new Map(file.time.map((t, i) => [t, i]));
+  const getters = histGetters(model);
+  if (!getters) continue;
   for (const st of STATIONS) {
-    const pi = file.points.findIndex((p) => p.id === st.id);
-    if (pi < 0 || !truthDays.has(st.key)) continue;
-    const get: Getter = (v, s) => { const i = index.get(s); return i === undefined ? undefined : file.data[v]?.[pi]?.[i]; };
+    const get = getters(st);
+    if (!get || !truthDays.has(st.key)) continue;
     for (const date of truthDays.get(st.key)!.keys()) push(`hist:${model}`, { date, station: st.key, lead: 0, label: "0 h", values: dayValues(get, liftStamps(date)) });
   }
 }
 
-interface RunFile { points: Point[]; runs: { init: string; time0: number; hours: number; data: Record<string, (number | null)[][]> }[] }
-for (const y of [2024, 2025]) {
-  const file = readDerived<RunFile>(`single-ecmwf_ifs-${y}.json`);
-  if (!file) continue;
-  for (const run of file.runs) {
-    const published = run.time0 + IFS_DELAY_H * HOUR;
-    const lastStamp = run.time0 + (run.hours - 1) * HOUR;
-    const firstDate = new Date(run.time0 * 1000).toISOString().slice(0, 10);
-    for (let k = 0; k <= 7; k++) {
-      const date = addDaysCore(firstDate, k);
-      const stamps = liftStamps(date);
-      const open = stamps[0] - HOUR;
-      if (open < published || stamps[stamps.length - 1] > lastStamp || stamps[0] < run.time0 + HOUR) continue;
-      // Lead classes of 12 h: 09:00 local is 08 UTC in winter and 07 UTC in summer time, which must not split a class.
-      const lead = Math.round((open - published) / HOUR / 12) * 12;
-      for (const st of STATIONS) {
-        if (!st.single || !truthDays.get(st.key)?.has(date)) continue;
-        const pi = file.points.findIndex((p) => p.id === st.single);
-        if (pi < 0) continue;
-        const get: Getter = (v, s) => (v === "sunshine_duration" ? null : run.data[v]?.[pi]?.[(s - run.time0) / HOUR]);
-        push("single:ecmwf_ifs", { date, station: st.key, lead, label: `${lead} h`, values: dayValues(get, stamps) });
-      }
+for (const run of singleRuns()) {
+  const firstDate = new Date(run.time0 * 1000).toISOString().slice(0, 10);
+  for (let k = 0; k <= 7; k++) {
+    const date = addDays(firstDate, k);
+    const stamps = liftStamps(date);
+    const open = stamps[0] - HOUR;
+    if (open < run.publishedSec || stamps[stamps.length - 1] > run.lastStamp || stamps[0] < run.time0 + HOUR) continue;
+    // Lead classes of 12 h: 09:00 local is 08 UTC in winter and 07 UTC in summer time, which must not split a class.
+    const lead = Math.round((open - run.publishedSec) / HOUR / 12) * 12;
+    for (const st of STATIONS) {
+      const get = run.getter(st);
+      if (!get || !truthDays.get(st.key)?.has(date)) continue;
+      push("single:ecmwf_ifs", { date, station: st.key, lead, label: `${lead} h`, values: dayValues(get, stamps) });
     }
   }
 }
 
 {
-  const base = readDerived<SeriesFile>("prev-icon_d2.json"), rules = readDerived<SeriesFile>("prev-icon_d2-rules.json");
-  if (base && rules) {
-    const bi = new Map(base.time.map((t, i) => [t, i])), ri = new Map(rules.time.map((t, i) => [t, i]));
+  const prev = prevGetters();
+  if (prev) {
     for (const st of STATIONS) {
-      if (!st.single) continue;
-      const pb = base.points.findIndex((p) => p.id === st.single), pr = rules.points.findIndex((p) => p.id === st.single);
-      if (pb < 0 || pr < 0) continue;
-      const get: Getter = (v, s) => {
-        if (v === "precipitation" || v === "temperature_2m") { const i = bi.get(s); return i === undefined ? undefined : base.data[`${v}_previous_day1`]?.[pb]?.[i]; }
-        const i = ri.get(s); return i === undefined ? undefined : rules.data[`${v}_previous_day1`]?.[pr]?.[i];
-      };
+      const get = prev.getter(st);
+      if (!get) continue;
       for (const date of truthDays.get(st.key)?.keys() ?? []) {
-        if (date < "2024-11-02" || date > "2026-04-30") continue;
+        if (date < prev.firstDay || date > prev.lastDay) continue;
         push("prev:icon_d2", { date, station: st.key, lead: 36, label: "1 d (24–47 h)", values: dayValues(get, liftStamps(date)) });
       }
     }

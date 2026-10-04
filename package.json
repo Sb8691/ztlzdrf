@@ -15,7 +15,8 @@
     "backtest": "tsx scripts/backtest-report.ts",
     "model": "tsx scripts/model-fit.ts",
     "verify": "tsx scripts/verify-prospective.ts",
-    "rules": "tsx scripts/rules-verify.ts"
+    "rules": "tsx scripts/rules-verify.ts",
+    "quality": "tsx scripts/quality-verify.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

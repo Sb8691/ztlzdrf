@@ -1,0 +1,108 @@
+{
+ "version": 1,
+ "generatedAt": "2026-10-04",
+ "fittedOn": "Historical Forecast lead 0, winters 2022/23-2025/26, six GeoSphere stations, operating window",
+ "curves": {
+  "ecmwf_ifs": {
+   "rainBad": {
+    "input": "sqrt(rain mm during lift hours at the base)",
+    "a": -5.2693,
+    "b": 2.6588
+   },
+   "rainFair": {
+    "input": "sqrt(rain mm)",
+    "a": -4.2151,
+    "b": 2.8113
+   },
+   "gustBad": {
+    "input": "max gust km/h / 10 at the top",
+    "a": -4.1678,
+    "b": 0.5605
+   },
+   "gustFair": {
+    "input": "max gust km/h / 10",
+    "a": -3.1865,
+    "b": 0.7619
+   },
+   "sunLow": {
+    "input": "7 - sunshine hours at the top",
+    "a": -2.797,
+    "b": 0.7461
+   },
+   "sunLowCloud": {
+    "input": [
+     "7 - sunshine hours",
+     "mean low cloud cover / 100",
+     "mean relative humidity / 100"
+    ],
+    "a": -4.9219,
+    "b": [
+     0.5469,
+     1.2266,
+     2.9922
+    ],
+    "n": 3203
+   },
+   "n": 3203
+  },
+  "icon_d2": {
+   "rainBad": {
+    "input": "sqrt(rain mm during lift hours at the base)",
+    "a": -5.2014,
+    "b": 3.9907
+   },
+   "rainFair": {
+    "input": "sqrt(rain mm)",
+    "a": -3.8392,
+    "b": 4.2338
+   },
+   "gustBad": {
+    "input": "max gust km/h / 10 at the top",
+    "a": -6.1414,
+    "b": 0.7833
+   },
+   "gustFair": {
+    "input": "max gust km/h / 10",
+    "a": -4.7098,
+    "b": 0.9506
+   },
+   "sunLow": {
+    "input": "7 - sunshine hours at the top",
+    "a": -2.4989,
+    "b": 0.9215
+   },
+   "sunLowCloud": {
+    "input": [
+     "7 - sunshine hours",
+     "mean low cloud cover / 100",
+     "mean relative humidity / 100"
+    ],
+    "a": -6.1719,
+    "b": [
+     0.6328,
+     2.8828,
+     4.0078
+    ],
+    "n": 3185
+   },
+   "n": 3197
+  }
+ },
+ "inversion": {
+  "icon_d2": {
+   "input": "model T(13:00) top - base, °C",
+   "a": 0.4677,
+   "b": 0.9213,
+   "n": 1593
+  }
+ },
+ "snowTemp": {
+  "dryC": -4,
+  "wetC": -1,
+  "minSnowCm": 4.8999999999999995,
+  "biasC": {
+   "ecmwf_ifs": 1,
+   "icon_d2": 0.1
+  }
+ }
+}
