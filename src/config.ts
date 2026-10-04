@@ -12,6 +12,7 @@
  * (Falkert has none; Hochrindl's own page only links to bergfex).
  */
 import { POWDER_MODEL } from "./powder-model.js";
+import { QUALITY_MODEL } from "./quality-model.js";
 
 export const SKI_RESORTS = [
   {
@@ -123,6 +124,8 @@ export const SKI_CONFIG = {
   clientRefreshMinutes: 60,
   /** The calibrated POWDER_SNEH model (src/powder-model.ts, METODIKA §4). */
   powder: POWDER_MODEL,
+  /** Calibrated probabilities of the day rules, inversion and snow temperature (src/quality-model.ts, METODIKA §4.5). */
+  quality: QUALITY_MODEL,
 };
 
 export type SkiConfig = typeof SKI_CONFIG;

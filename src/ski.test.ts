@@ -12,6 +12,8 @@ import {
   HOUR_MS,
   addDays,
   buildSkiSnapshot,
+  curveProb,
+  dayQuality,
   firstSkiDate,
   horizonDates,
   horizonUrl,
@@ -41,7 +43,7 @@ import {
  */
 
 type Cfg = typeof SKI_CONFIG;
-type Hour = { temp: number | null; precip: number | null; gust: number | null; sun: number | null };
+type Hour = { temp: number | null; precip: number | null; gust: number | null; sun: number | null; cloud?: number | null; rh?: number | null };
 /** Fills one point's hour: point index (2r = top, 2r+1 = base), member index, stamp. */
 type Fill = (point: number, member: number, ms: number) => Partial<Hour>;
 
@@ -69,6 +71,8 @@ function response(from: string, to: string, fill: Fill = () => ({}), members = 1
       hourly[`precipitation${s}`] = hours.map((h) => h.precip);
       hourly[`wind_gusts_10m${s}`] = hours.map((h) => h.gust);
       hourly[`sunshine_duration${s}`] = hours.map((h) => h.sun);
+      // The extra deterministic columns only when a test asks for them.
+      if (hours.some((h) => h.cloud !== undefined)) { hourly[`cloud_cover_low${s}`] = hours.map((h) => h.cloud ?? null); hourly[`relative_humidity_2m${s}`] = hours.map((h) => h.rh ?? null); }
     }
     return {
       latitude: 46.9,
@@ -114,6 +118,9 @@ test("každé stredisko má dva body, vrchol pred dolnou stanicou, v jednej pož
   assert.equal(url.searchParams.get("latitude")!.split(",").length, pts.length);
   assert.equal(url.searchParams.get("models"), cfg.horizons.short.model);
   assert.equal(url.searchParams.get("timeformat"), "unixtime");
+  // Deterministic horizons also ask for low cloud and humidity (step 6), the ensemble does not.
+  assert.equal(url.searchParams.get("hourly"), "temperature_2m,precipitation,wind_gusts_10m,sunshine_duration,cloud_cover_low,relative_humidity_2m");
+  assert.equal(new URL(horizonUrl(cfg, "long", DAY)).searchParams.get("hourly"), "temperature_2m,precipitation,wind_gusts_10m,sunshine_duration");
   assert.match(horizonUrl(cfg, "long", DAY), /^https:\/\/ensemble-api\.open-meteo\.com\/v1\/ensemble\?/);
   assert.match(metaUrl(cfg, "long"), /^https:\/\/ensemble-api\.open-meteo\.com\/data\/ecmwf_ifs025_ensemble\//);
   assert.match(metaUrl(cfg, "now"), /^https:\/\/api\.open-meteo\.com\/data\/dwd_icon_d2\//);
@@ -389,9 +396,9 @@ test("POWDER_SNEH: stupeň podľa poradia dňa, značka ALERT od prahu p* = 1 / 
   assert.deepEqual(stages, ["alert", "alert", "pozor"]);
 });
 
-test("snímka v2: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
+test("snímka v3: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
   const snap = snapshotFor();
-  assert.equal(snap.version, 2);
+  assert.equal(snap.version, 3);
   assert.equal(snap.horizons.short.powderLaw, "ecmwf_ifs");
   assert.equal(snap.horizons.now.powderLaw, "icon_d2");
   assert.equal(snap.horizons.long.powderLaw, null);
@@ -405,6 +412,74 @@ test("snímka v2: powderSnow na deterministických dňoch, ansámbel bez zákona
   assert.equal(cfg.powder.thresholdCm, fitted.event.thresholdCm);
   assert.equal(cfg.rules.snowMaxTempC, fitted.physics.phaseMidC);
   assert.equal(cfg.rules.snowCmPerMm, fitted.physics.slr0 / 10);
+});
+
+// ---------------------------------------------------------------------------
+// Day quality
+// ---------------------------------------------------------------------------
+
+/** Resort 0 on DAY in the short horizon (IFS) and now horizon (ICON-D2) from a response built with `fill`. */
+function qualityOf(fill: Fill, key: "now" | "short" = "short") {
+  const snap = snapshotFor(fill);
+  return (snap.horizons[key].resorts[0].days[0] as { quality: ReturnType<typeof dayQuality> }).quality!;
+}
+
+test("kvalita dňa: pravdepodobnosti rastú so vstupom, dobrý deň je súčin, krivky sedia s fitom", () => {
+  const dry = qualityOf(() => ({}));
+  assert.ok(dry.rainBad < 0.02 && dry.rainFair < 0.05, JSON.stringify(dry));
+  assert.ok(dry.gustBad < 0.05 && dry.sunLow < 0.1);
+  assert.ok(Math.abs(dry.good - (1 - dry.rainFair) * (1 - dry.gustFair) * (1 - dry.sunLow)) < 0.002);
+  // Rain at the base during the lift hours raises the rain probabilities, nothing else.
+  const wet = qualityOf((p, _m, t) => (p === BASE && t === at(12) ? { temp: 5, precip: 8 } : {}));
+  assert.ok(wet.rainBad > 0.5 && wet.rainFair > wet.rainBad, JSON.stringify(wet));
+  assert.equal(wet.gustBad, dry.gustBad);
+  // A 70 km/h gust at the top: the gust probabilities rise, the good-day probability falls.
+  const windy = qualityOf((p, _m, t) => (p === TOP && t === at(13) ? { gust: 70 } : {}));
+  assert.ok(windy.gustBad > dry.gustBad && windy.gustFair > 0.5 && windy.good < dry.good);
+  // No sun all day: overcast likely.
+  const grey = qualityOf(() => ({ sun: 0 }));
+  assert.ok(grey.sunLow > 0.5 && grey.sunLow > dry.sunLow);
+  const fitted = JSON.parse(readFileSync(join(REPO_ROOT, "data", "quality", "quality-model.json"), "utf8"));
+  for (const model of ["ecmwf_ifs", "icon_d2"]) for (const k of ["rainBad", "rainFair", "gustBad", "gustFair", "sunLow", "sunLowCloud"]) {
+    assert.deepEqual((cfg.quality.curves[model] as Record<string, { a: number; b: unknown }>)[k], { a: fitted.curves[model][k].a, b: fitted.curves[model][k].b }, `${model} ${k}`);
+  }
+  assert.deepEqual(cfg.quality.inversion.icon_d2, { a: fitted.inversion.icon_d2.a, b: fitted.inversion.icon_d2.b });
+  assert.equal(curveProb({ a: 0, b: 1 }, 0), 0.5);
+  assert.ok(Math.abs(curveProb({ a: 0, b: [1, 1] }, [1, -1]) - 0.5) < 1e-12);
+});
+
+test("kvalita dňa: nízka oblačnosť a vlhkosť sa použijú len keď prišli a model má krivku; inverzia len z ICON-D2", () => {
+  const withExtras: Fill = () => ({ sun: 1800, cloud: 90, rh: 95 });
+  const without: Fill = () => ({ sun: 1800 });
+  const d2 = qualityOf(withExtras, "now"), d2plain = qualityOf(without, "now");
+  assert.ok(d2.sunLow > d2plain.sunLow, `${d2.sunLow} vs ${d2plain.sunLow}`);
+  // Probabilities are stored to three decimals.
+  assert.ok(Math.abs(d2.sunLow - curveProb(cfg.quality.curves.icon_d2.sunLowCloud, [7 - 3.5, 0.9, 0.95])) < 1e-3);
+  assert.ok(Math.abs(d2plain.sunLow - curveProb(cfg.quality.curves.icon_d2.sunLow, 7 - 3.5)) < 1e-3);
+  // Inversion: top 2 °C warmer than the base at 13:00 -> likely from ICON-D2, absent from IFS.
+  const inv: Fill = (p, _m, t) => (t === at(13) ? { temp: p === TOP ? -1 : -3 } : {});
+  const now = qualityOf(inv, "now"), short = qualityOf(inv, "short");
+  assert.equal(now.inversion!.deltaTC, 2);
+  assert.ok(now.inversion!.probability > 0.8, String(now.inversion!.probability));
+  assert.equal(short.inversion, null);
+  assert.ok(qualityOf(() => ({}), "now").inversion!.probability < qualityOf(inv, "now").inversion!.probability);
+});
+
+test("kvalita dňa: teplota počas sneženia s korekciou modelu, pásma, náraz v okne; bez snehu žiadne pásmo", () => {
+  const w = powderWindow(DAY, cfg);
+  // 20 mm at -6 °C in the window at the top: 14 cm of snow at -6 °C; IFS adds its +1 °C bias -> -5 °C, still dry.
+  const snowy: Fill = (p, _m, t) => (p === TOP && t === w.endMs ? { precip: 20, temp: -6, gust: 55 } : {});
+  const short = qualityOf(snowy, "short"), now = qualityOf(snowy, "now");
+  assert.deepEqual(short.snowTemp, { tC: -6 + cfg.quality.snowTemp.biasC.ecmwf_ifs, band: "dry" });
+  assert.deepEqual(now.snowTemp, { tC: Math.round((-6 + cfg.quality.snowTemp.biasC.icon_d2) * 10) / 10, band: "dry" });
+  assert.equal(short.windowGustKmh, 55);
+  const warm = qualityOf((p, _m, t) => (p === TOP && t === w.endMs ? { precip: 20, temp: 0.5 } : {}), "now");
+  assert.equal(warm.snowTemp!.band, "wet");
+  assert.equal(qualityOf(() => ({}), "short").snowTemp, null);
+  // A gap in the window leaves the window parts null but keeps the lift-day probabilities.
+  const gap = qualityOf((p, _m, t) => (p === TOP && t === w.startMs + HOUR_MS ? { gust: null } : {}), "short");
+  assert.equal(gap.windowGustKmh, null);
+  assert.ok(gap.rainBad >= 0);
 });
 
 // ---------------------------------------------------------------------------

@@ -75,7 +75,7 @@ len denník.
 | 3 – model | hotovo 4. 10. 2026 | `npm run model`: fyzika pri predstihu 0 na 10 sezónach IFS a 4 ICON-D2 (14 staníc) – dnešné pravidlo stránky je rovnako dobrý vstup ako fitované varianty (wet-bulb, pomer sneh/voda, výška, vietor); zisk dáva kalibrovaná neistota: dvojdielne rozdelenie (P(sneží) a √úhrn okolo √x) so sklonom klesajúcim s predstihom, overené zima proti zime: BSS 0,26 (0,01–0,42) pri 23 h, 0,21 pri 71 h, 0,42 pri 0 h, ICON-D2 0,34 pri 1 dni; kombinácia modelov v šume. Koeficienty v `data/model/powder-model.json`: [data/model](data/model), METODIKA §4 |
 | 4 – zapojenie do stránky | hotovo 4. 10. 2026 | snímka v2: každý deň horizontov D0 (ICON-D2, nahradil AROME) a D0–D+2 (IFS 9 km) nesie `powderSnow` – úhrn okna D−1 09:00 → D 09:00, predstih, P(≥ 15 cm), medián a 90. percentil; koeficienty v `src/powder-model.ts` (kópia `data/model/powder-model.json`, test rovnosti); stupeň dňa (ALERT D0–D+1, POZOR D+2–D+3) a značka `alert` od p* = 0,20 (predvolené N = 4, majiteľ N neurčil; jedno číslo v `src/powder-model.ts`): METODIKA §4.4 |
 | 5 – prospektívne overovanie | 5a hotovo 4. 10. 2026, vyhodnotenie po sezóne 2026/27 | každý čerstvý beh CI pripíše riadok do `data/prospective/<sezóna>.jsonl`: strediská, šesť staníc s pravdou (rovnaká požiadavka, ten istý beh), 51 členov ansámblu v okne; `npm run verify` po sezóne: METODIKA §5.2 |
-| 6 – kvalita dňa | 6a hotovo 4. 10. 2026, 6b–6d prebieha | `npm run rules`: dnešné pravidlá (dážď dole, nárazy hore, slnko) proti hodinovým dátam 6 staníc GeoSphere, 4 zimy – áno/nie prahy sú zle kalibrované (dážď varuje priveľa, vietor z IFS bez zručnosti, zamračenie primálo), kalibrované pravdepodobnosti majú BSS 0,3–0,6 pri 0–1 d: [data/rules](data/rules), METODIKA §4.5, §5.3 |
+| 6 – kvalita dňa | hotovo 4. 10. 2026 | `npm run rules` + `npm run quality`: dnešné áno/nie pravidlá sú zle kalibrované (dážď varuje priveľa, vietor z IFS bez zručnosti, zamračenie primálo), kalibrované pravdepodobnosti majú BSS 0,3–0,6 pri 0–1 d; teplota počas sneženia z ICON-D2 presná, z IFS +1 °C; inverziu vidí len ICON-D2; vietor pri powderi a slnečný vrchol nad hmlou sa predpovedať nedajú. Snímka v3 nesie `quality` (P dážď, P veterno / stojace lanovky, P zamračené, P dobrý deň = súčin, inverzia, teplota počas sneženia s pásmom, náraz v okne); deterministické horizonty doťahujú nízku oblačnosť a vlhkosť: [data/rules](data/rules), [data/quality](data/quality), METODIKA §4.5, §5.3–5.4 |
 
 Offline skripty bežia cez `npm run` (tsx), surové dáta držia v `~/.cache/ztlzdrf` mimo gitu
 (`ZTLZDRF_CACHE` ho presmeruje), do gitu idú len malé odvodené JSON a správy. Dáta: Open-Meteo (CC BY 4.0,
@@ -91,6 +91,7 @@ npm run backtest         # baseline podľa predstihu → data/backtest/
 npm run model            # fit a výber modelu úhrnu → data/model/
 npm run verify           # po sezóne: log predpovedí proti pravde → data/prospective/REPORT-*.md
 npm run rules            # pravidlá stránky proti staniciam → data/rules/
+npm run quality          # kvalita powderu, inverzie, oblak, dobrý deň; krivky pre stránku → data/quality/
 ```
 
 ## Lokálne

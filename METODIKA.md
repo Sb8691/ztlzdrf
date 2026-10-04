@@ -29,6 +29,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 4. 10. 2026 | Krok 6b–6d: značka vetra pri powderi a „slnečný vrchol nad sivým údolím“ sa nevydávajú (bez zručnosti); inverzia len z ICON-D2; teplota počas sneženia z IFS +1,0 °C; dobrý deň = súčin kalibrovaných zložiek; krivky z predstihu 0 bez závislosti od predstihu; deterministické horizonty doťahujú nízku oblačnosť a vlhkosť; snímka v3 | Fable |
 | 4. 10. 2026 | Krok 6a: hodinové značky GeoSphere = predchádzajúca hodina (overené krížovou koreláciou); áno/nie pravidlá stránky nahradia kalibrované pravdepodobnosti (6d); nárazy z IFS bez zručnosti → vietor len z ICON-D2 do 47 h alebo klimatológia; prahy stránky ostávajú definíciami | Fable (krok 6 schválený majiteľom 4. 10.) |
 | 4. 10. 2026 | Krok 5a: každý čerstvý beh generátora pripíše riadok do `data/prospective/<sezóna>.jsonl` (strediská, šesť overovacích staníc, členovia ansámblu v okne); CI commituje `data/prospective`; vyhodnotenie až po sezóne 2026/27 | majiteľ (áno na plán), Fable |
 | 4. 10. 2026 | Krok 4b: prah ALERTu p* = 0,20 (N = 4) ako predvolená hodnota, lebo majiteľ N nevedel určiť; stupne podľa poradia dňa (ALERT D0–D+1, POZOR D+2–D+3, VÝHĽAD D+4–D+9); horizont `short` ostáva 3 dni (D+3 bez stupňa) | Fable (majiteľ: „neviem“) |
@@ -540,6 +541,55 @@ proti 0,28–0,30. Dolné hranice CI pri 23–71 h ležia na nule, nie nad ňou 
   stanice 1 832–2 197 m sú niekde medzi); slnko na stanici meria heliograf, model dáva
   `sunshine_duration`; predstih IFS +7 h ako v §5.1.
 
+
+**6b/6c – kvalita powderu, oblak, inverzie (4. 10. 2026).** `npm run quality`
+(`scripts/quality-verify.ts`), tabuľky v `data/quality/REPORT.md`, výsledky v §5.4, krivky pre
+stránku v `data/quality/quality-model.json`.
+
+- **Teplota počas sneženia** (vážená snehom v okne D−1 09:00 → D 09:00; pásma z literatúry, nefitujú
+  sa: suchý ≤ −4 °C, vlhší −4…−1 °C, mokrý > −1 °C): ICON-D2 ju trafí (MAE 0,5 °C, zhoda pásma 0,88,
+  P(stanica suchý │ model suchý) 0,76), IFS je o 1,0 °C príliš studený a „suchý“ hlási dvakrát častejšie,
+  než sa stane. Rozhodnutie: značka pásma z ICON-D2 priamo, z IFS s korekciou +1,0 °C (jedno číslo,
+  overené na troch predstihoch: −1,0 / −1,2 / −1,2 °C). Hustota snehu sa nemeria – pásmo je
+  predpoklad, teplota je overená.
+- **Vietor počas sneženia** („nezničený vetrom“): na snehových dňoch je náraz > 35 km/h na staniciach
+  normou (77 %) a žiadny model ho nerozlíši (BSS kalibrované −0,02 až −0,29, pri 60 km/h −1,3 až −2,7).
+  Rozhodnutie: značka vetra pri powderi sa **nevydáva**; stránka nesie len surový najsilnejší náraz v
+  okne ako informáciu bez nároku na zručnosť.
+- **Inverzia o 13:00** (vrchol teplejší než údolie): ICON-D2 BSS kalibrované 0,52 (0,41–0,60), AUC 0,96
+  na troch dvojiciach staníc; IFS bez zručnosti (−0,05). Rozhodnutie: príznak inverzie len z ICON-D2
+  (D0), logistická krivka na modelovom rozdiele T vrchol − údolie; dvojice staníc majú prevýšenie
+  630–1 230 m, strediská 270–1 030 m – prenos je predpoklad.
+- **Slnečný vrchol nad sivým údolím** (vrchol ≥ 3 h slnka, údolie < 1 h): 3 % dní, ani jeden model
+  (BSS ≈ 0). Rozhodnutie: nevydáva sa.
+- **Zamračenie:** k predpovedanému slnku pridajú nízka oblačnosť a vlhkosť z ICON-D2 zručnosť (0,54 →
+  0,62, intervaly sa neprekrývajú), z IFS nie (0,54 → 0,55). Rozhodnutie: ICON-D2 krivka s tromi
+  vstupmi (slnko, nízka oblačnosť, vlhkosť; stránka si ich doťahuje len pre deterministické horizonty),
+  IFS so slnkom.
+- **Dobrý deň stránky** (dážď < 0,2 mm, náraz ≤ 40 km/h, slnko ≥ 1 h na jednej stanici): dnešné áno/nie
+  má BSS −0,06 (IFS) / 0,06 (ICON-D2) – ako pravdepodobnosť bez zručnosti; súčin troch nezávisle
+  kalibrovaných zložiek 0,35 / 0,44 a priama logistická kalibrácia 0,35 / 0,44 sú rovnaké. Rozhodnutie:
+  pravdepodobnosť dobrého dňa = súčin (1 − P dážď)(1 − P veterno)(1 − P zamračené) – jednoduchšie,
+  priehľadné a rovnako dobré; nezávislosť je zjednodušenie, ktoré dáta na tejto vzorke nepotrestali.
+- **Krivky pre stránku (6d):** jedna logistická krivka na zložku a model z Historical Forecast
+  (predstih 0, štyri zimy, šesť staníc); závislosť od predstihu sa nemodeluje – podľa §5.3 sa krivky do
+  ~3 dní menia málo (dážď a −5,3 → −4,6, b 2,7 → 2,0) a za tým zručnosť mizne, čo sa prejaví v
+  prospektívnom overení.
+
+**6d – zapojenie do stránky (4. 10. 2026).** `src/quality-model.ts` je kópia krivek z
+`data/quality/quality-model.json` (verzia 1, test rovnosti); `dayQuality` v `src/ski-core.js` dáva
+každému dňu deterministických horizontov `quality = { rainBad, rainFair, gustBad, gustFair, sunLow,
+good, inversion, snowTemp, windowGustKmh }`: pravdepodobnosti udalostí stránky z logistických kriviek
+na tých istých agregátoch, z akých vznikajú dnešné verdikty; `good` = (1 − P dážď ≥ 0,2)(1 − P náraz >
+40)(1 − P slnko < 1 h); `inversion` (ΔT vrchol − dolná stanica o 13:00 a jej pravdepodobnosť) len z
+ICON-D2; `snowTemp` (teplota počas sneženia s korekciou modelu a pásmo suchý / vlhší / mokrý) len pri
+≥ 4,9 cm snehu v powder okne; `windowGustKmh` surový náraz v okne bez nároku na zručnosť.
+Deterministické horizonty si doťahujú `cloud_cover_low` a `relative_humidity_2m` (ansámbel nie);
+odpoveď bez nich sa spracuje s krivkou len zo slnka. Snímka v3; log predpovedí nesie `quality` aj pre
+overovacie stanice (stanica je sama sebe dolnou stanicou, bez inverzie). Verdikty stránky
+(`status`, `reasons`) ostávajú deterministické, kým majiteľ nerozhodne o zobrazení. Overené naživo
+4. 10. 2026 (ICON-D2 aj IFS vracajú obe premenné v %).
+
 ## 5. Výsledky podľa predstihu
 
 ### 5.1 Krok 2 – backtest a baseline (4. 10. 2026)
@@ -725,6 +775,35 @@ pri predstihu 0 a 1 d kladný BSS s intervalom nad nulou pre dážď, zamračeni
 z IFS má zmysel pre dážď do ~3 dní a pre zamračenie pri predstihu 0 (pre dlhšie predstihy slnko v archíve
 behov nie je). Slnko z IFS celých behov sa nedá overiť podľa predstihu (premenná v Single Runs chýba).
 
+
+### 5.4 Krok 6b/6c – kvalita powderu, oblak a inverzie (4. 10. 2026)
+
+Pravda a vzorky ako v §5.3; „snehové dni“ = stanica ≥ 7 mm snehovej vody (≈ 5 cm) v powder okne.
+
+| Čo | Zdroj | Predstih | n | výsledok |
+|---|---|---|---|---|
+| teplota počas sneženia (obaja ≥ 7 mm) | ICON-D2 hist | 0 h | 90 | bias −0,1 °C, MAE 0,5, zhoda pásma 0,88, P(suchý│suchý) 0,76 (29), P(mokrý│mokrý) 0,92 (24) |
+| | ICON-D2 prev | 1 d | 41 | bias 0,0, MAE 0,6, zhoda 0,83 |
+| | IFS hist | 0 h | 111 | bias −1,0 °C, MAE 1,3, zhoda 0,67, P(suchý│suchý) 0,47 (40); model „suchý“ 36 % dní, stanica 17 % |
+| | IFS behy | 24 / 48 / 72 h | 50 / 37 / 36 | bias −1,0 / −1,2 / −1,2 °C, zhoda 0,58 / 0,57 / 0,58 |
+| náraz v okne > 35 km/h, všetky dni | ICON-D2 hist / prev | 0 h / 1 d | 2152 / 1088 | kal. 0,24 (0,17–0,32) / 0,33 (0,24–0,43), AUC 0,86–0,88, bias +3,8 / +1,6 km/h |
+| | IFS hist / behy 24–72 h | | 2152 / 1216 | kal. 0,02–0,08, AUC 0,76–0,77, bias −9 až −10 km/h |
+| náraz v okne > 35 km/h, snehové dni | všetky | | 136 / 61 | klimatológia 0,77; kal. −0,02 (ICON-D2) až −0,29 (IFS), AUC 0,66–0,80 |
+| náraz v okne > 60 km/h, snehové dni | všetky | | 136 / 61 | kal. −1,3 (ICON-D2), −1,9 (IFS hist), −2,7 (IFS 24 h) |
+| inverzia o 13:00, všetky dvojice | ICON-D2 hist | 0 h | 1593 | det. 0,36 (0,21–0,48), **kal. 0,52 (0,41–0,60)**, AUC 0,96 (Kanzelhöhe–Weitensfeld 0,60, Flattnitz–Weitensfeld 0,55, Villacher Alpe–Arriach 0,35) |
+| | IFS hist | 0 h | 1596 | det. −0,32, kal. −0,05, AUC 0,82 |
+| slnečný vrchol nad sivým údolím | ICON-D2 / IFS hist | 0 h | 1616 | 46 udalostí (3 %); det. −0,31 / −0,24, kal. 0,02 / 0,02 |
+| zamračenie: slnko → + nízka oblačnosť → + vlhkosť | ICON-D2 hist | 0 h | 3253 | kal. 0,54 (0,47–0,59) → 0,61 (0,55–0,65) → **0,62 (0,57–0,66)**, AUC 0,91 → 0,95 |
+| | IFS hist | 0 h | 3253 | 0,54 → 0,54 → 0,55 |
+| dobrý deň: áno/nie stránky / súčin zložiek / priamo | ICON-D2 hist | 0 h | 2122 | 0,06 (−0,05–0,15) / **0,44 (0,39–0,48)** / 0,44 (0,39–0,49), AUC 0,89 |
+| | ICON-D2 prev | 1 d | 1070 | 0,05 / 0,40 / 0,39 |
+| | IFS hist | 0 h | 2126 | −0,06 (−0,17–0,03) / 0,35 (0,29–0,40) / 0,35 |
+
+**Čo z toho plynie (overené):** teplota počas sneženia je z ICON-D2 spoľahlivá a z IFS po korekcii
++1 °C; vietor počas sneženia sa nepredpovie (vo vetre sneží skoro vždy); inverziu vidí ICON-D2, IFS nie;
+slnečný vrchol nad hmlou v údolí nevidí nikto; zamračenie z ICON-D2 zlepší nízka oblačnosť a vlhkosť;
+„dobrý deň“ ako pravdepodobnosť je súčin zložiek (0,35–0,44) a dnešné áno/nie nemá zručnosť.
+
 ## 6. Limity
 
 - Žiadny dlhý rad pravdy neleží na hornej stanici lanovky; LWD body sú 1,4–1,6 km od nich a existujú len
@@ -738,6 +817,9 @@ behov nie je). Slnko z IFS celých behov sa nedá overiť podľa predstihu (prem
 - eHYD končí 31. 8. 2023 (sneh) / 31. 12. 2023 (zrážky, T): použiteľné len na fyziku bez predstihu.
 - Deterministický prah na surovom úhrne nemá zručnosť (BSS ≤ 0,13 pri 23 h, záporná od ~80 h), hoci AUC
   je 0,9–0,98: bez kalibrovanej pravdepodobnosti sa POWDER ALERT postaviť nedá (§5.1).
+- Zložky dňa (§4.5): vietor počas sneženia a slnečný vrchol nad hmlou v údolí sa predpovedať nedajú, inverziu vidí
+  len ICON-D2, nárazy na vrcholoch z IFS nemajú zručnosť; krivky zložiek sú z predstihu 0 a za ~3 dni
+  strácajú zručnosť (§5.3).
 - Kalibrovaný model (§4) má pri 23–71 h BSS 0,19–0,26 s dolnou hranicou CI na nule a od ~83 h zručnosť
   slabne (BSS ≈ 0,1, pri 131 h ≈ 0); jeho spoľahlivosť pri vysokých pravdepodobnostiach stojí na jednotkách
   prípadov. Rozhodujúce overenie príde až zo sezóny 2026/27.
@@ -761,4 +843,5 @@ npm run backtest          # baseline podľa predstihu → data/backtest/{summary
 npm run model             # fyzika, rozdelenie, zákon podľa predstihu, kombinácia → data/model/{powder-model.json,REPORT.md}; --only=physics,explore,lead,law,blend
 npm run verify            # po sezóne: data/prospective/<sezóna>.jsonl proti pravde → data/prospective/REPORT-<sezóna>.md; --season=2026-27, --log=súbor
 npm run rules             # krok 6a: pravidlá stránky (dážď, nárazy, slnko) proti staniciam podľa predstihu → data/rules/{REPORT.md,rules-verification.json}
+npm run quality           # krok 6b/6c: teplota počas sneženia, vietor v okne, inverzie, oblak, dobrý deň; krivky pre stránku → data/quality/{REPORT.md,quality-verification.json,quality-model.json}; --only=snowtemp,gust,inversion,sunnytop,overcast,good,curves
 ```

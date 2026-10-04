@@ -57,7 +57,7 @@ test("stanice sa pýtajú rovnako ako strediská: tie isté premenné, dátumy a
   assert.equal(url.searchParams.get("elevation"), VERIFICATION_STATIONS.map((s) => s.elevation).join(","));
   assert.equal(url.searchParams.get("models"), cfg.horizons.short.model);
   assert.equal(url.searchParams.get("start_date"), requestDates(cfg, "short", DAY).startDate);
-  assert.equal(url.searchParams.get("hourly"), "temperature_2m,precipitation,wind_gusts_10m,sunshine_duration");
+  assert.equal(url.searchParams.get("hourly"), "temperature_2m,precipitation,wind_gusts_10m,sunshine_duration,cloud_cover_low,relative_humidity_2m");
 });
 
 test("riadok logu: strediská, stanice a členovia ansámblu; D0 ansámblu bez okna", () => {

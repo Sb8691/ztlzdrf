@@ -33,13 +33,18 @@ export const ENSEMBLE_ENDPOINT = "https://ensemble-api.open-meteo.com/v1/ensembl
 
 /** All three horizons ask for exactly these, for every point. */
 export const VARS = ["temperature_2m", "precipitation", "wind_gusts_10m", "sunshine_duration"];
+/** The deterministic horizons also ask for these (step 6: low cloud and humidity sharpen the overcast
+ * probability from ICON-D2); the ensemble does not, and a response without them still parses. */
+export const DET_EXTRA_VARS = ["cloud_cover_low", "relative_humidity_2m"];
 
-/** Verified live 2026-10-03. Other units are a changed API, not something to convert silently. */
+/** Verified live 2026-10-03 (extras 2026-10-04). Other units are a changed API, not something to convert silently. */
 export const EXPECTED_UNITS = {
   temperature_2m: "°C",
   precipitation: "mm",
   wind_gusts_10m: "km/h",
   sunshine_duration: "s",
+  cloud_cover_low: "%",
+  relative_humidity_2m: "%",
 };
 
 export const HORIZON_KEYS = ["now", "short", "long"];
@@ -178,7 +183,7 @@ export function pointsUrl(cfg, key, firstDate, pts) {
     longitude: pts.map((p) => p.longitude).join(","),
     elevation: pts.map((p) => p.elevation).join(","),
     models: h.model,
-    hourly: VARS.join(","),
+    hourly: [...VARS, ...(h.ensemble ? [] : DET_EXTRA_VARS)].join(","),
     start_date: startDate,
     end_date: endDate,
     timezone: cfg.timezone,
@@ -248,7 +253,7 @@ export function parsePoints(json, what) {
   return list.map((p, n) => {
     if (!p || !p.hourly || !Array.isArray(p.hourly.time)) throw new Error(`Open-Meteo (${what}): bod ${n + 1} bez hodinových dát`);
     const units = p.hourly_units || {};
-    for (const v of VARS) {
+    for (const v of Object.keys(EXPECTED_UNITS)) {
       const got = units[v];
       if (got && got !== EXPECTED_UNITS[v]) throw new Error(`Open-Meteo (${what}): ${v} prišlo v ${got}, očakávam ${EXPECTED_UNITS[v]}`);
     }
@@ -263,6 +268,9 @@ export function parsePoints(json, what) {
         precipitation: column(h, `precipitation${s}`, len),
         gust: column(h, `wind_gusts_10m${s}`, len),
         sunSeconds: column(h, `sunshine_duration${s}`, len),
+        // Optional (deterministic horizons only): all null when the response lacks them.
+        lowCloud: column(h, `cloud_cover_low${s}`, len),
+        humidity: column(h, `relative_humidity_2m${s}`, len),
       })),
     };
   });
@@ -554,6 +562,108 @@ export function powderSnow(top, date, cfg, idx, law, publishedMs, dayOffset = 0)
 }
 
 // ---------------------------------------------------------------------------
+// Day quality as probabilities (step 6, METODIKA §4.5)
+// ---------------------------------------------------------------------------
+//
+// The page's yes/no rules verified poorly against stations (rain over-warns, the gust threshold
+// has no skill from IFS, overcast under-warns), while a logistic curve on the same model value is
+// calibrated. These functions turn the lift-day aggregates into probabilities of the page's own
+// events, a probability of a "good" day as the product of its parts (as good as a direct fit on the
+// archive), the inversion at 13:00 (ICON-D2 only) and the temperature during the POWDER_SNEH
+// snowfall with each model's bias added back.
+
+export const logistic = (z) => 1 / (1 + Math.exp(-z));
+
+/** Probability from a one-input curve {a, b} or a multi-input curve {a, b: []}. */
+export function curveProb(curve, g) {
+  if (Array.isArray(curve.b)) {
+    let z = curve.a;
+    for (let i = 0; i < curve.b.length; i++) z += curve.b[i] * g[i];
+    return logistic(z);
+  }
+  return logistic(curve.a + curve.b * g);
+}
+
+/**
+ * @typedef {{
+ *   rainBad: number, rainFair: number, gustBad: number, gustFair: number, sunLow: number, good: number,
+ *   inversion: { deltaTC: number, probability: number } | null,
+ *   snowTemp: { tC: number, band: "dry" | "moist" | "wet" } | null,
+ *   windowGustKmh: number | null,
+ * }} DayQuality
+ */
+
+/**
+ * One lift day at one resort as calibrated probabilities. `base` may be the same series as `top`
+ * (a single station), in which case there is no inversion. Null when the model has no curves or a
+ * lift hour is missing; the powder-window parts are null on their own when that window has a gap.
+ *
+ * @returns {DayQuality | null}
+ */
+export function dayQuality(top, base, date, cfg, idx, model) {
+  const q = cfg.quality;
+  const curves = q.curves[model];
+  if (!curves) return null;
+  const rules = cfg.rules;
+  const lift = stamps(localTimeMs(date, cfg.liftOpenHour, cfg.timezone), localTimeMs(date, cfg.liftCloseHour, cfg.timezone));
+  let rainBase = 0, gust = -Infinity, sunSeconds = 0, cloud = 0, humidity = 0, extras = 0;
+  for (const t of lift) {
+    const i = idx.get(t);
+    if (i === undefined) return null;
+    const values = [top.temperature[i], top.precipitation[i], top.gust[i], top.sunSeconds[i], base.temperature[i], base.precipitation[i]];
+    if (values.some((v) => v === null)) return null;
+    rainBase += rainMm(base.precipitation[i], base.temperature[i], rules);
+    gust = Math.max(gust, top.gust[i]);
+    sunSeconds += top.sunSeconds[i];
+    const lc = top.lowCloud ? top.lowCloud[i] : null, rh = top.humidity ? top.humidity[i] : null;
+    if (lc !== null && rh !== null) { cloud += lc; humidity += rh; extras++; }
+  }
+  const sunHours = sunSeconds / 3600;
+  const rainG = Math.sqrt(round3(rainBase));
+  const rainBad = curveProb(curves.rainBad, rainG), rainFair = curveProb(curves.rainFair, rainG);
+  const gustBad = curveProb(curves.gustBad, gust / 10), gustFair = curveProb(curves.gustFair, gust / 10);
+  const sunLow = extras === lift.length && curves.sunLowCloud ? curveProb(curves.sunLowCloud, [7 - sunHours, cloud / extras / 100, humidity / extras / 100]) : curveProb(curves.sunLow, 7 - sunHours);
+
+  let inversion = null;
+  const inv = q.inversion[model];
+  if (inv && base !== top) {
+    const i = idx.get(localTimeMs(date, 13, cfg.timezone));
+    if (i !== undefined && top.temperature[i] !== null && base.temperature[i] !== null) {
+      const deltaTC = top.temperature[i] - base.temperature[i];
+      inversion = { deltaTC: Math.round(deltaTC * 10) / 10, probability: round3(curveProb(inv, deltaTC)) };
+    }
+  }
+
+  const w = powderWindow(date, cfg);
+  let snow = 0, snowT = 0, windowGust = -Infinity, windowOk = true;
+  for (const t of stamps(w.startMs, w.endMs)) {
+    const i = idx.get(t);
+    const p = i === undefined ? null : top.precipitation[i], temp = i === undefined ? null : top.temperature[i], g = i === undefined ? null : top.gust[i];
+    if (p === null || temp === null || g === null) { windowOk = false; break; }
+    const s = snowCm(p, temp, rules);
+    if (s > 0) { snow += s; snowT += s * temp; }
+    windowGust = Math.max(windowGust, g);
+  }
+  let snowTemp = null;
+  if (windowOk && snow >= q.snowTemp.minSnowCm) {
+    const tC = snowT / snow + (q.snowTemp.biasC[model] ?? 0);
+    snowTemp = { tC: Math.round(tC * 10) / 10, band: tC <= q.snowTemp.dryC ? "dry" : tC <= q.snowTemp.wetC ? "moist" : "wet" };
+  }
+
+  return {
+    rainBad: round3(rainBad),
+    rainFair: round3(rainFair),
+    gustBad: round3(gustBad),
+    gustFair: round3(gustFair),
+    sunLow: round3(sunLow),
+    good: round3((1 - rainFair) * (1 - gustFair) * (1 - sunLow)),
+    inversion,
+    snowTemp,
+    windowGustKmh: windowOk ? Math.round(windowGust) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Horizons
 // ---------------------------------------------------------------------------
 
@@ -587,13 +697,18 @@ function hourlyFor(top, base, dates, cfg) {
  * A deterministic horizon: one verdict per resort and day, the POWDER_SNEH probability of the day
  * (null without a law for the model), plus the hourly lines behind it.
  */
-export function judgeDeterministic(points, cfg, dates, law = null, publishedMs = 0) {
+export function judgeDeterministic(points, cfg, dates, law = null, publishedMs = 0, model = null) {
   return cfg.resorts.map((resort, r) => {
     const { top, base } = resortPoints(points, cfg, r);
     const idx = indexByTime(top.timesMs);
     return {
       id: resort.id,
-      days: dates.map((date, i) => ({ date, ...judgeDay(top.members[0], base.members[0], date, cfg, idx), powderSnow: powderSnow(top.members[0], date, cfg, idx, law, publishedMs, i) })),
+      days: dates.map((date, i) => ({
+        date,
+        ...judgeDay(top.members[0], base.members[0], date, cfg, idx),
+        powderSnow: powderSnow(top.members[0], date, cfg, idx, law, publishedMs, i),
+        quality: model ? dayQuality(top.members[0], base.members[0], date, cfg, idx, model) : null,
+      })),
       hourly: hourlyFor(top, base, dates, cfg),
     };
   });
@@ -654,8 +769,9 @@ export function summarizeEnsemble(points, cfg, dates) {
 
 /** Bumped whenever the snapshot's shape changes, so an older stored one is rejected, not misread.
  * 2 (4 Oct 2026): powderSnow (amount, lead, probability, median, p90, stage, alert flag) on deterministic
- * days, powderLaw and publishedAtMs on horizons. */
-export const SKI_SNAPSHOT_VERSION = 2;
+ * days, powderLaw and publishedAtMs on horizons. 3 (4 Oct 2026): quality (calibrated day-rule
+ * probabilities, good-day probability, inversion, snow temperature, window gust) on deterministic days. */
+export const SKI_SNAPSHOT_VERSION = 3;
 
 /**
  * Everything the page draws, derived once by whoever has the raw responses - the generator, or the
@@ -682,7 +798,7 @@ export function buildSkiSnapshot(responses, cfg, fetchedAtMs) {
       powderLaw: law ? h.model : null,
       dates,
       grids: points.map((p) => p.grid),
-      resorts: h.ensemble ? summarizeEnsemble(points, cfg, dates) : judgeDeterministic(points, cfg, dates, law, publishedMs),
+      resorts: h.ensemble ? summarizeEnsemble(points, cfg, dates) : judgeDeterministic(points, cfg, dates, law, publishedMs, h.model),
     };
   }
   return { version: SKI_SNAPSHOT_VERSION, fetchedAtMs, firstDate, config: cfg, horizons };

@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SkiConfig } from "./config.js";
 import { fetchJson } from "./fetch-json.js";
-import { HORIZON_KEYS, SKI_SNAPSHOT_VERSION, indexByTime, parsePoints, pointsUrl, powderSnow, windowSnowCm } from "./ski-core.js";
+import { HORIZON_KEYS, SKI_SNAPSHOT_VERSION, dayQuality, indexByTime, parsePoints, pointsUrl, powderSnow, windowSnowCm } from "./ski-core.js";
 import type { SkiSnapshot } from "./ski.js";
 
 /**
@@ -85,8 +85,8 @@ export function buildForecastLog(snapshot: SkiSnapshot, responses: Responses, st
     h.resorts.forEach((r, ri) => {
       resorts[r.id] = r.days.map((d, di) => {
         if (!ensemble) {
-          const { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow } = d as Record<string, unknown>;
-          return { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow };
+          const { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality } = d as Record<string, unknown>;
+          return { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality };
         }
         const { date, goodPct, fairPct, badPct, snowCm } = d as Record<string, unknown>;
         const top = points![2 * ri];
@@ -104,7 +104,8 @@ export function buildForecastLog(snapshot: SkiSnapshot, responses: Responses, st
       entry.stations = {};
       VERIFICATION_STATIONS.forEach((s, si) => {
         const idx = indexByTime(pts[si].timesMs);
-        entry.stations![s.id] = h.dates.map((date, di) => ({ date, powderSnow: powderSnow(pts[si].members[0], date, cfg, idx, law, publishedMs, di) }));
+        // A station is its own base: no inversion, rain at the station itself.
+        entry.stations![s.id] = h.dates.map((date, di) => ({ date, powderSnow: powderSnow(pts[si].members[0], date, cfg, idx, law, publishedMs, di), quality: dayQuality(pts[si].members[0], pts[si].members[0], date, cfg, idx, h.model) }));
       });
     }
     line.horizons[key] = entry;
