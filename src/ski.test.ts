@@ -545,7 +545,7 @@ test("stránka: tri časti, štyri karty, odkazy len na strediská a zdroj dát"
   assert.equal([...html.matchAll(/class="sk-card"/g)].length, cfg.resorts.length);
   assert.equal([...html.matchAll(/class="sk-hourly"/g)].length, cfg.resorts.length);
   assert.equal([...html.matchAll(/<tr><th scope="row">/g)].length, cfg.horizons.short.days + cfg.horizons.long.days);
-  const allowed = new Set(["https://open-meteo.com/", ...cfg.resorts.flatMap((r) => [r.links.snowReport, r.links.webcam])]);
+  const allowed = new Set(["https://open-meteo.com/", "https://data.hub.geosphere.at/", "https://ehyd.gv.at/", ...cfg.resorts.flatMap((r) => [r.links.snowReport, r.links.webcam])]);
   const markup = page.replace(/<script type="module">[\s\S]*?<\/script>/, "");
   const hrefs = [...markup.matchAll(/href="([^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, "&"));
   for (const href of hrefs) assert.ok(allowed.has(href), `neočakávaný odkaz ${href}`);
@@ -553,6 +553,30 @@ test("stránka: tri časti, štyri karty, odkazy len na strediská a zdroj dát"
     assert.ok(hrefs.includes(r.links.snowReport), `${r.name}: snehová správa`);
     assert.ok(hrefs.includes(r.links.webcam), `${r.name}: webkamera`);
   }
+});
+
+test("stránka: pruhy s percentom namiesto slov, dôvody s pravdepodobnosťou, mäkký sneh a inverzia", () => {
+  const render = clientRender();
+  // A valley 5 °C warmer than the top: the usual lapse, so no inversion is named.
+  const html = mainOf(renderSkiPage(snapshotFor((p) => (p === BASE ? { temp: 0 } : {}))));
+  // One bar per card, per 3-day cell and per 10-day cell; no verdict words left on judged days.
+  assert.equal([...html.matchAll(/class="sk-prob"/g)].length, cfg.resorts.length * (1 + cfg.horizons.short.days + cfg.horizons.long.days));
+  assert.doesNotMatch(html, /sk-status sk-(good|fair|bad)/);
+  assert.match(html, /<b>dobré \d+\u00a0%<\/b>/);
+  assert.match(html, /<p class="sk-why">Bez výhrad\.<\/p>/);
+  // Rain at the base all lift day: the concern names rain with its probability.
+  const rainy = render.renderSki(snapshotFor((p, _m, t) => (p === BASE && t >= at(10) && t <= at(16) ? { temp: 5, precip: 3 } : {})), at(10));
+  assert.match(rainy, /<p class="sk-why">dážď dole \d+\u00a0%/);
+  // A warm valley: the temperature rule stays a plain sentence and the good share is zero.
+  const soft = render.renderSki(snapshotFor((p) => (p === BASE ? { temp: 6 } : {})), at(10));
+  assert.match(soft, /mäkký sneh dole \(nad 3\u00a0°C\)/);
+  assert.match(soft, /<b>dobré 0\u00a0%<\/b>/);
+  // Top warmer than the base at 13:00: the ICON-D2 card names the inversion.
+  const inv = render.renderSki(snapshotFor((p, _m, t) => (t === at(13) ? { temp: p === TOP ? -1 : -3 } : {})), at(10));
+  assert.match(inv, /hore teplejšie než dole \d+\u00a0%/);
+  // The method text explains the percentages, with the alert threshold and stage days from the configuration.
+  assert.match(html, /Ako sa počítajú percentá\?/);
+  assert.match(html, /POWDER ALERT<\/b> svieti od 20\u00a0% na prvé 2 dni/);
 });
 
 test("vložená snímka sa dá prečítať späť a vložený kód je bez import/export", () => {
@@ -570,13 +594,21 @@ test("rovnaká snímka dá bajt po bajte rovnakú stránku; čas načítania je 
   assert.match(clientRender().renderMetaText(snap, at(12)), /Načítané dnes 10:00/);
 });
 
-test("neznámy deň je nedostatok dát, prašan sa ukáže a staré dáta sa priznajú", () => {
+test("neznámy deň je nedostatok dát, prašan dostane percento a značku, staré dáta sa priznajú", () => {
   const render = clientRender();
   const gap = snapshotFor((p, _m, t) => (p === TOP && t === at(12) ? { gust: null } : {}));
   assert.match(render.renderSki(gap, at(10)), /Nedostatok dát/);
+  // 20 mm at -5 °C at 03:00: 14 cm in the powder window and in the 3-day sum, dry snow.
   const powder = snapshotFor((p, _m, t) => (p === TOP && t === at(3) ? { precip: 20 } : {}));
-  assert.match(render.renderSki(powder, at(10)), /14\u00a0cm · prašan/);
+  const html = render.renderSki(powder, at(10));
+  assert.match(html, /Nový sneh za 3 dni<\/dt><dd>14\u00a0cm<\/dd>/);
+  assert.match(html, /<p class="sk-flag"><b class="sk-alert">POWDER ALERT<\/b> prašan do rána \d+\u00a0%<\/p>/);
+  assert.match(html, /Prašan do rána \(≥ 15\u00a0cm\)<\/dt><dd>\d+\u00a0%<\/dd>/);
+  assert.match(html, /Nový sneh do rána<\/dt><dd>okolo \d+, až \d+\u00a0cm · suchý<\/dd>/);
+  assert.match(html, /<small><b class="sk-alert">POWDER ALERT<\/b> \d+\u00a0%<\/small>/);
   const fresh = render.renderSki(snapshotFor(), at(10));
+  assert.doesNotMatch(fresh, /class="sk-alert"/);
+  assert.match(fresh, /Prašan do rána \(≥ 15\u00a0cm\)<\/dt><dd>0\u00a0%<\/dd>/);
   assert.doesNotMatch(fresh, /staršie/);
   assert.match(render.renderSki(snapshotFor(), at(10, addDays(DAY, 1))), /staršie/);
 });

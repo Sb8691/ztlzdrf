@@ -8,10 +8,20 @@
  * when there is one.
  *
  * Colour follows the station everywhere: the top station is the first series colour, the base the
- * second. Verdicts use the status colours and always carry their word, never colour alone.
+ * second. Verdicts are the good / fair / bad shares (calibrated probabilities on the deterministic
+ * days, member shares on the ensemble days) and always carry their number, never colour alone.
  */
 
 const STATUS_WORD = { good: "Dobré", fair: "Ujde", bad: "Zlé" };
+/** Temperature during the snowfall, the page's word for each band (METODIKA §4.5). */
+const BAND_WORD = { dry: "suchý", moist: "vlhší", wet: "mokrý" };
+/** The POWDER_SNEH stage of a day whose probability reaches the flag threshold. */
+const STAGE_WORD = { alert: "POWDER ALERT", pozor: "POWDER POZOR", vyhlad: "POWDER VÝHĽAD" };
+/** A component is named among a day's concerns from this probability on - a display choice, not a
+ * verified threshold (METODIKA §4.6). */
+const CONCERN_FROM = 0.2;
+/** The 3-day table names the powder chance from here on, so dry days stay quiet. */
+const POWDER_LINE_FROM = 0.05;
 const NB = " ";
 
 function esc(s) {
@@ -72,6 +82,69 @@ function statusMark(status) {
   return `<span class="sk-status sk-${status}"><i aria-hidden="true"></i>${STATUS_WORD[status]}</span>`;
 }
 
+/** "35 %" from a probability. */
+function pct(p) {
+  return `${Math.round(p * 100)}${NB}%`;
+}
+
+/** The good / fair / bad bar - the one verdict language of the whole page: calibrated probabilities
+ * on the deterministic days, member shares on the ensemble days. */
+function shareBar(day) {
+  const seg = (cls, v) => (v > 0 ? `<span class="sk-seg sk-${cls}" style="flex-grow:${v}"></span>` : "");
+  return `<span class="sk-share" aria-hidden="true">${seg("good", day.goodPct)}${seg("fair", day.fairPct)}${seg("bad", day.badPct)}</span>`;
+}
+
+function shareTitle(day) {
+  return `dobré ${day.goodPct}${NB}%, ujde ${day.fairPct}${NB}%, zlé ${day.badPct}${NB}%`;
+}
+
+/** The bar with the number that carries it (never colour alone). Without shares the verdict word,
+ * which only happens when a model has no calibrated curves. */
+function shareMark(day) {
+  if (day.goodPct === null || day.goodPct === undefined) return statusMark(day.status);
+  return `<span class="sk-prob">${shareBar(day)}<b>dobré ${day.goodPct}${NB}%</b></span>`;
+}
+
+/**
+ * What may spoil the day: the page's own events with their probabilities (from CONCERN_FROM), the
+ * temperature rule for soft snow and a likely inversion. The deterministic reasons when the day has
+ * no probabilities.
+ */
+function concerns(day, cfg) {
+  if (day.status === null) return "Predpoveď ešte nesiaha na celý deň.";
+  const q = day.quality;
+  if (!q) return day.reasons.length ? day.reasons.join(" · ") : "Bez výhrad.";
+  const r = cfg.rules;
+  const out = [];
+  if (q.rainBad >= CONCERN_FROM) out.push(`dážď dole ${pct(q.rainBad)}`);
+  else if (q.rainFair >= CONCERN_FROM) out.push(`slabý dážď dole ${pct(q.rainFair)}`);
+  if (q.gustBad >= CONCERN_FROM) out.push(`nárazy nad ${r.gustBadKmh}${NB}km/h ${pct(q.gustBad)}, lanovky môžu stáť`);
+  else if (q.gustFair >= CONCERN_FROM) out.push(`veterno ${pct(q.gustFair)}`);
+  if (day.softSnow) out.push(`mäkký sneh dole (nad ${r.softSnowTempC}${NB}°C)`);
+  if (q.sunLow >= CONCERN_FROM) out.push(`zamračené ${pct(q.sunLow)}`);
+  if (q.inversion && q.inversion.probability >= 0.5) out.push(`hore teplejšie než dole ${pct(q.inversion.probability)}`);
+  return out.length ? out.join(" · ") : "Bez výhrad.";
+}
+
+/** The stage badge of a day whose POWDER_SNEH probability reaches the flag threshold, else "". */
+function powderBadge(day) {
+  const ps = day.powderSnow;
+  return ps && ps.alert && ps.stage ? `<b class="sk-alert">${STAGE_WORD[ps.stage]}</b>` : "";
+}
+
+/** The POWDER_SNEH rows of a card: the calibrated chance, and the expected new snow when there may
+ * be any. Values are HTML. */
+function powderRows(day, cfg) {
+  const ps = day.powderSnow;
+  if (!ps) return [];
+  const rows = [[`Prašan do rána (≥ ${cfg.powder.thresholdCm}${NB}cm)`, pct(ps.probability)]];
+  if (ps.p90Cm >= 1) {
+    const band = day.quality && day.quality.snowTemp ? ` · ${BAND_WORD[day.quality.snowTemp.band]}` : "";
+    rows.push(["Nový sneh do rána", esc(`okolo ${num(ps.medianCm)}, až ${num(ps.p90Cm)}${NB}cm${band}`)]);
+  }
+  return rows;
+}
+
 function links(resort) {
   return (
     `<p class="sk-links"><a href="${esc(resort.links.snowReport)}" target="_blank" rel="noopener">Snehová správa</a>` +
@@ -83,24 +156,27 @@ function links(resort) {
 // 1. The next lift day
 // ---------------------------------------------------------------------------
 
-function nowCard(resort, day) {
+function nowCard(resort, day, cfg) {
   const rows = [];
-  if (day.freshSnowCm !== null) {
-    rows.push(["Nový sneh za 3 dni", `${num(day.freshSnowCm)}${NB}cm${day.powder ? " · prašan" : ""}`]);
-  }
+  const plain = (k, v) => rows.push([k, esc(v)]);
+  rows.push(...powderRows(day, cfg));
+  if (day.freshSnowCm !== null) plain("Nový sneh za 3 dni", `${num(day.freshSnowCm)}${NB}cm`);
   if (day.status) {
-    rows.push(["Teplota hore", range(day.topTemp.min, day.topTemp.max, "°C")]);
-    rows.push(["Teplota dole", range(day.baseTemp.min, day.baseTemp.max, "°C")]);
-    rows.push(["Nárazy vetra hore", `do ${num(day.maxGustKmh)}${NB}km/h`]);
-    rows.push(["Slnko", `${num(day.sunHours, 1)}${NB}h`]);
-    if (day.rainBaseMm > 0) rows.push(["Dážď dole", `${num(day.rainBaseMm, 1)}${NB}mm`]);
+    plain("Teplota hore", range(day.topTemp.min, day.topTemp.max, "°C"));
+    plain("Teplota dole", range(day.baseTemp.min, day.baseTemp.max, "°C"));
+    plain("Nárazy vetra hore", `do ${num(day.maxGustKmh)}${NB}km/h`);
+    plain("Slnko", `${num(day.sunHours, 1)}${NB}h`);
+    if (day.rainBaseMm > 0) plain("Dážď dole", `${num(day.rainBaseMm, 1)}${NB}mm`);
   }
-  const why = day.status === null ? "Predpoveď ešte nesiaha na celý deň." : day.reasons.length ? day.reasons.join(" · ") : "Bez výhrad.";
+  // The badge gets a line of its own: in the value column it would wrap the row label on a phone.
+  const badge = powderBadge(day);
+  const flag = badge ? `<p class="sk-flag">${badge} prašan do rána ${pct(day.powderSnow.probability)}</p>` : "";
   return (
     `<article class="sk-card">` +
-    `<header><h3>${esc(resort.name)}</h3>${statusMark(day.status)}</header>` +
-    `<p class="sk-why">${esc(why)}</p>` +
-    `<dl>${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` +
+    `<header><h3>${esc(resort.name)}</h3>${shareMark(day)}</header>` +
+    flag +
+    `<p class="sk-why">${esc(concerns(day, cfg))}</p>` +
+    `<dl>${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join("")}</dl>` +
     links(resort) +
     `</article>`
   );
@@ -110,14 +186,19 @@ function nowCard(resort, day) {
 // 2. Three days: a day x resort table plus hourly charts per resort
 // ---------------------------------------------------------------------------
 
-/** Status, then one short line per fact - narrow phone columns wrap a joined sentence badly. */
+/** Shares, then one short line per fact - narrow phone columns wrap a joined sentence badly. */
 function shortCell(day, cfg) {
   if (!day.status) return `<td>${statusMark(null)}</td>`;
-  const lines = [range(day.topTemp.min, day.topTemp.max, "°C")];
-  if (day.freshSnowCm !== null && day.freshSnowCm >= 1) lines.push(`${num(day.freshSnowCm)}${NB}cm snehu`);
-  if (day.maxGustKmh > cfg.rules.gustFairKmh) lines.push(`vietor ${num(day.maxGustKmh)}${NB}km/h`);
-  const title = day.reasons.length ? day.reasons.join(" · ") : "Bez výhrad.";
-  return `<td title="${esc(title)}">${statusMark(day.status)}${lines.map((l) => `<small>${esc(l)}</small>`).join("")}</td>`;
+  const lines = [esc(range(day.topTemp.min, day.topTemp.max, "°C"))];
+  const ps = day.powderSnow;
+  if (ps && ps.probability >= POWDER_LINE_FROM) {
+    const badge = powderBadge(day);
+    lines.push(badge ? `${badge} ${pct(ps.probability)}` : esc(`prašan ${pct(ps.probability)}`));
+  }
+  if (day.freshSnowCm !== null && day.freshSnowCm >= 1) lines.push(esc(`${num(day.freshSnowCm)}${NB}cm snehu`));
+  if (day.maxGustKmh > cfg.rules.gustFairKmh) lines.push(esc(`vietor ${num(day.maxGustKmh)}${NB}km/h`));
+  const title = day.goodPct === null ? concerns(day, cfg) : `${shareTitle(day)} · ${concerns(day, cfg)}`;
+  return `<td title="${esc(title)}">${shareMark(day)}${lines.map((l) => `<small>${l}</small>`).join("")}</td>`;
 }
 
 function dayTable(dates, resorts, cfg, cell, caption) {
@@ -261,32 +342,36 @@ function hourlyChart(resort, hourly, dates, cfg) {
 
 function longCell(day) {
   if (day.goodPct === null) return `<td><span class="sk-status sk-none">${day.reason === "members" ? "Neúplné dáta" : "Nedostatok dát"}</span></td>`;
-  const seg = (cls, pct) => (pct > 0 ? `<span class="sk-seg sk-${cls}" style="flex-grow:${pct}"></span>` : "");
-  const bar = `<span class="sk-share" aria-hidden="true">${seg("good", day.goodPct)}${seg("fair", day.fairPct)}${seg("bad", day.badPct)}</span>`;
   let snow = "";
   if (day.snowCm && day.snowCm.p90 >= 1) {
     snow = `<small>${num(day.snowCm.p10)}–${num(day.snowCm.p90)}${NB}cm snehu</small>`;
   }
-  const title = `dobré ${day.goodPct} %, ujde ${day.fairPct} %, zlé ${day.badPct} % scenárov`;
-  return `<td title="${esc(title)}">${bar}<small>dobré ${day.goodPct}${NB}%</small>${snow}</td>`;
+  return `<td title="${esc(`${shareTitle(day)} scenárov`)}">${shareMark(day)}${snow}</td>`;
 }
 
 // ---------------------------------------------------------------------------
 // The whole page body
 // ---------------------------------------------------------------------------
 
+const LEGEND = `<p class="sk-legend"><span><i class="sk-good"></i>dobré</span><span><i class="sk-fair"></i>ujde</span><span><i class="sk-bad"></i>zlé</span></p>`;
+
 function method(cfg) {
   const r = cfg.rules;
+  const p = cfg.powder;
+  const st = cfg.quality.snowTemp;
+  const alertDays = p.stages[0].maxDayOffset + 1;
   return (
-    `<details class="sk-method"><summary>Ako sa hodnotí deň?</summary>` +
-    `<p>Hodnotí sa čas prevádzky lanoviek ${cfg.liftOpenHour}:00–${cfg.liftCloseHour}:00, pri každom stredisku pri najnižšej a najvyššej stanici lanovky. Platí najhoršie z pravidiel:</p>` +
+    `<details class="sk-method"><summary>Ako sa počítajú percentá?</summary>` +
+    `<p>Hodnotí sa čas prevádzky lanoviek ${cfg.liftOpenHour}:00–${cfg.liftCloseHour}:00, pri každom stredisku pri najnižšej a najvyššej stanici lanovky. Deň je:</p>` +
     `<ul>` +
-    `<li><b>Zlé:</b> dážď dole aspoň ${num(r.rainBadMm, 1)}${NB}mm, alebo nárazy vetra nad ${r.gustBadKmh}${NB}km/h (lanovky môžu stáť).</li>` +
-    `<li><b>Ujde:</b> slabý dážď dole (od ${num(r.rainFairMm, 1)}${NB}mm), nárazy nad ${r.gustFairKmh}${NB}km/h, aspoň polovicu dňa dole nad ${r.softSnowTempC}${NB}°C (mäkký sneh), alebo menej ako ${r.minSunHours}${NB}h slnka (horšia viditeľnosť).</li>` +
-    `<li><b>Dobré:</b> nič z toho.</li>` +
+    `<li><b>zlý</b>, keď dole naprší aspoň ${num(r.rainBadMm, 1)}${NB}mm alebo nárazy vetra hore prekročia ${r.gustBadKmh}${NB}km/h (lanovky môžu stáť);</li>` +
+    `<li><b>ujde</b>, keď dole naprší aspoň ${num(r.rainFairMm, 1)}${NB}mm, nárazy prekročia ${r.gustFairKmh}${NB}km/h, dole je aspoň pol dňa nad ${r.softSnowTempC}${NB}°C (mäkký sneh), alebo je menej ako ${r.minSunHours}${NB}h slnka (horšia viditeľnosť);</li>` +
+    `<li><b>dobrý</b>, keď nič z toho.</li>` +
     `</ul>` +
-    `<p>Či padá dážď alebo sneh, určuje teplota v danej výške: do ${num(r.snowMaxTempC)}${NB}°C sneh, nad ňou dážď. Nový sneh je súčet za ${r.freshSnowHours}${NB}h pred otvorením a počas dňa pri hornej stanici. Od ${r.powderCm}${NB}cm je označený ako prašan; deň nikdy nezhorší.</p>` +
-    `<p>Pri 10 dňoch prejde každý z 51 scenárov ansámblu ECMWF tým istým hodnotením. Percentá sú podiely scenárov a sneh je rozpätie medzi 10. a 90. percentilom celodenného sneženia hore.</p>` +
+    `<p>Na najbližší deň a na tri dni sú pruh a percentá <b>pravdepodobnosti</b>. Pre každé pravidlo sa z predpovedaného dažďa, nárazu a slnka zoberie, ako často sa pri takej predpovedi naozaj splnilo – na šiestich horských staniciach GeoSphere Austria v okolí za štyri zimy. „Dobré“ je pravdepodobnosť, že sa nesplní žiadne (mäkký sneh sa berie z teploty priamo), „zlé“, že dole naprší aspoň ${num(r.rainBadMm, 1)}${NB}mm alebo zafúka nad ${r.gustBadKmh}${NB}km/h. Samotné áno/nie podľa predpovede pri overení neobstálo: dážď hlásilo viac než dvakrát častejšie, než prišiel, a vietor na vrcholoch z modelu na tri dni nesedí vôbec. Od štvrtého dňa tieto pravdepodobnosti strácajú hodnotu.</p>` +
+    `<p><b>Prašan</b> je aspoň ${p.thresholdCm}${NB}cm nového snehu pri hornej stanici od ${p.windowHour}:00 predošlého dňa do ${p.windowHour}:00. Percento vychádza z predpovedaného úhrnu a z toho, ako sa predpovede s rovnakým predstihom trafili v minulých zimách na staniciach, kde sa nový sneh meria. <b>POWDER ALERT</b> svieti od ${Math.round(p.alert.minProb * 100)}${NB}% na prvé ${alertDays} dni, <b>POWDER POZOR</b> ďalej. „Okolo“ je stredná hodnota, „až“ hodnota, pod ktorou ostane deväť z desiatich prípadov. Suchý, vlhší alebo mokrý sneh je podľa teploty počas sneženia (do ${num(st.dryC)}${NB}°C, do ${num(st.wetC)}${NB}°C, teplejšie). Či prašan rozfúka vietor, sa predpovedať nedá. Nový sneh za 3 dni je súčet za ${r.freshSnowHours}${NB}h pred otvorením a počas dňa.</p>` +
+    `<p>Či padá dážď alebo sneh, určuje teplota v danej výške: do ${num(r.snowMaxTempC)}${NB}°C sneh, nad ňou dážď.</p>` +
+    `<p>Pri 10 dňoch prejde každý z 51 scenárov ansámblu ECMWF áno/nie pravidlami. Podiely sú podiely scenárov, nie kalibrované pravdepodobnosti, a sneh je rozpätie medzi 10. a 90. percentilom celodenného sneženia hore.</p>` +
     `<p><b>Čo predpoveď nevie:</b> či je stredisko otvorené, koľko snehu je na zjazdovke a či je upravená alebo technicky zasnežená. Na to slúžia snehová správa a webkamera. Model počíta zrážky, vietor a slnko pre celú oblasť, nie zvlášť pre vrchol. Na exponovanom hrebeni môže fúkať viac. Ansámbel má hrubú mriežku (asi 25${NB}km), preto sa v 10-dňovom výhľade strediská líšia hlavne teplotou.</p>` +
     `<p>Ak chýba čo i len jedna potrebná hodnota, deň sa neohodnotí. Chýbajúce údaje sa nikdy nepočítajú ako nula.</p>` +
     `</details>`
@@ -310,15 +395,17 @@ function renderSki(snapshot, nowMs) {
   return (
     (stale ? `<p class="sk-warn">Tieto dáta sú staršie a začínajú dňom, ktorý už je za nami. Obnovte predpoveď.</p>` : "") +
     `<section class="sk-section"><h2>${esc(longDayLabel(H.now.dates[0]))}</h2><p class="sk-src">Najbližší lyžiarsky deň · ${esc(source(H.now))}</p>` +
-    `<div class="sk-cards">${cfg.resorts.map((r, i) => nowCard(r, now[i].days[0])).join("")}</div></section>` +
+    `<p class="sk-note">Pruh a percento sú pravdepodobnosť, že deň bude dobrý, ujde alebo zlý; pod názvom strediska je, čo ho môže pokaziť.</p>` +
+    LEGEND +
+    `<div class="sk-cards">${cfg.resorts.map((r, i) => nowCard(r, now[i].days[0], cfg)).join("")}</div></section>` +
     `<section class="sk-section"><h2>Najbližšie ${H.short.dates.length} dni</h2><p class="sk-src">${esc(source(H.short))}</p>` +
-    `<p class="sk-note">Pod hodnotením: teplota pri hornej stanici počas prevádzky, nový sneh za 3 dni a silnejší vietor.</p>` +
-    dayTable(H.short.dates, short, cfg, shortCell, `Hodnotenie dňa na najbližšie ${H.short.dates.length} dni`) +
+    `<p class="sk-note">Pod pruhom: teplota pri hornej stanici počas prevádzky, šanca na prašan, nový sneh za 3 dni a silnejší vietor.</p>` +
+    dayTable(H.short.dates, short, cfg, shortCell, `Pravdepodobnosti dobrého, priemerného a zlého dňa na najbližšie ${H.short.dates.length} dni`) +
     cfg.resorts.map((r, i) => hourlyChart(r, short[i].hourly, H.short.dates, cfg)).join("") +
     `</section>` +
     `<section class="sk-section"><h2>Výhľad na ${H.long.dates.length} dní</h2><p class="sk-src">${esc(source(H.long))}</p>` +
-    `<p class="sk-note">Pruh je podiel z 51 scenárov predpovede; pod ním podiel dobrých dní a rozpätie snehu hore.</p>` +
-    `<p class="sk-legend"><span><i class="sk-good"></i>dobré</span><span><i class="sk-fair"></i>ujde</span><span><i class="sk-bad"></i>zlé</span></p>` +
+    `<p class="sk-note">Pruh je podiel z 51 scenárov predpovede, nie kalibrovaná pravdepodobnosť; pod ním rozpätie snehu hore.</p>` +
+    LEGEND +
     dayTable(H.long.dates, long, cfg, longCell, `Výhľad na ${H.long.dates.length} dní`) +
     `</section>` +
     method(cfg)

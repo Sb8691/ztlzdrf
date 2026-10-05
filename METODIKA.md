@@ -29,6 +29,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 5. 10. 2026 | Krok 7: stránka ukazuje pravdepodobnosti namiesto áno/nie (rozhodnutie majiteľa); jeden vizuálny jazyk = pruh dobré / ujde / zlé + „dobré X %“ aj pri deterministických dňoch; P(zlé) = súčin, overené proti priamemu fitu; dôvody od 20 %, inverzia od 50 %, prašan v tabuľke od 5 % (voľby zobrazenia); stará značka prašanu 10 cm / 72 h zo stránky preč; GeoSphere a eHYD v pätičke, LWD nie; snímka v4; `docs/` obnovené živým načítaním mimo sezóny CI (log mimo repozitára) | majiteľ (áno 5. 10.), Fable |
 | 4. 10. 2026 | Krok 6b–6d: značka vetra pri powderi a „slnečný vrchol nad sivým údolím“ sa nevydávajú (bez zručnosti); inverzia len z ICON-D2; teplota počas sneženia z IFS +1,0 °C; dobrý deň = súčin kalibrovaných zložiek; krivky z predstihu 0 bez závislosti od predstihu; deterministické horizonty doťahujú nízku oblačnosť a vlhkosť; snímka v3 | Fable |
 | 4. 10. 2026 | Krok 6a: hodinové značky GeoSphere = predchádzajúca hodina (overené krížovou koreláciou); áno/nie pravidlá stránky nahradia kalibrované pravdepodobnosti (6d); nárazy z IFS bez zručnosti → vietor len z ICON-D2 do 47 h alebo klimatológia; prahy stránky ostávajú definíciami | Fable (krok 6 schválený majiteľom 4. 10.) |
 | 4. 10. 2026 | Krok 5a: každý čerstvý beh generátora pripíše riadok do `data/prospective/<sezóna>.jsonl` (strediská, šesť overovacích staníc, členovia ansámblu v okne); CI commituje `data/prospective`; vyhodnotenie až po sezóne 2026/27 | majiteľ (áno na plán), Fable |
@@ -512,7 +513,7 @@ proti 0,28–0,30. Dolné hranice CI pri 23–71 h ležia na nule, nie nad ňou 
   (rozhodovacia tabuľka v `data/model/REPORT.md`). Jedno číslo v `src/powder-model.ts` (`alert`).
   Pokryté dni: D0 (ICON-D2 aj IFS), D+1 a D+2 (IFS); D+3 by potreboval štvrtý deň horizontu `short`
   (zmena tabuľky stránky), D+4–D+9 ansámbel bez zákona.
-- **Ešte nie je:** zobrazenie v UI, pravdepodobnosť pre ansámbel, D+3.
+- **Ešte nie je:** pravdepodobnosť pre ansámbel, D+3. Zobrazenie v UI pribudlo v kroku 7 (§4.6).
 
 
 ### 4.5 Zložky lyžiarskeho dňa (krok 6)
@@ -587,8 +588,42 @@ ICON-D2; `snowTemp` (teplota počas sneženia s korekciou modelu a pásmo suchý
 Deterministické horizonty si doťahujú `cloud_cover_low` a `relative_humidity_2m` (ansámbel nie);
 odpoveď bez nich sa spracuje s krivkou len zo slnka. Snímka v3; log predpovedí nesie `quality` aj pre
 overovacie stanice (stanica je sama sebe dolnou stanicou, bez inverzie). Verdikty stránky
-(`status`, `reasons`) ostávajú deterministické, kým majiteľ nerozhodne o zobrazení. Overené naživo
+(`status`, `reasons`) ostávajú v snímke; od kroku 7 stránka kreslí podiely z pravdepodobností (§4.6). Overené naživo
 4. 10. 2026 (ICON-D2 aj IFS vracajú obe premenné v %).
+
+### 4.6 Zobrazenie na stránke (krok 7, 5. 10. 2026)
+
+Majiteľ 5. 10. 2026 rozhodol, že stránka má ukazovať pravdepodobnosti namiesto áno/nie („Ano zobrazovat
+pravdepodobnosti“); pôvodné „UI/UX nerieš“ zo zadania tým padlo. Plán kroku (jeden vizuálny jazyk, podiely
+aj pri deterministických dňoch, prašan s ALERTom, dôvody od 20 %, živé načítanie do `docs/`) schválený
+„Áno“ s odporúčanými voľbami.
+
+- **Podiely dňa (overené):** deterministické dni nesú `goodPct / fairPct / badPct` ako ansámblové
+  (`dayShares` v `src/ski-core.js`): P(zlé) = 1 − (1 − P dážď ≥ 1 mm)(1 − P náraz > 60 km/h), P(dobré) =
+  súčin z §4.5, pri mäkkom snehu dole (teplotné pravidlo, deterministicky, nové pole `softSnow`) 0, ujde =
+  zvyšok; celé percentá so súčtom 100. Súčin pre zlý deň má mimo vzorky rovnaký BSS ako priamy fit
+  (ICON-D2 0,24 pri 0 h, 0,29 pri 1 d; IFS 0,05 – nárazy z IFS nemajú na vrcholoch zručnosť), §5.4. Snímka
+  v4; log predpovedí nesie podiely.
+- **Čo stránka kreslí:** karta najbližšieho dňa a trojdňová tabuľka majú pruh dobré / ujde / zlé a
+  „dobré X %“ ako 10-dňový výhľad (tam ostávajú podiely scenárov, v poznámke a v texte metódy výslovne
+  nekalibrované); slová Dobré / Ujde / Zlé zmizli, ostali len pre model bez kriviek (nenastáva) a
+  „Nedostatok dát“. Riadok dôvodov = zložky s pravdepodobnosťou ≥ 20 % (dážď dole / slabý dážď dole,
+  nárazy nad 60 km/h / veterno, zamračené), mäkký sneh dole a pri D0 inverzia ≥ 50 % („hore teplejšie než
+  dole“). Riadok „Prašan do rána (≥ 15 cm)“ s P(POWDER_SNEH); pri `alert` značka POWDER ALERT (D0–D+1) /
+  POWDER POZOR (D+2) v samostatnom riadku karty a v bunke tabuľky; „Nový sneh do rána: okolo (medián), až
+  (90. percentil)“ pri p90 ≥ 1 cm s pásmom suchý / vlhší / mokrý; v tabuľke „prašan X %“ od 5 %. Stará
+  značka „prašan“ (10 cm / 72 h) sa nezobrazuje, pole `powder` ostáva. Náraz v okne sa nezobrazuje (bez
+  zručnosti). Text „Ako sa počítajú percentá?“ vysvetľuje kalibráciu, hranice (~3 dni) a prašan z
+  konfigurácie; pätička uvádza GeoSphere Austria (CC BY 4.0) a eHYD (Datenquelle: ehyd.gv.at) ako zdroje
+  kalibrácie. LWD Kärnten sa na stránke neuvádza, kým nepríde súhlas.
+- **Predpoklady (voľby zobrazenia, nie merania):** prah 20 % pre dôvody, 5 % pre riadok prašanu v
+  tabuľke, 50 % pre inverziu; slová pásiem; „okolo / až“ pre medián a p90. Pri rovnakej modelovej teplote
+  hore a dole dáva krivka inverzie 62 % – nulový modelový rozdiel je už inverzia oproti bežnému poklesu
+  teploty s výškou, teda správne, nie chyba.
+- **Testy a kontrola:** `src/ski.test.ts` – podiely (súčin, mäkký sneh, medzera, ansámbel nezmenený),
+  stránka (56 pruhov, žiadne slovné verdikty, dôvody s percentom, mäkký sneh, inverzia, text metódy z
+  konfigurácie), prašan (riadok, značka, okolo / až, pásmo). Rozloženie overené v headless Chrome na šírke
+  telefónu aj plochy; značka ALERT dostala vlastný riadok, lebo v stĺpci hodnôt lámala popis.
 
 ## 5. Výsledky podľa predstihu
 
@@ -828,6 +863,10 @@ rovnako: súčin P(dážď ≥ 1 mm) a P(náraz > 60 km/h) = priamy fit, z ICON-
 - Kalibrovaný model (§4) má pri 23–71 h BSS 0,19–0,26 s dolnou hranicou CI na nule a od ~83 h zručnosť
   slabne (BSS ≈ 0,1, pri 131 h ≈ 0); jeho spoľahlivosť pri vysokých pravdepodobnostiach stojí na jednotkách
   prípadov. Rozhodujúce overenie príde až zo sezóny 2026/27.
+
+- Podiely 10-dňového výhľadu sú podiely členov ansámblu, nie kalibrované pravdepodobnosti; na stránke stoja
+  vedľa kalibrovaných podielov D0–D+2 a sú tak označené. Log zbiera členov, aby sa po sezóne 2026/27 dala
+  kalibrácia doplniť.
 
 ## 7. Prekalibrovanie
 
