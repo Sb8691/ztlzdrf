@@ -81,7 +81,7 @@ Cieľ: kalibrovaná pravdepodobnosť **POWDER_SNEH** (aspoň 15 cm nového snehu
 na 10 lyžiarskych dní dopredu, overená na minulých sezónach mimo vzorky a zvlášť pre každý predstih,
 neskôr aj kvalita powderu a „super lyžovačka“. Postup ide po krokoch, každý krok je samostatný commit
 schválený majiteľom. Definície, rozhodnutia, dáta a všetky čísla sú v [METODIKA.md](METODIKA.md); tu je
-len denník.
+len denník. Čo ďalej, kedy a čo čaká na majiteľa: [TODO.md](TODO.md).
 
 | Krok | Stav | Čo vzniklo |
 |---|---|---|
