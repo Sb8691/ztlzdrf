@@ -85,8 +85,8 @@ export function buildForecastLog(snapshot: SkiSnapshot, responses: Responses, st
     h.resorts.forEach((r, ri) => {
       resorts[r.id] = r.days.map((d, di) => {
         if (!ensemble) {
-          const { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality } = d as Record<string, unknown>;
-          return { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality };
+          const { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality, goodPct, fairPct, badPct } = d as Record<string, unknown>;
+          return { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality, goodPct, fairPct, badPct };
         }
         const { date, goodPct, fairPct, badPct, snowCm } = d as Record<string, unknown>;
         const top = points![2 * ri];

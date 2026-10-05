@@ -307,6 +307,7 @@ export function rainMm(precipMm, tempC, rules) {
  * @typedef {{
  *   status: "good" | "fair" | "bad" | null,
  *   reasons: string[],
+ *   softSnow: boolean,
  *   powder: boolean,
  *   freshSnowCm: number | null,
  *   rainBaseMm: number | null,
@@ -350,6 +351,7 @@ export function judgeDay(top, base, date, cfg, idx) {
   const empty = {
     status: null,
     reasons: [],
+    softSnow: false,
     powder: freshSnowCm !== null && freshSnowCm >= rules.powderCm,
     freshSnowCm,
     rainBaseMm: null,
@@ -395,13 +397,15 @@ export function judgeDay(top, base, date, cfg, idx) {
   else if (rainBase >= rules.rainFairMm) fair.push(`slabý dážď dole (${mm(rainBase)} mm)`);
   if (gust > rules.gustBadKmh) bad.push(`nárazy vetra ${Math.round(gust)} km/h, lanovky môžu stáť`);
   else if (gust > rules.gustFairKmh) fair.push(`veterno (nárazy ${Math.round(gust)} km/h)`);
-  if (softHours / lift.length >= rules.softSnowShare) fair.push(`mäkký sneh dole (nad ${rules.softSnowTempC} °C)`);
+  const softSnow = softHours / lift.length >= rules.softSnowShare;
+  if (softSnow) fair.push(`mäkký sneh dole (nad ${rules.softSnowTempC} °C)`);
   if (sunSeconds < rules.minSunHours * 3600) fair.push("zamračené, horšia viditeľnosť");
 
   return {
     ...empty,
     status: bad.length ? "bad" : fair.length ? "fair" : "good",
     reasons: [...bad, ...fair],
+    softSnow,
     rainBaseMm: rainBase,
     rainTopMm: rainTop,
     maxGustKmh: Math.round(gust),
@@ -663,6 +667,28 @@ export function dayQuality(top, base, date, cfg, idx, model) {
   };
 }
 
+/**
+ * @typedef {{ goodPct: number | null, fairPct: number | null, badPct: number | null }} DayShares
+ */
+
+/**
+ * The day's verdict as the three shares the page draws, the same three the ensemble days carry
+ * (step 7, METODIKA §4.6): P(bad) = 1 − (1 − P rain ≥ rainBadMm)(1 − P gust > gustBadKmh), P(good) =
+ * the calibrated good-day product - zero when the valley is soft, a temperature rule that stays
+ * deterministic - and "fair" the rest. Both products verified against a direct fit (§5.4). Whole
+ * percentages that sum to 100; null when the day has no verdict or the model no curves.
+ *
+ * @returns {DayShares}
+ */
+export function dayShares(verdict, quality) {
+  if (!verdict.status || !quality) return { goodPct: null, fairPct: null, badPct: null };
+  const bad = 1 - (1 - quality.rainBad) * (1 - quality.gustBad);
+  const good = verdict.softSnow ? 0 : Math.min(quality.good, 1 - bad);
+  const badPct = Math.round(bad * 100);
+  const goodPct = Math.min(Math.round(good * 100), 100 - badPct);
+  return { goodPct, fairPct: 100 - goodPct - badPct, badPct };
+}
+
 // ---------------------------------------------------------------------------
 // Horizons
 // ---------------------------------------------------------------------------
@@ -694,8 +720,9 @@ function hourlyFor(top, base, dates, cfg) {
 }
 
 /**
- * A deterministic horizon: one verdict per resort and day, the POWDER_SNEH probability of the day
- * (null without a law for the model), plus the hourly lines behind it.
+ * A deterministic horizon: one verdict per resort and day with its calibrated quality and the
+ * good / fair / bad shares drawn from it, the POWDER_SNEH probability of the day (null without a
+ * law for the model), plus the hourly lines behind it.
  */
 export function judgeDeterministic(points, cfg, dates, law = null, publishedMs = 0, model = null) {
   return cfg.resorts.map((resort, r) => {
@@ -703,12 +730,17 @@ export function judgeDeterministic(points, cfg, dates, law = null, publishedMs =
     const idx = indexByTime(top.timesMs);
     return {
       id: resort.id,
-      days: dates.map((date, i) => ({
-        date,
-        ...judgeDay(top.members[0], base.members[0], date, cfg, idx),
-        powderSnow: powderSnow(top.members[0], date, cfg, idx, law, publishedMs, i),
-        quality: model ? dayQuality(top.members[0], base.members[0], date, cfg, idx, model) : null,
-      })),
+      days: dates.map((date, i) => {
+        const verdict = judgeDay(top.members[0], base.members[0], date, cfg, idx);
+        const quality = model ? dayQuality(top.members[0], base.members[0], date, cfg, idx, model) : null;
+        return {
+          date,
+          ...verdict,
+          powderSnow: powderSnow(top.members[0], date, cfg, idx, law, publishedMs, i),
+          quality,
+          ...dayShares(verdict, quality),
+        };
+      }),
       hourly: hourlyFor(top, base, dates, cfg),
     };
   });
@@ -770,8 +802,10 @@ export function summarizeEnsemble(points, cfg, dates) {
 /** Bumped whenever the snapshot's shape changes, so an older stored one is rejected, not misread.
  * 2 (4 Oct 2026): powderSnow (amount, lead, probability, median, p90, stage, alert flag) on deterministic
  * days, powderLaw and publishedAtMs on horizons. 3 (4 Oct 2026): quality (calibrated day-rule
- * probabilities, good-day probability, inversion, snow temperature, window gust) on deterministic days. */
-export const SKI_SNAPSHOT_VERSION = 3;
+ * probabilities, good-day probability, inversion, snow temperature, window gust) on deterministic days.
+ * 4 (5 Oct 2026): softSnow on verdicts and goodPct / fairPct / badPct on deterministic days, the shares
+ * the page draws instead of the yes/no verdict. */
+export const SKI_SNAPSHOT_VERSION = 4;
 
 /**
  * Everything the page draws, derived once by whoever has the raw responses - the generator, or the

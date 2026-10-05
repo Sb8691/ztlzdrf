@@ -798,11 +798,16 @@ Pravda a vzorky ako v §5.3; „snehové dni“ = stanica ≥ 7 mm snehovej vody
 | dobrý deň: áno/nie stránky / súčin zložiek / priamo | ICON-D2 hist | 0 h | 2122 | 0,06 (−0,05–0,15) / **0,44 (0,39–0,48)** / 0,44 (0,39–0,49), AUC 0,89 |
 | | ICON-D2 prev | 1 d | 1070 | 0,05 / 0,40 / 0,39 |
 | | IFS hist | 0 h | 2126 | −0,06 (−0,17–0,03) / 0,35 (0,29–0,40) / 0,35 |
+| zlý deň (dážď ≥ 1 mm alebo náraz > 60): áno/nie stránky / súčin zložiek / priamo (krok 7, 5. 10. 2026) | ICON-D2 hist | 0 h | 2122 | −0,24 (−0,41–−0,09) / **0,24 (0,17–0,32)** / 0,25 (0,18–0,32), AUC 0,90 |
+| | ICON-D2 prev | 1 d | 1070 | −0,10 / 0,29 (0,19–0,37) / 0,28 |
+| | IFS hist | 0 h | 2126 | −0,44 (−0,62–−0,29) / 0,05 (−0,02–0,11) / 0,03 |
 
 **Čo z toho plynie (overené):** teplota počas sneženia je z ICON-D2 spoľahlivá a z IFS po korekcii
 +1 °C; vietor počas sneženia sa nepredpovie (vo vetre sneží skoro vždy); inverziu vidí ICON-D2, IFS nie;
 slnečný vrchol nad hmlou v údolí nevidí nikto; zamračenie z ICON-D2 zlepší nízka oblačnosť a vlhkosť;
-„dobrý deň“ ako pravdepodobnosť je súčin zložiek (0,35–0,44) a dnešné áno/nie nemá zručnosť.
+„dobrý deň“ ako pravdepodobnosť je súčin zložiek (0,35–0,44) a dnešné áno/nie nemá zručnosť; „zlý deň“
+rovnako: súčin P(dážď ≥ 1 mm) a P(náraz > 60 km/h) = priamy fit, z ICON-D2 BSS 0,24–0,29, z IFS len 0,05
+(vietor z IFS nemá na vrcholoch zručnosť, §5.3), áno/nie stránky −0,24 až −0,44 (krok 7, 5. 10. 2026).
 
 ## 6. Limity
 

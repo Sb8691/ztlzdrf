@@ -363,16 +363,9 @@ say("|---|---|---|---|---|---|---|");
 }
 
 // ---------------------------------------------------------------------------
-// 6d direct "good day"
+// 6d direct "good day" and "bad day" (step 7: the page shows both as shares)
 // ---------------------------------------------------------------------------
 if (only.has("good")) {
-say("");
-say(`### Dobrý deň stránky (dážď < ${R.rainFairMm} mm, náraz ≤ ${R.gustFairKmh} km/h, slnko ≥ ${R.minSunHours} h, všetko na jednej stanici), horské stanice: priamo vs. súčin zložiek`);
-say("");
-say("| Zdroj | Predstih | n | dobrých dní | klim. | **BSS det.** (áno/nie stránky) (CI) | **BSS súčin kalibrovaných zložiek** (CI) | **BSS priama kalibrácia** (CI) | AUC priama | spoľahlivosť priamej |");
-say("|---|---|---|---|---|---|---|---|---|---|");
-{
-  const out: Record<string, unknown> = {};
   interface GCase { date: string; st: Station; season: string; rainM: number; gustM: number; sunM: number; rainS: number; gustS: number; sunS: number }
   const all: Record<string, GCase[]> = {};
   for (const inst of instances) {
@@ -383,30 +376,58 @@ say("|---|---|---|---|---|---|---|---|---|---|");
     if ([rainM, gustM, sunM, rainS, gustS, sunS].some((v) => v === null)) continue;
     (all[`${inst.source}|${inst.label}`] ??= []).push({ date: inst.date, st: inst.station, season: seasonOf(inst.date), rainM: rainM!, gustM: gustM!, sunM: sunM!, rainS: rainS!, gustS: gustS!, sunS: sunS! });
   }
-  const good = (rain: number, gust: number, sun: number) => rain < R.rainFairMm && gust <= R.gustFairKmh && sun >= R.minSunHours;
-  for (const [key, g] of Object.entries(all).sort(([a], [b]) => sourceOrder(a, b))) {
-    if (g.length < 60) continue;
-    const [source, label] = key.split("|");
-    const mk = (gOf: (c: GCase) => number[]): QCase[] => g.map((c) => ({ day: c.date, station: c.st.key, obs: good(c.rainS, c.gustS, c.sunS) ? 1 : 0, fc: 0, clim: 0, climMean: NaN, season: c.season, g: gOf(c), det: good(c.rainM, c.gustM, c.sunM) }));
-    const direct = evaluate(mk((c) => [Math.sqrt(c.rainM), c.gustM / 10, 7 - c.sunM]));
-    if (!direct) continue;
-    // Product of independently calibrated components (each LOSO): P(good) = (1 - p_rain)(1 - p_gust)(1 - p_sunLow).
-    const comps: [string, (c: GCase) => number, (c: GCase) => boolean][] = [["rain", (c) => Math.sqrt(c.rainM), (c) => c.rainS >= R.rainFairMm], ["gust", (c) => c.gustM / 10, (c) => c.gustS > R.gustFairKmh], ["sun", (c) => 7 - c.sunM, (c) => c.sunS < R.minSunHours]];
-    const seasons = [...new Set(g.map((c) => c.season))];
-    const probProduct = new Map<GCase, number>();
-    for (const s of seasons) {
-      const train = g.filter((c) => c.season !== s), test = g.filter((c) => c.season === s);
-      const fits = comps.map(([, gOf, evOf]) => fitLogistic(train.map((c) => ({ g: gOf(c), y: evOf(c) ? 1 : 0 }))));
-      for (const c of test) probProduct.set(c, comps.reduce((p, [, gOf], i) => p * (1 - logisticProb(gOf(c), fits[i])), 1));
+  type Comp = [string, (c: GCase) => number, (c: GCase) => boolean];
+  const rainG = (c: GCase) => Math.sqrt(c.rainM), gustG = (c: GCase) => c.gustM / 10, sunG = (c: GCase) => 7 - c.sunM;
+  /** The page's two verdict events, each as the model's yes/no, a direct logistic fit and the product of its independently calibrated parts. */
+  const targets: { key: string; title: string; event: (rain: number, gust: number, sun: number) => boolean; gDirect: (c: GCase) => number[]; comps: Comp[]; product: (p: number[]) => number }[] = [
+    {
+      key: "goodDay",
+      title: `Dobrý deň stránky (dážď < ${R.rainFairMm} mm, náraz ≤ ${R.gustFairKmh} km/h, slnko ≥ ${R.minSunHours} h, všetko na jednej stanici), horské stanice: priamo vs. súčin zložiek`,
+      event: (rain, gust, sun) => rain < R.rainFairMm && gust <= R.gustFairKmh && sun >= R.minSunHours,
+      gDirect: (c) => [rainG(c), gustG(c), sunG(c)],
+      comps: [["rain", rainG, (c) => c.rainS >= R.rainFairMm], ["gust", gustG, (c) => c.gustS > R.gustFairKmh], ["sun", sunG, (c) => c.sunS < R.minSunHours]],
+      // P(good) = (1 - p_rain)(1 - p_gust)(1 - p_sunLow)
+      product: (p) => p.reduce((acc, x) => acc * (1 - x), 1),
+    },
+    {
+      key: "badDay",
+      title: `Zlý deň stránky (dážď ≥ ${R.rainBadMm} mm alebo náraz > ${R.gustBadKmh} km/h, na jednej stanici), horské stanice: priamo vs. súčin zložiek`,
+      event: (rain, gust) => rain >= R.rainBadMm || gust > R.gustBadKmh,
+      gDirect: (c) => [rainG(c), gustG(c)],
+      comps: [["rain", rainG, (c) => c.rainS >= R.rainBadMm], ["gust", gustG, (c) => c.gustS > R.gustBadKmh]],
+      // P(bad) = 1 - (1 - p_rainBad)(1 - p_gustBad)
+      product: (p) => 1 - p.reduce((acc, x) => acc * (1 - x), 1),
+    },
+  ];
+  for (const t of targets) {
+    say("");
+    say(`### ${t.title}`);
+    say("");
+    say("| Zdroj | Predstih | n | udalostí | klim. | **BSS det.** (áno/nie stránky) (CI) | **BSS súčin kalibrovaných zložiek** (CI) | **BSS priama kalibrácia** (CI) | AUC priama | spoľahlivosť priamej |");
+    say("|---|---|---|---|---|---|---|---|---|---|");
+    const out: Record<string, unknown> = {};
+    for (const [key, g] of Object.entries(all).sort(([a], [b]) => sourceOrder(a, b))) {
+      if (g.length < 60) continue;
+      const [source, label] = key.split("|");
+      const mk = (gOf: (c: GCase) => number[]): QCase[] => g.map((c) => ({ day: c.date, station: c.st.key, obs: t.event(c.rainS, c.gustS, c.sunS) ? 1 : 0, fc: 0, clim: 0, climMean: NaN, season: c.season, g: gOf(c), det: t.event(c.rainM, c.gustM, c.sunM) }));
+      const direct = evaluate(mk(t.gDirect));
+      if (!direct) continue;
+      // Each component calibrated on its own, leave-one-season-out, then combined as the page does.
+      const seasons = [...new Set(g.map((c) => c.season))];
+      const probProduct = new Map<GCase, number>();
+      for (const s of seasons) {
+        const train = g.filter((c) => c.season !== s), test = g.filter((c) => c.season === s);
+        const fits = t.comps.map(([, gOf, evOf]) => fitLogistic(train.map((c) => ({ g: gOf(c), y: evOf(c) ? 1 : 0 }))));
+        for (const c of test) probProduct.set(c, t.product(t.comps.map(([, gOf], i) => logisticProb(gOf(c), fits[i]))));
+      }
+      const prodCases = withClimatology(mk(() => [0])).map((q, i) => ({ ...q, prob: probProduct.get(g[i])! }));
+      const sProd = scores(prodCases, 1);
+      const bssProd = bootstrapBlocks(prodCases, (x) => { const r = scores(x, 1); return r.events >= 5 ? r.bss : null; }, 10, 1000, 14); bssProd.est = sProd.bss;
+      out[key] = { n: direct.n, events: direct.events, bssDet: direct.bssDet, bssProduct: bssProd, bssDirect: direct.bssCal, fit: direct.fit };
+      say(`| ${SOURCE_NAMES[source]} | ${label} | ${direct.n} | ${direct.events} | ${f2(direct.climRate)} | **${ci(direct.bssDet)}** | **${ci(bssProd)}** | **${ci(direct.bssCal)}** | ${f2(direct.auc)} | ${relText(direct.rel)} |`);
     }
-    const prodCases = withClimatology(mk(() => [0])).map((q, i) => ({ ...q, prob: probProduct.get(g[i])! }));
-    const sProd = scores(prodCases, 1);
-    const bssProd = bootstrapBlocks(prodCases, (x) => { const r = scores(x, 1); return r.events >= 5 ? r.bss : null; }, 10, 1000, 14); bssProd.est = sProd.bss;
-    out[key] = { n: direct.n, good: direct.events, bssDet: direct.bssDet, bssProduct: bssProd, bssDirect: direct.bssCal, fit: direct.fit };
-    say(`| ${SOURCE_NAMES[source]} | ${label} | ${direct.n} | ${direct.events} | ${f2(direct.climRate)} | **${ci(direct.bssDet)}** | **${ci(bssProd)}** | **${ci(direct.bssCal)}** | ${f2(direct.auc)} | ${relText(direct.rel)} |`);
+    results[t.key] = out;
   }
-  results.goodDay = out;
-}
 }
 
 mkdirSync(OUT_DIR, { recursive: true });

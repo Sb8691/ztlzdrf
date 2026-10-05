@@ -82,8 +82,16 @@ Pásma (predpoklad z literatúry, nefitujú sa): suchý ≤ -4 °C, vlhší -4�
 
 ### Dobrý deň stránky (dážď < 0.2 mm, náraz ≤ 40 km/h, slnko ≥ 1 h, všetko na jednej stanici), horské stanice: priamo vs. súčin zložiek
 
-| Zdroj | Predstih | n | dobrých dní | klim. | **BSS det.** (áno/nie stránky) (CI) | **BSS súčin kalibrovaných zložiek** (CI) | **BSS priama kalibrácia** (CI) | AUC priama | spoľahlivosť priamej |
+| Zdroj | Predstih | n | udalostí | klim. | **BSS det.** (áno/nie stránky) (CI) | **BSS súčin kalibrovaných zložiek** (CI) | **BSS priama kalibrácia** (CI) | AUC priama | spoľahlivosť priamej |
 |---|---|---|---|---|---|---|---|---|---|
 | IFS 9 km, Historical Forecast | 0 h | 2126 | 1049 | 0,49 | **-0,06 (-0,17–0,03)** | **0,35 (0,29–0,40)** | **0,35 (0,29–0,41)** | 0,85 | 0,03→0,02 (221), 0,09→0,10 (334), 0,22→0,26 (169), 0,41→0,43 (230), 0,62→0,57 (329), 0,80→0,81 (841) |
 | ICON-D2, Historical Forecast | 0 h | 2122 | 1047 | 0,49 | **0,06 (-0,05–0,15)** | **0,44 (0,39–0,48)** | **0,44 (0,39–0,49)** | 0,89 | 0,02→0,03 (356), 0,09→0,13 (223), 0,22→0,25 (177), 0,40→0,35 (239), 0,61→0,53 (284), 0,82→0,83 (597), 0,93→0,96 (246) |
 | ICON-D2, previous runs | 1 d | 1070 | 541 | 0,52 | **0,05 (-0,11–0,17)** | **0,40 (0,32–0,45)** | **0,39 (0,31–0,45)** | 0,87 | 0,02→0,05 (131), 0,10→0,15 (107), 0,22→0,19 (110), 0,40→0,35 (139), 0,60→0,54 (168), 0,82→0,85 (359), 0,92→0,96 (56) |
+
+### Zlý deň stránky (dážď ≥ 1 mm alebo náraz > 60 km/h, na jednej stanici), horské stanice: priamo vs. súčin zložiek
+
+| Zdroj | Predstih | n | udalostí | klim. | **BSS det.** (áno/nie stránky) (CI) | **BSS súčin kalibrovaných zložiek** (CI) | **BSS priama kalibrácia** (CI) | AUC priama | spoľahlivosť priamej |
+|---|---|---|---|---|---|---|---|---|---|
+| IFS 9 km, Historical Forecast | 0 h | 2126 | 249 | 0,12 | **-0,44 (-0,62–-0,29)** | **0,05 (-0,02–0,11)** | **0,03 (-0,03–0,10)** | 0,75 | 0,04→0,03 (471), 0,08→0,09 (1201), 0,21→0,23 (298), 0,38→0,28 (124), 0,59→0,69 (26) |
+| ICON-D2, Historical Forecast | 0 h | 2122 | 249 | 0,12 | **-0,24 (-0,41–-0,09)** | **0,24 (0,17–0,32)** | **0,25 (0,18–0,32)** | 0,90 | 0,02→0,01 (1229), 0,09→0,11 (451), 0,21→0,29 (192), 0,38→0,47 (116), 0,59→0,44 (59), 0,78→0,65 (46), 0,97→0,86 (29) |
+| ICON-D2, previous runs | 1 d | 1070 | 124 | 0,12 | **-0,10 (-0,32–0,09)** | **0,29 (0,19–0,37)** | **0,28 (0,18–0,37)** | 0,90 | 0,02→0,01 (603), 0,09→0,11 (247), 0,22→0,29 (101), 0,39→0,42 (50), 0,60→0,57 (30), 0,82→0,61 (28) |

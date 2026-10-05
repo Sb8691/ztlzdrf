@@ -396,9 +396,9 @@ test("POWDER_SNEH: stupeň podľa poradia dňa, značka ALERT od prahu p* = 1 / 
   assert.deepEqual(stages, ["alert", "alert", "pozor"]);
 });
 
-test("snímka v3: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
+test("snímka v4: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
   const snap = snapshotFor();
-  assert.equal(snap.version, 3);
+  assert.equal(snap.version, 4);
   assert.equal(snap.horizons.short.powderLaw, "ecmwf_ifs");
   assert.equal(snap.horizons.now.powderLaw, "icon_d2");
   assert.equal(snap.horizons.long.powderLaw, null);
@@ -412,6 +412,35 @@ test("snímka v3: powderSnow na deterministických dňoch, ansámbel bez zákona
   assert.equal(cfg.powder.thresholdCm, fitted.event.thresholdCm);
   assert.equal(cfg.rules.snowMaxTempC, fitted.physics.phaseMidC);
   assert.equal(cfg.rules.snowCmPerMm, fitted.physics.slr0 / 10);
+});
+
+test("podiely dňa: zlé zo súčinu, dobré z kalibrovaného súčinu, mäkký sneh dole dobré vynuluje, súčet 100", () => {
+  type Day = { status: string | null; softSnow: boolean; goodPct: number | null; fairPct: number | null; badPct: number | null; quality: { good: number; rainBad: number; gustBad: number } | null };
+  const day = (fill: Fill, key: "now" | "short" = "short") => snapshotFor(fill).horizons[key].resorts[0].days[0] as Day;
+  const nice = day(() => ({}));
+  assert.ok(nice.goodPct! >= 70 && nice.badPct! <= 5, JSON.stringify(nice));
+  assert.equal(nice.goodPct! + nice.fairPct! + nice.badPct!, 100);
+  assert.equal(nice.goodPct, Math.round(nice.quality!.good * 100));
+  assert.equal(nice.badPct, Math.round((1 - (1 - nice.quality!.rainBad) * (1 - nice.quality!.gustBad)) * 100));
+  // Rain at the base all lift day: a bad day, in both models.
+  const rainy = day((p, _m, t) => (p === BASE && t >= at(10) && t <= at(16) ? { temp: 5, precip: 3 } : {}));
+  assert.ok(rainy.badPct! >= 80 && rainy.goodPct! <= 5, JSON.stringify(rainy));
+  assert.ok(day((p, _m, t) => (p === BASE && t >= at(10) && t <= at(16) ? { temp: 5, precip: 3 } : {}), "now").badPct! >= 80);
+  // A warm valley (soft snow) is at best "fair": the good share is zero, the bad share stays small.
+  const soft = day((p) => (p === BASE ? { temp: 6 } : {}));
+  assert.equal(soft.status, "fair");
+  assert.equal(soft.softSnow, true);
+  assert.equal(soft.goodPct, 0);
+  assert.ok(soft.badPct! <= 5 && soft.fairPct === 100 - soft.badPct!);
+  assert.equal(nice.softSnow, false);
+  // No verdict, no shares.
+  const gap = day((p, _m, t) => (p === TOP && t === at(12) ? { gust: null } : {}));
+  assert.equal(gap.status, null);
+  assert.deepEqual([gap.goodPct, gap.fairPct, gap.badPct], [null, null, null]);
+  // The ensemble days keep their member shares.
+  const ens = snapshotFor().horizons.long.resorts[0].days[0] as { goodPct: number; expected: number };
+  assert.equal(ens.goodPct, 100);
+  assert.equal(ens.expected, cfg.horizons.long.expectedMembers);
 });
 
 // ---------------------------------------------------------------------------
