@@ -1,0 +1,45 @@
+{
+ "version": 1,
+ "generatedAt": "2026-10-15",
+ "fittedOn": "Historical Forecast snow_depth at 06 UTC vs measured depth, winters Nov-Apr, all seasons in the archive",
+ "coverCm": 30,
+ "input": "sqrt(model snow depth cm at the top station, lift opening hour)",
+ "curves": {
+  "icon_d2": {
+   "a": -6.7266,
+   "b": 1.2188,
+   "n": 6971,
+   "events": 2076,
+   "seasons": [
+    "2022/23",
+    "2023/24",
+    "2024/25",
+    "2025/26"
+   ],
+   "bssCal": {
+    "est": 0.4648731631705729,
+    "lo": 0.3635854870639066,
+    "hi": 0.5470571158896596
+   },
+   "auc": 0.9491780177563123,
+   "halfCm": 30.5
+  },
+  "ecmwf_ifs": {
+   "a": -2.1857,
+   "b": 0.4762,
+   "n": 1665,
+   "events": 570,
+   "seasons": [
+    "2024/25",
+    "2025/26"
+   ],
+   "bssCal": {
+    "est": 0.24800384446272006,
+    "lo": 0.14594420943042186,
+    "hi": 0.3581127593097403
+   },
+   "auc": 0.810583193142674,
+   "halfCm": 21.1
+  }
+ }
+}

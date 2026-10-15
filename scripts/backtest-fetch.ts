@@ -10,6 +10,8 @@
  *           GFS (N = 1..3), month by month at the verification stations.
  *   hist    Historical Forecast API (no lead time): IFS 9 km winters 2016/17 → and ICON-D2 2022/23 →
  *           at every point (28), for the physics of step 3 and as the "lead → 0" baseline.
+ *   snow    Historical Forecast snow depth (step 8): ICON-D2 winters 2022/23 →, IFS 9 km 2024/25 →
+ *           (the archive has it only from 2025), at every point, into hist-snow-<model>.json.
  *
  * Open-Meteo counts a request with several points, more than 10 variables or more than 14 days as
  * several calls against the 10 000 / day limit; the phases are sized so that `single` + `prev` fit
@@ -24,6 +26,7 @@ import type { Point } from "./lib/points.js";
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith("--")).map((a) => { const [k, v] = a.slice(2).split("="); return [k, v ?? "true"]; }));
 const only = new Set((args.only ?? "single,prev,hist").split(","));
+/** `snow` is not in the default set: run it explicitly (npm run backtest:fetch -- --only=snow). */
 /** Winters as start years. */
 const winters = (args.winters ?? "2024,2025").split(",").map(Number);
 const limit = args.limit ? Number(args.limit) : Infinity;
@@ -167,46 +170,59 @@ async function phasePrev(): Promise<void> {
 // hist: Historical Forecast (no lead)
 // ---------------------------------------------------------------------------
 
+/** Historical Forecast series of `vars` at all points, winter by winter and month by month, appended into derived/<name>. */
+async function histSeries(model: string, firstWinter: number, vars: string[], name: string): Promise<void> {
+  const lastWinter = Number(TODAY.slice(5, 7)) >= 8 ? Number(TODAY.slice(0, 4)) : Number(TODAY.slice(0, 4)) - 1;
+  const q = coordQuery(points);
+  const stored = readDerived<{ time: number[]; cells: number[]; data: Record<string, (number | null)[][]> }>(name);
+  const time: number[] = stored?.time ?? [];
+  const data: Record<string, (number | null)[][]> = stored?.data ?? {};
+  let cells: number[] = stored?.cells ?? [];
+  const have = new Set(time);
+  const chunks: string[][] = [];
+  for (let i = 0; i < vars.length; i += 6) chunks.push(vars.slice(i, i + 6));
+  for (let y = firstWinter; y <= lastWinter; y++) {
+    for (const [start, end] of winterMonths(y)) {
+      const startTs = Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10))) / 1000;
+      if (have.has(startTs)) continue;
+      const month: Record<string, (number | null)[][]> = {};
+      let monthTime: number[] = [];
+      try {
+        for (const chunk of chunks) {
+          const url = `https://historical-forecast-api.open-meteo.com/v1/forecast?${q}&hourly=${chunk.join(",")}&models=${model}&start_date=${start}&end_date=${end}&timeformat=unixtime`;
+          const json = await fetchJsonCached<OmPoint | OmPoint[]>(url, { minIntervalMs: 4500, retries: 4, label: `${model} ${name} ${start}`, verbose: false });
+          const list = Array.isArray(json) ? json : [json];
+          if (list.length !== points.length) throw new Error(`${list.length} bodov namiesto ${points.length}`);
+          monthTime = list[0].hourly.time;
+          cells = list.map((p) => p.elevation);
+          for (const v of chunk) month[v] = list.map((p) => (p.hourly[v] ?? monthTime.map(() => null)).map(round2));
+        }
+      } catch (err) {
+        if (isLimit(err)) { writeDerived(name, { points, model, time, cells, data }); console.error(`Limit API: ${err instanceof Error ? err.message : err}`); process.exit(2); }
+        throw err;
+      }
+      time.push(...monthTime);
+      for (const [v, cols] of Object.entries(month)) { data[v] ??= points.map(() => []); cols.forEach((c, i) => data[v][i].push(...c)); }
+      console.log(`   ${model} ${name} ${start}..${end}: ${monthTime.length} h`);
+    }
+    writeDerived(name, { points, model, time, cells, data });
+  }
+}
+
 async function phaseHist(): Promise<void> {
   const plans: { model: string; firstWinter: number }[] = [{ model: "ecmwf_ifs", firstWinter: 2016 }, { model: "icon_d2", firstWinter: 2022 }];
-  const lastWinter = Number(TODAY.slice(5, 7)) >= 8 ? Number(TODAY.slice(0, 4)) : Number(TODAY.slice(0, 4)) - 1;
   console.log("== Historical Forecast at all", points.length, "points:", plans.map((p) => `${p.model} from ${p.firstWinter}/${(p.firstWinter + 1) % 100}`).join("; "));
-  const q = coordQuery(points);
-  for (const { model, firstWinter } of plans) {
-    const name = `hist-${model}.json`;
-    const stored = readDerived<{ time: number[]; cells: number[]; data: Record<string, (number | null)[][]> }>(name);
-    const time: number[] = stored?.time ?? [];
-    const data: Record<string, (number | null)[][]> = stored?.data ?? {};
-    let cells: number[] = stored?.cells ?? [];
-    const have = new Set(time);
-    for (let y = firstWinter; y <= lastWinter; y++) {
-      for (const [start, end] of winterMonths(y)) {
-        const startTs = Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1, Number(start.slice(8, 10))) / 1000;
-        if (have.has(startTs)) continue;
-        const chunks = [HIST_VARS.slice(0, 6), HIST_VARS.slice(6)];
-        const month: Record<string, (number | null)[][]> = {};
-        let monthTime: number[] = [];
-        try {
-          for (const chunk of chunks) {
-            const url = `https://historical-forecast-api.open-meteo.com/v1/forecast?${q}&hourly=${chunk.join(",")}&models=${model}&start_date=${start}&end_date=${end}&timeformat=unixtime`;
-            const json = await fetchJsonCached<OmPoint | OmPoint[]>(url, { minIntervalMs: 4500, retries: 4, label: `${model} hist ${start}`, verbose: false });
-            const list = Array.isArray(json) ? json : [json];
-            if (list.length !== points.length) throw new Error(`${list.length} bodov namiesto ${points.length}`);
-            monthTime = list[0].hourly.time;
-            cells = list.map((p) => p.elevation);
-            for (const v of chunk) month[v] = list.map((p) => (p.hourly[v] ?? monthTime.map(() => null)).map(round2));
-          }
-        } catch (err) {
-          if (isLimit(err)) { writeDerived(name, { points, model, time, cells, data }); console.error(`Limit API: ${err instanceof Error ? err.message : err}`); process.exit(2); }
-          throw err;
-        }
-        time.push(...monthTime);
-        for (const [v, cols] of Object.entries(month)) { data[v] ??= points.map(() => []); cols.forEach((c, i) => data[v][i].push(...c)); }
-        console.log(`   ${model} ${start}..${end}: ${monthTime.length} h`);
-      }
-      writeDerived(name, { points, model, time, cells, data });
-    }
-  }
+  for (const { model, firstWinter } of plans) await histSeries(model, firstWinter, HIST_VARS, `hist-${model}.json`);
+}
+
+// ---------------------------------------------------------------------------
+// snow: Historical Forecast snow depth (step 8, snow cover)
+// ---------------------------------------------------------------------------
+
+async function phaseSnow(): Promise<void> {
+  const plans: { model: string; firstWinter: number }[] = [{ model: "icon_d2", firstWinter: 2022 }, { model: "ecmwf_ifs", firstWinter: 2024 }];
+  console.log("== Historical Forecast snow depth at all", points.length, "points:", plans.map((p) => `${p.model} from ${p.firstWinter}/${(p.firstWinter + 1) % 100}`).join("; "));
+  for (const { model, firstWinter } of plans) await histSeries(model, firstWinter, ["snow_depth"], `hist-snow-${model}.json`);
 }
 
 async function main(): Promise<void> {
@@ -214,6 +230,7 @@ async function main(): Promise<void> {
   if (only.has("single")) await phaseSingle();
   if (only.has("prev")) await phasePrev();
   if (only.has("hist")) await phaseHist();
+  if (only.has("snow")) await phaseSnow();
   console.log(`Done: ${stats.network} requests over the network (${(stats.bytes / 1e6).toFixed(1)} MB), ${stats.cached} from cache.`);
 }
 
