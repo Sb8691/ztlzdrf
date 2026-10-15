@@ -152,6 +152,31 @@ function links(resort) {
   );
 }
 
+/** The snow-cover gate (step 8): true when the cover probability is known and below the configured
+ * minimum - the day is then not judged at all. An unknown cover never gates. */
+function noSnow(day, cfg) {
+  const c = day.snowCover;
+  return !!c && c.probability < cfg.cover.gate.minProb;
+}
+
+const NO_SNOW_MARK = `<span class="sk-status sk-none">Bez snehu</span>`;
+
+function coverText(day, cfg) {
+  const c = day.snowCover;
+  return `sneh hore podľa modelu ${num(c.topCm)}${NB}cm, pokrývka aspoň ${cfg.cover.coverCm}${NB}cm ${pct(c.probability)}`;
+}
+
+/** "mimo sezóny (bežne od 22. 11. do 26. 4.)" outside the resort's usual season, else "". A note only:
+ * whether lifts run is the snow report's business, the cover gate judges the snow. */
+function seasonNote(resort, isoDate) {
+  const s = resort && resort.season;
+  if (!s) return "";
+  const md = isoDate.slice(5);
+  const inSeason = s.opens <= s.closes ? md >= s.opens && md <= s.closes : md >= s.opens || md <= s.closes;
+  const dm = (x) => `${Number(x.slice(3))}.${NB}${Number(x.slice(0, 2))}.`;
+  return inSeason ? "" : `mimo sezóny (bežne od ${dm(s.opens)} do ${dm(s.closes)})`;
+}
+
 // ---------------------------------------------------------------------------
 // 1. The next lift day
 // ---------------------------------------------------------------------------
@@ -171,11 +196,13 @@ function nowCard(resort, day, cfg) {
   // The badge gets a line of its own: in the value column it would wrap the row label on a phone.
   const badge = powderBadge(day);
   const flag = badge ? `<p class="sk-flag">${badge} prašan do rána ${pct(day.powderSnow.probability)}</p>` : "";
+  const gated = noSnow(day, cfg);
+  const why = [gated ? coverText(day, cfg) : concerns(day, cfg), seasonNote(resort, day.date)].filter(Boolean).join(" · ");
   return (
     `<article class="sk-card">` +
-    `<header><h3>${esc(resort.name)}</h3>${shareMark(day)}</header>` +
+    `<header><h3>${esc(resort.name)}</h3>${gated ? NO_SNOW_MARK : shareMark(day)}</header>` +
     flag +
-    `<p class="sk-why">${esc(concerns(day, cfg))}</p>` +
+    `<p class="sk-why">${esc(why)}</p>` +
     `<dl>${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join("")}</dl>` +
     links(resort) +
     `</article>`
@@ -187,8 +214,9 @@ function nowCard(resort, day, cfg) {
 // ---------------------------------------------------------------------------
 
 /** Shares, then one short line per fact - narrow phone columns wrap a joined sentence badly. */
-function shortCell(day, cfg) {
+function shortCell(day, cfg, resort) {
   if (!day.status) return `<td>${statusMark(null)}</td>`;
+  const gated = noSnow(day, cfg);
   const lines = [esc(range(day.topTemp.min, day.topTemp.max, "°C"))];
   const ps = day.powderSnow;
   if (ps && ps.probability >= POWDER_LINE_FROM) {
@@ -197,14 +225,14 @@ function shortCell(day, cfg) {
   }
   if (day.freshSnowCm !== null && day.freshSnowCm >= 1) lines.push(esc(`${num(day.freshSnowCm)}${NB}cm snehu`));
   if (day.maxGustKmh > cfg.rules.gustFairKmh) lines.push(esc(`vietor ${num(day.maxGustKmh)}${NB}km/h`));
-  const title = day.goodPct === null ? concerns(day, cfg) : `${shareTitle(day)} · ${concerns(day, cfg)}`;
-  return `<td title="${esc(title)}">${shareMark(day)}${lines.map((l) => `<small>${l}</small>`).join("")}</td>`;
+  const title = [gated ? coverText(day, cfg) : day.goodPct === null ? concerns(day, cfg) : `${shareTitle(day)} · ${concerns(day, cfg)}`, seasonNote(resort, day.date)].filter(Boolean).join(" · ");
+  return `<td title="${esc(title)}">${gated ? NO_SNOW_MARK : shareMark(day)}${lines.map((l) => `<small>${l}</small>`).join("")}</td>`;
 }
 
 function dayTable(dates, resorts, cfg, cell, caption) {
   const head = cfg.resorts.map((r) => `<th scope="col">${esc(r.shortName)}</th>`).join("");
   const body = dates
-    .map((date, i) => `<tr><th scope="row">${rowDayLabel(date)}</th>${resorts.map((r) => cell(r.days[i], cfg)).join("")}</tr>`)
+    .map((date, i) => `<tr><th scope="row">${rowDayLabel(date)}</th>${resorts.map((r) => cell(r.days[i], cfg, cfg.resorts.find((x) => x.id === r.id))).join("")}</tr>`)
     .join("");
   return `<div class="sk-scroll"><table class="sk-table"><caption>${esc(caption)}</caption><thead><tr><th scope="col">Deň</th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
@@ -340,13 +368,15 @@ function hourlyChart(resort, hourly, dates, cfg) {
 // 3. Ten days: share of ensemble scenarios per verdict
 // ---------------------------------------------------------------------------
 
-function longCell(day) {
+function longCell(day, cfg, resort) {
   if (day.goodPct === null) return `<td><span class="sk-status sk-none">${day.reason === "members" ? "Neúplné dáta" : "Nedostatok dát"}</span></td>`;
   let snow = "";
   if (day.snowCm && day.snowCm.p90 >= 1) {
     snow = `<small>${num(day.snowCm.p10)}–${num(day.snowCm.p90)}${NB}cm snehu</small>`;
   }
-  return `<td title="${esc(`${shareTitle(day)} scenárov`)}">${shareMark(day)}${snow}</td>`;
+  const gated = noSnow(day, cfg);
+  const title = [gated ? coverText(day, cfg) : `${shareTitle(day)} scenárov`, seasonNote(resort, day.date)].filter(Boolean).join(" · ");
+  return `<td title="${esc(title)}">${gated ? NO_SNOW_MARK : shareMark(day)}${snow}</td>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +398,7 @@ function method(cfg) {
     `<li><b>ujde</b>, keď dole naprší aspoň ${num(r.rainFairMm, 1)}${NB}mm, nárazy prekročia ${r.gustFairKmh}${NB}km/h, dole je aspoň pol dňa nad ${r.softSnowTempC}${NB}°C (mäkký sneh), alebo je menej ako ${r.minSunHours}${NB}h slnka (horšia viditeľnosť);</li>` +
     `<li><b>dobrý</b>, keď nič z toho.</li>` +
     `</ul>` +
+    `<p><b>Bez snehu</b> znamená, že podľa modelu ICON-D2 nie je pri hornej stanici pokrývka aspoň ${cfg.cover.coverCm}${NB}cm, takže sa deň nehodnotí. Pravdepodobnosť pokrývky vychádza z toho, ako často stanice v okolí pri danej modelovej výške snehu naozaj mali aspoň ${cfg.cover.coverCm}${NB}cm (štyri zimy, 17 staníc); hodnotí sa od ${pct(cfg.cover.gate.minProb)}. Ďalšie dni berú dnešnú výšku snehu z ICON-D2 a pridajú k nej zmenu podľa svojho modelu. Bežné termíny sezóny stredísk stránka len poznamená; či lanovky bežia, povie snehová správa.</p>` +
     `<p>Na najbližší deň a na tri dni sú pruh a percentá <b>pravdepodobnosti</b>. Pre každé pravidlo sa z predpovedaného dažďa, nárazu a slnka zoberie, ako často sa pri takej predpovedi naozaj splnilo – na šiestich horských staniciach GeoSphere Austria v okolí za štyri zimy. „Dobré“ je pravdepodobnosť, že sa nesplní žiadne (mäkký sneh sa berie z teploty priamo), „zlé“, že dole naprší aspoň ${num(r.rainBadMm, 1)}${NB}mm alebo zafúka nad ${r.gustBadKmh}${NB}km/h. Samotné áno/nie podľa predpovede pri overení neobstálo: dážď hlásilo viac než dvakrát častejšie, než prišiel, a vietor na vrcholoch z modelu na tri dni nesedí vôbec. Od štvrtého dňa tieto pravdepodobnosti strácajú hodnotu.</p>` +
     `<p><b>Prašan</b> je aspoň ${p.thresholdCm}${NB}cm nového snehu pri hornej stanici od ${p.windowHour}:00 predošlého dňa do ${p.windowHour}:00. Percento vychádza z predpovedaného úhrnu a z toho, ako sa predpovede s rovnakým predstihom trafili v minulých zimách na staniciach, kde sa nový sneh meria. <b>POWDER ALERT</b> svieti od ${Math.round(p.alert.minProb * 100)}${NB}% na prvé ${alertDays} dni, <b>POWDER POZOR</b> ďalej. „Okolo“ je stredná hodnota, „až“ hodnota, pod ktorou ostane deväť z desiatich prípadov. Suchý, vlhší alebo mokrý sneh je podľa teploty počas sneženia (do ${num(st.dryC)}${NB}°C, do ${num(st.wetC)}${NB}°C, teplejšie). Či prašan rozfúka vietor, sa predpovedať nedá. Nový sneh za 3 dni je súčet za ${r.freshSnowHours}${NB}h pred otvorením a počas dňa.</p>` +
     `<p>Či padá dážď alebo sneh, určuje teplota v danej výške: do ${num(r.snowMaxTempC)}${NB}°C sneh, nad ňou dážď.</p>` +
@@ -395,7 +426,7 @@ function renderSki(snapshot, nowMs) {
   return (
     (stale ? `<p class="sk-warn">Tieto dáta sú staršie a začínajú dňom, ktorý už je za nami. Obnovte predpoveď.</p>` : "") +
     `<section class="sk-section"><h2>${esc(longDayLabel(H.now.dates[0]))}</h2><p class="sk-src">Najbližší lyžiarsky deň · ${esc(source(H.now))}</p>` +
-    `<p class="sk-note">Pruh a percento sú pravdepodobnosť, že deň bude dobrý, ujde alebo zlý; pod názvom strediska je, čo ho môže pokaziť.</p>` +
+    `<p class="sk-note">Pruh a percento sú pravdepodobnosť, že deň bude dobrý, ujde alebo zlý; pod názvom strediska je, čo ho môže pokaziť. „Bez snehu“: model nevidí hore pokrývku aspoň ${cfg.cover.coverCm}${NB}cm.</p>` +
     LEGEND +
     `<div class="sk-cards">${cfg.resorts.map((r, i) => nowCard(r, now[i].days[0], cfg)).join("")}</div></section>` +
     `<section class="sk-section"><h2>Najbližšie ${H.short.dates.length} dni</h2><p class="sk-src">${esc(source(H.short))}</p>` +
@@ -404,7 +435,7 @@ function renderSki(snapshot, nowMs) {
     cfg.resorts.map((r, i) => hourlyChart(r, short[i].hourly, H.short.dates, cfg)).join("") +
     `</section>` +
     `<section class="sk-section"><h2>Výhľad na ${H.long.dates.length} dní</h2><p class="sk-src">${esc(source(H.long))}</p>` +
-    `<p class="sk-note">Pruh je podiel z 51 scenárov predpovede, nie kalibrovaná pravdepodobnosť; pod ním rozpätie snehu hore.</p>` +
+    `<p class="sk-note">Pruh je podiel z 51 scenárov predpovede, nie kalibrovaná pravdepodobnosť; pod ním rozpätie snehu hore.${H.long.dates.length < cfg.horizons.long.days ? " Posledný deň pribudne s novým behom modelu." : ""}</p>` +
     LEGEND +
     dayTable(H.long.dates, long, cfg, longCell, `Výhľad na ${H.long.dates.length} dní`) +
     `</section>` +

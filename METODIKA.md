@@ -29,6 +29,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 16. 10. 2026 | Krok 8: deň sa hodnotí len s pokrývkou – brána z modelovej výšky snehu ICON-D2 (overená, 4 zimy, 17 staníc), IFS 9 km ako brána zamietnutý (2 zimy, biasy oboch znamienok); ostatné horizonty kotvené na úroveň ICON-D2 prvého dňa + vlastná zmena (predpoklad, overí sezóna 2026/27); „Bez snehu“ pod P 0,5 bez pruhu a dôvodov, prašan ostáva; sezónne termíny stredísk len ako poznámka; posledný deň výhľadu bez hodín prevádzky sa vypúšťa; snímka v5 | majiteľ (plán schválený 16. 10.), Fable |
 | 5. 10. 2026 | Krok 7: stránka ukazuje pravdepodobnosti namiesto áno/nie (rozhodnutie majiteľa); jeden vizuálny jazyk = pruh dobré / ujde / zlé + „dobré X %“ aj pri deterministických dňoch; P(zlé) = súčin, overené proti priamemu fitu; dôvody od 20 %, inverzia od 50 %, prašan v tabuľke od 5 % (voľby zobrazenia); stará značka prašanu 10 cm / 72 h zo stránky preč; GeoSphere a eHYD v pätičke, LWD nie; snímka v4; `docs/` obnovené živým načítaním mimo sezóny CI (log mimo repozitára) | majiteľ (áno 5. 10.), Fable |
 | 4. 10. 2026 | Krok 6b–6d: značka vetra pri powderi a „slnečný vrchol nad sivým údolím“ sa nevydávajú (bez zručnosti); inverzia len z ICON-D2; teplota počas sneženia z IFS +1,0 °C; dobrý deň = súčin kalibrovaných zložiek; krivky z predstihu 0 bez závislosti od predstihu; deterministické horizonty doťahujú nízku oblačnosť a vlhkosť; snímka v3 | Fable |
 | 4. 10. 2026 | Krok 6a: hodinové značky GeoSphere = predchádzajúca hodina (overené krížovou koreláciou); áno/nie pravidlá stránky nahradia kalibrované pravdepodobnosti (6d); nárazy z IFS bez zručnosti → vietor len z ICON-D2 do 47 h alebo klimatológia; prahy stránky ostávajú definíciami | Fable (krok 6 schválený majiteľom 4. 10.) |
@@ -625,6 +626,47 @@ aj pri deterministických dňoch, prašan s ALERTom, dôvody od 20 %, živé na�
   konfigurácie), prašan (riadok, značka, okolo / až, pásmo). Rozloženie overené v headless Chrome na šírke
   telefónu aj plochy; značka ALERT dostala vlastný riadok, lebo v stĺpci hodnôt lámala popis.
 
+### 4.7 Snehová pokrývka ako predpoklad dňa (krok 8, 16. 10. 2026)
+
+Majiteľ 16. 10. 2026 ukázal, že stránka v októbri kreslí „dobré 0 %“ a oranžový pruh, hoci nikde nie je
+sneh: pravidlá hodnotia počasie lyžiarskeho dňa, nie to, či je na čom lyžovať. Plán kroku (brána z
+overenej modelovej pokrývky + sezónne termíny ako poznámka; sivé „Bez snehu“ bez pruhu a percent, prašan
+ostáva; posledný deň výhľadu) schválený s odporúčanými voľbami.
+
+- **Dáta:** Open-Meteo `snow_depth` (m) dávajú IFS, ICON-D2 aj všetkých 51 členov ansámblu, bez CORS
+  problémov. V archíve Historical Forecast ho má ICON-D2 od zimy 2022/23, IFS 9 km až od roku 2025 (s
+  dierami, napr. 3/2025 chýba), ansámbel 0,25° vôbec. `npm run backtest:fetch -- --only=snow` →
+  `hist-snow-<model>.json` v cache (36 volaní, 12 MB).
+- **Overenie** (`npm run cover` = `scripts/cover-verify.ts`, výsledky §5.5, `data/cover/`): model o
+  06 UTC proti nameranej výške snehu ráno na 17 staniciach (ručné GeoSphere, automaty, LWD, eHYD do 2023;
+  SNOWGRID vynechaný ako model), mesiace nov–apr, udalosť stanica ≥ 30 cm (podmienka pokrývky z kroku 1).
+  ICON-D2: 6 971 dvojíc, 4 zimy, kalibrovaný BSS 0,46 (0,36–0,55), AUC 0,95, P(stanica ≥ 30 │ model
+  0 cm) = 0,01, P = 0,5 pri 30,5 cm modelu; bias +2,5 cm v pásme 1 200–1 700 m, −15 cm nad 1 700 m (ťahá
+  Villacher Alpe −28 cm, LWD body v 1 800–1 900 m sú bez biasu). IFS 9 km: 1 665 dvojíc, 2 zimy, BSS
+  0,25 (jeden fold plochý), AUC 0,81, biasy staníc −43 až +23 cm a P(≥ 30 │ 0 cm) nad 1 700 m 0,34 →
+  ako brána nepoužiteľný. Na spoločných dňoch IFS − ICON-D2 −5,8 cm, MAE 16 cm, zhoda áno/nie 0,81.
+- **Rozhodnutia:** krivka len z ICON-D2 (`src/cover-model.ts`: a −6,7266, b 1,2188 na √cm, test
+  rovnosti s `data/cover/cover-model.json`). Úroveň pokrývky pre všetky horizonty = ICON-D2 pri hornej
+  stanici o otváracej hodine prvého dňa (`coverAnchors` v `src/ski-core.js`); ostatné modely k nej
+  pridajú len svoju zmenu odvtedy (`snowCover` s `anchorCm`), ansámbel po členoch (medián cm, priemer
+  P). Brána na stránke: P(pokrývka ≥ 30 cm) < 0,5 → „Bez snehu“, deň sa nehodnotí (pruh a dôvody sa
+  nekreslia, prašan, teploty a vietor ostávajú). Bez hodnoty (chýbajúca premenná, medzera o 09:00) sa
+  nebráni – chýbajúce dáta nikdy neznamenajú „bez snehu“. Snímka v5; log nesie `snowCover` pre strediská
+  aj overovacie stanice (kotvené rovnako na stanici).
+- **Sezóna stredísk:** `season` pri stredisku v `src/config.ts` z oznámení na 2025/26 (Bad
+  Kleinkirchheim 5. 12.–6. 4. z infolistu strediska; Turracher Höhe 22. 11.–26. 4. bergfex; Falkert od
+  13. 12. austria.info, koniec 6. 4. predpoklad; Hochrindl 6. 12.–15. 3. austria.info a lyžiarska škola).
+  Mimo nich stránka pridá poznámku „mimo sezóny (bežne od … do …)“, nič viac – či lanovky bežia, povie
+  snehová správa.
+- **Posledný deň výhľadu:** ansámbel na Open-Meteo siaha ~240 h od behu, ráno preto desiaty deň nemá
+  hodiny prevádzky. Snímka vypustí koncové dni bez verdiktu vo všetkých strediskách (diera uprostred ostane
+  dierou), stránka ukáže „Výhľad na 9 dní“ s poznámkou, že deň pribudne s novým behom.
+- **Predpoklady:** kotvenie zmeny (model zmenu výšky snehu predpovedá rozumne, úroveň nie) nie je
+  overené – overí ho sezóna 2026/27 z logu; prah 0,5 je voľba zobrazenia (zodpovedá ~30 cm modelu);
+  krivka pooluje stanice 700–2 140 m; sezónne termíny sú orientačné a menia sa rok od roka.
+- **Testy:** pokrývka priamo / kotvená / bez hodnoty, ansámbel po členoch, orezanie výhľadu a diera
+  uprostred, stránka („Bez snehu“ bez pruhu, poznámka sezóny s prelomom roka, kratší výhľad s vysvetlením).
+
 ## 5. Výsledky podľa predstihu
 
 ### 5.1 Krok 2 – backtest a baseline (4. 10. 2026)
@@ -844,6 +886,25 @@ slnečný vrchol nad hmlou v údolí nevidí nikto; zamračenie z ICON-D2 zlepš
 rovnako: súčin P(dážď ≥ 1 mm) a P(náraz > 60 km/h) = priamy fit, z ICON-D2 BSS 0,24–0,29, z IFS len 0,05
 (vietor z IFS nemá na vrcholoch zručnosť, §5.3), áno/nie stránky −0,24 až −0,44 (krok 7, 5. 10. 2026).
 
+### 5.5 Krok 8 – snehová pokrývka z modelu (16. 10. 2026)
+
+Pravda: nameraná výška snehu ráno (06 UTC), 17 staníc 704–2 140 m, nov–apr; model Historical Forecast
+`snow_depth` o 06 UTC, predstih 0. Udalosť: stanica ≥ 30 cm. Plné tabuľky v `data/cover/REPORT.md`.
+
+| Model | dvojíc | zimy | klim. | model ≥ 30 ako áno/nie (BSS, POD / FAR) | **BSS kal.** (CI) | AUC | P(≥ 30 │ model 0 / 10 / 20 / 30 / 50 cm) |
+|---|---|---|---|---|---|---|---|
+| ICON-D2 | 6 971 | 4 | 0,28 | 0,25 (0,08–0,37), 0,81 / 0,19 | **0,46 (0,36–0,55)** | 0,95 | 0,00 / 0,05 / 0,22 / 0,49 / 0,87 |
+| IFS 9 km | 1 665 | 2 | 0,35 | 0,28 (0,12–0,43), 0,47 / 0,18 | 0,25 (0,15–0,36) | 0,81 | 0,10 / 0,34 / 0,49 / 0,60 / 0,77 |
+
+Podiel dní so stanicou ≥ 30 cm podľa modelovej výšky ICON-D2: 0 cm → 0,01 (nad 1 700 m 0,11), 1–10 → 0,03,
+11–20 → 0,08, 21–30 → 0,35, 31–50 → 0,70, 51–100 → 0,98. Bias ICON-D2 podľa pásma: údolie +0,8 cm,
+1 200–1 700 m +2,5 cm, nad 1 700 m −15 cm (Villacher Alpe −28, LWD Falkert −0,1, LWD Turracherhöhe −2,6).
+IFS 9 km podľa stanice: LWD +18 / +23 cm, Kanzelhöhe −20, Flattnitz −13, Villacher Alpe −43 → žiadna
+jedna korekcia; prah ≥ 50 cm má kalibrovaný BSS −0,15.
+
+**Čo z toho plynie (overené):** výška snehu ICON-D2 je dobrý predpoklad lyžovania – keď model ukáže
+0 cm, sneh na lyžovanie je len v 1 % dní, pri 30 cm v polovici; IFS 9 km sa na to nehodí.
+
 ## 6. Limity
 
 - Žiadny dlhý rad pravdy neleží na hornej stanici lanovky; LWD body sú 1,4–1,6 km od nich a existujú len
@@ -868,6 +929,10 @@ rovnako: súčin P(dážď ≥ 1 mm) a P(náraz > 60 km/h) = priamy fit, z ICON-
   vedľa kalibrovaných podielov D0–D+2 a sú tak označené. Log zbiera členov, aby sa po sezóne 2026/27 dala
   kalibrácia doplniť.
 
+- Pokrývka (§4.7): krivka je len z ICON-D2 a z predstihu 0; úroveň pre ďalšie dni je dnešná, zmena z iného
+  modelu je neoverený predpoklad; nad 1 700 m model podhodnocuje (Villacher Alpe), čo brána rieši len
+  pravdepodobnosťou. Sezónne termíny stredísk sú z jednej zimy.
+
 ## 7. Prekalibrovanie
 
 Po sezóne 2026/27: `npm run verify` nad `data/prospective/2026-27.jsonl` (§5.2) rozhodne, či koeficienty
@@ -888,4 +953,5 @@ npm run model             # fyzika, rozdelenie, zákon podľa predstihu, kombin�
 npm run verify            # po sezóne: data/prospective/<sezóna>.jsonl proti pravde → data/prospective/REPORT-<sezóna>.md; --season=2026-27, --log=súbor
 npm run rules             # krok 6a: pravidlá stránky (dážď, nárazy, slnko) proti staniciam podľa predstihu → data/rules/{REPORT.md,rules-verification.json}
 npm run quality           # krok 6b/6c: teplota počas sneženia, vietor v okne, inverzie, oblak, dobrý deň; krivky pre stránku → data/quality/{REPORT.md,quality-verification.json,quality-model.json}; --only=snowtemp,gust,inversion,sunnytop,overcast,good,curves
+npm run cover             # krok 8: modelová výška snehu (ICON-D2, IFS) proti nameranej pokrývke → data/cover/{REPORT.md,cover-verification.json,cover-model.json}; vstup: npm run backtest:fetch -- --only=snow
 ```

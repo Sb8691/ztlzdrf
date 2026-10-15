@@ -43,7 +43,7 @@ import {
  */
 
 type Cfg = typeof SKI_CONFIG;
-type Hour = { temp: number | null; precip: number | null; gust: number | null; sun: number | null; cloud?: number | null; rh?: number | null };
+type Hour = { temp: number | null; precip: number | null; gust: number | null; sun: number | null; cloud?: number | null; rh?: number | null; depth?: number | null };
 /** Fills one point's hour: point index (2r = top, 2r+1 = base), member index, stamp. */
 type Fill = (point: number, member: number, ms: number) => Partial<Hour>;
 
@@ -73,6 +73,8 @@ function response(from: string, to: string, fill: Fill = () => ({}), members = 1
       hourly[`sunshine_duration${s}`] = hours.map((h) => h.sun);
       // The extra deterministic columns only when a test asks for them.
       if (hours.some((h) => h.cloud !== undefined)) { hourly[`cloud_cover_low${s}`] = hours.map((h) => h.cloud ?? null); hourly[`relative_humidity_2m${s}`] = hours.map((h) => h.rh ?? null); }
+      // Snow depth (m) only when a test asks for it; a response without it carries no cover.
+      if (hours.some((h) => h.depth !== undefined)) hourly[`snow_depth${s}`] = hours.map((h) => h.depth ?? null);
     }
     return {
       latitude: 46.9,
@@ -118,9 +120,9 @@ test("každé stredisko má dva body, vrchol pred dolnou stanicou, v jednej pož
   assert.equal(url.searchParams.get("latitude")!.split(",").length, pts.length);
   assert.equal(url.searchParams.get("models"), cfg.horizons.short.model);
   assert.equal(url.searchParams.get("timeformat"), "unixtime");
-  // Deterministic horizons also ask for low cloud and humidity (step 6), the ensemble does not.
-  assert.equal(url.searchParams.get("hourly"), "temperature_2m,precipitation,wind_gusts_10m,sunshine_duration,cloud_cover_low,relative_humidity_2m");
-  assert.equal(new URL(horizonUrl(cfg, "long", DAY)).searchParams.get("hourly"), "temperature_2m,precipitation,wind_gusts_10m,sunshine_duration");
+  // Every horizon asks for snow depth (step 8); the deterministic ones also for low cloud and humidity (step 6).
+  assert.equal(url.searchParams.get("hourly"), "temperature_2m,precipitation,wind_gusts_10m,sunshine_duration,snow_depth,cloud_cover_low,relative_humidity_2m");
+  assert.equal(new URL(horizonUrl(cfg, "long", DAY)).searchParams.get("hourly"), "temperature_2m,precipitation,wind_gusts_10m,sunshine_duration,snow_depth");
   assert.match(horizonUrl(cfg, "long", DAY), /^https:\/\/ensemble-api\.open-meteo\.com\/v1\/ensemble\?/);
   assert.match(metaUrl(cfg, "long"), /^https:\/\/ensemble-api\.open-meteo\.com\/data\/ecmwf_ifs025_ensemble\//);
   assert.match(metaUrl(cfg, "now"), /^https:\/\/api\.open-meteo\.com\/data\/dwd_icon_d2\//);
@@ -396,9 +398,9 @@ test("POWDER_SNEH: stupeň podľa poradia dňa, značka ALERT od prahu p* = 1 / 
   assert.deepEqual(stages, ["alert", "alert", "pozor"]);
 });
 
-test("snímka v4: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
+test("snímka v5: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
   const snap = snapshotFor();
-  assert.equal(snap.version, 4);
+  assert.equal(snap.version, 5);
   assert.equal(snap.horizons.short.powderLaw, "ecmwf_ifs");
   assert.equal(snap.horizons.now.powderLaw, "icon_d2");
   assert.equal(snap.horizons.long.powderLaw, null);
@@ -515,10 +517,11 @@ test("kvalita dňa: teplota počas sneženia s korekciou modelu, pásma, náraz 
 // The page
 // ---------------------------------------------------------------------------
 
-/** A whole snapshot as the generator would build it at 10:00 on DAY, every horizon from `fill`. */
-function snapshotFor(fill: Fill = () => ({}), fetchedAtMs = at(10)) {
-  const range = (key: "now" | "short" | "long") => requestDates(cfg, key, DAY);
-  const data = (key: "now" | "short" | "long", members = 1) => response(range(key).startDate, range(key).endDate, fill, members);
+type HorizonKey = "now" | "short" | "long";
+/** A whole snapshot as the generator would build it at 10:00 on `day`, every horizon from `fill` unless `perHorizon` names its own. */
+function snapshotFor(fill: Fill = () => ({}), fetchedAtMs?: number, day = DAY, perHorizon: Partial<Record<HorizonKey, Fill>> = {}) {
+  const range = (key: HorizonKey) => requestDates(cfg, key, day);
+  const data = (key: HorizonKey, members = 1) => response(range(key).startDate, range(key).endDate, perHorizon[key] ?? fill, members);
   return buildSkiSnapshot(
     {
       now: { data: data("now"), meta: null },
@@ -526,9 +529,51 @@ function snapshotFor(fill: Fill = () => ({}), fetchedAtMs = at(10)) {
       long: { data: data("long", cfg.horizons.long.expectedMembers), meta: null },
     },
     cfg,
-    fetchedAtMs
+    fetchedAtMs ?? at(10, day)
   );
 }
+
+type Cover = { topCm: number; probability: number } | null;
+const coverOf = (snap: ReturnType<typeof snapshotFor>, key: HorizonKey, dayIndex = 0, resort = 0) => (snap.horizons[key].resorts[resort].days[dayIndex] as { snowCover: Cover }).snowCover;
+
+test("snehová pokrývka: ICON-D2 priamo, ostatné horizonty od jej úrovne plus vlastná zmena; bez hodnoty nič", () => {
+  assert.equal(coverOf(snapshotFor(), "now"), null);
+  assert.equal(coverOf(snapshotFor(), "long", 3), null);
+  // Bare ground in every model: no cover anywhere.
+  const bare = snapshotFor(() => ({ depth: 0 }));
+  assert.deepEqual(coverOf(bare, "now"), { topCm: 0, probability: 0.001 });
+  assert.ok(coverOf(bare, "short", 2)!.probability < 0.01 && coverOf(bare, "long", 5)!.probability < 0.01);
+  // ICON-D2 sees 0.4 m; IFS carries 0.9 m rising to 1.1 m on D+2: its level is ignored, its change counts.
+  const curve = cfg.cover.curves.icon_d2;
+  const p = (cm: number) => 1 / (1 + Math.exp(-(curve.a + curve.b * Math.sqrt(cm))));
+  const anchored = snapshotFor(() => ({ depth: 0.4 }), undefined, DAY, {
+    short: (_p, _m, t) => ({ depth: t >= at(0, addDays(DAY, 2)) ? 1.1 : 0.9 }),
+    long: (_p, m, t) => ({ depth: t >= at(0, addDays(DAY, 5)) ? 0.1 + 0.3 * (m % 2) : 0.1 }),
+  });
+  assert.deepEqual(coverOf(anchored, "now"), { topCm: 40, probability: Math.round(p(40) * 1000) / 1000 });
+  assert.deepEqual(coverOf(anchored, "short", 0), { topCm: 40, probability: Math.round(p(40) * 1000) / 1000 });
+  assert.deepEqual(coverOf(anchored, "short", 2), { topCm: 60, probability: Math.round(p(60) * 1000) / 1000 });
+  // Ensemble: 26 members keep the level, 25 gain 30 cm -> median 40 cm, mean probability between.
+  const ens = coverOf(anchored, "long", 5)!;
+  assert.equal(ens.topCm, 40);
+  assert.ok(ens.probability > p(40) && ens.probability < p(70), String(ens.probability));
+  // A missing ICON-D2 depth at the opening hour: no anchor, so nothing is gated - never a silent "no snow".
+  const gap = snapshotFor(() => ({ depth: 0.4 }), undefined, DAY, { now: (p, _m, t) => ({ depth: p === TOP && t === at(9) ? null : 0.4 }) });
+  assert.equal(coverOf(gap, "now"), null);
+  assert.equal(coverOf(gap, "short", 1), null);
+});
+
+test("výhľad: posledný deň bez hodín prevádzky sa vypustí, medzera uprostred ostane medzerou", () => {
+  const last = addDays(DAY, cfg.horizons.long.days - 1);
+  const trimmed = snapshotFor(() => ({}), undefined, DAY, { long: (_p, _m, t) => (t >= at(10, last) ? { temp: null } : {}) });
+  assert.equal(trimmed.horizons.long.dates.length, cfg.horizons.long.days - 1);
+  assert.equal(trimmed.horizons.long.resorts[0].days.length, cfg.horizons.long.days - 1);
+  assert.equal(trimmed.horizons.short.dates.length, cfg.horizons.short.days);
+  const mid = addDays(DAY, 4);
+  const holed = snapshotFor(() => ({}), undefined, DAY, { long: (_p, _m, t) => (t === at(12, mid) ? { temp: null } : {}) });
+  assert.equal(holed.horizons.long.dates.length, cfg.horizons.long.days);
+  assert.equal((holed.horizons.long.resorts[0].days[4] as { reason: string | null }).reason, "horizon");
+});
 
 const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
 
@@ -577,6 +622,28 @@ test("stránka: pruhy s percentom namiesto slov, dôvody s pravdepodobnosťou, m
   // The method text explains the percentages, with the alert threshold and stage days from the configuration.
   assert.match(html, /Ako sa počítajú percentá\?/);
   assert.match(html, /POWDER ALERT<\/b> svieti od 20\u00a0% na prvé 2 dni/);
+});
+
+test("stránka: bez pokrývky „Bez snehu“ namiesto pruhu, sezóna len ako poznámka, kratší výhľad s vysvetlením", () => {
+  const render = clientRender();
+  const bare = mainOf(renderSkiPage(snapshotFor(() => ({ depth: 0 }))));
+  const cells = cfg.resorts.length * (1 + cfg.horizons.short.days + cfg.horizons.long.days);
+  assert.equal([...bare.matchAll(/Bez snehu/g)].length, cells + 2, "každá karta a bunka, plus poznámka pod nadpisom a text metódy");
+  assert.doesNotMatch(bare, /class="sk-prob"/);
+  assert.match(bare, /<p class="sk-why">sneh hore podľa modelu 0\u00a0cm, pokrývka aspoň 30\u00a0cm 0\u00a0%<\/p>/);
+  assert.doesNotMatch(bare, /mimo sezóny/);
+  const deep = mainOf(renderSkiPage(snapshotFor(() => ({ depth: 0.6 }))));
+  assert.equal([...deep.matchAll(/class="sk-prob"/g)].length, cells);
+  assert.doesNotMatch(deep, /<p class="sk-why">sneh hore/);
+  // May: snow in the model, but outside every resort's usual season - judged, with the note.
+  const may = mainOf(renderSkiPage(snapshotFor(() => ({ depth: 0.6 }), undefined, "2027-05-01")));
+  assert.match(may, /Bez výhrad\. · mimo sezóny \(bežne od 5\.\u00a012\. do 6\.\u00a04\.\)/);
+  assert.match(may, /mimo sezóny \(bežne od 22\.\u00a011\. do 26\.\u00a04\.\)/);
+  const last = addDays(DAY, cfg.horizons.long.days - 1);
+  const short = mainOf(renderSkiPage(snapshotFor(() => ({}), undefined, DAY, { long: (_p, _m, t) => (t >= at(10, last) ? { temp: null } : {}) })));
+  assert.match(short, /Výhľad na 9 dní/);
+  assert.match(short, /Posledný deň pribudne s novým behom modelu\./);
+  assert.doesNotMatch(mainOf(renderSkiPage(snapshotFor())), /Posledný deň pribudne/);
 });
 
 test("vložená snímka sa dá prečítať späť a vložený kód je bez import/export", () => {

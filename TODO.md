@@ -1,8 +1,8 @@
 # TODO – ako pokračovať
 
-Stav k 5. 10. 2026: kroky 0–7 zadania (`prompts/fable-presna-predpoved.md`) sú hotové a pushnuté
-(`origin/main` = `0c4cf25`). Stránka ukazuje kalibrované pravdepodobnosti, POWDER ALERT a očakávaný nový
-sneh; CI loguje predpovede od novembra. Rozhodujúci test modelu je sezóna 2026/27. Čísla, definície a
+Stav k 16. 10. 2026: kroky 0–8 (8 = predpoklad snehu z modelovej pokrývky, 16. 10.) sú hotové. Stránka
+ukazuje kalibrované pravdepodobnosti, POWDER ALERT a očakávaný nový sneh, a bez pokrývky „Bez snehu“; CI
+loguje predpovede od novembra. Rozhodujúci test modelu je sezóna 2026/27. Čísla, definície a
 rozhodnutia sú v [METODIKA.md](METODIKA.md), denník krokov v [README.md](README.md); tu je len to,
 čo treba urobiť a kedy.
 
@@ -45,7 +45,10 @@ rozhodnutia sú v [METODIKA.md](METODIKA.md), denník krokov v [README.md](READM
   predstihu a slotu CI, stanice vs. strediská (strediská cez náhradné stanice `RESORT_PROXY`), rozhodovacia
   tabuľka pre p*. Potom podľa METODIKA §7: buď koeficienty ostanú, alebo `npm run backtest:fetch` +
   `npm run model` s novou zimou v archíve a `version` v `src/powder-model.ts` + 1; to isté pre krivky
-  kvality (`npm run rules`, `npm run quality` → `src/quality-model.ts`). Správa majiteľovi, až potom zmena.
+  kvality (`npm run rules`, `npm run quality` → `src/quality-model.ts`) a pokrývky
+  (`npm run backtest:fetch -- --only=snow`, `npm run cover` → `src/cover-model.ts`). Z logu overiť aj
+  kotvenú zmenu pokrývky (`snowCover` pri staniciach na D+1, D+2 a vo výhľade proti nameranej HS) –
+  dnes neoverený predpoklad (METODIKA §4.7). Správa majiteľovi, až potom zmena.
 
 ## Ďalšie kroky (nie sú schválené – najprv plán a „Áno“)
 
@@ -63,6 +66,9 @@ rozhodnutia sú v [METODIKA.md](METODIKA.md), denník krokov v [README.md](READM
    nedajú): „koľko napadlo naozaj“ vedľa predpovede. Nový zdroj = nová licencia = najprv otázka.
 6. **UI drobnosti** podľa spätnej väzby: tooltipy v hodinovom grafe, zobrazenie nárazu v okne (dnes
    skryté, bez zručnosti), vrstva „pre mamu“ (majiteľ zatiaľ nechcel).
+7. **Pokrývka ďalej:** výška snehu v údolí (dolná stanica) ako druhá brána alebo poznámka; sezónne
+   termíny stredísk obnoviť pred každou zimou (`season` v `src/config.ts`); `npm run verify` rozšíriť o
+   skóre pokrývky.
 
 ## Kde čo je
 

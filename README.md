@@ -6,7 +6,7 @@ Hochrindl** – v troch horizontoch:
 
 | Časť stránky | Model (cez [Open-Meteo](https://open-meteo.com/)) | Čo ukazuje |
 |---|---|---|
-| Najbližší lyžiarsky deň | DWD ICON-D2 2,2 km (do 4. 10. 2026 GeoSphere AROME; ICON-D2 je jediný krátkodobý model so zimným archívom, takže jeho POWDER_SNEH je overený) | kartu na stredisko: pruh a pravdepodobnosť dobrého / ujde / zlého dňa, čo ho môže pokaziť (s pravdepodobnosťou), šanca na prašan (≥ 15 cm do rána) s POWDER ALERT, očakávaný nový sneh, nový sneh za 3 dni, teploty, vietor, slnko, odkazy na snehovú správu a webkameru |
+| Najbližší lyžiarsky deň | DWD ICON-D2 2,2 km (do 4. 10. 2026 GeoSphere AROME; ICON-D2 je jediný krátkodobý model so zimným archívom, takže jeho POWDER_SNEH je overený) | kartu na stredisko: „Bez snehu“, keď ICON-D2 nevidí hore pokrývku aspoň 30 cm; inak pruh a pravdepodobnosť dobrého / ujde / zlého dňa, čo ho môže pokaziť (s pravdepodobnosťou), šanca na prašan (≥ 15 cm do rána) s POWDER ALERT, očakávaný nový sneh, nový sneh za 3 dni, teploty, vietor, slnko, odkazy na snehovú správu a webkameru |
 | Najbližšie 3 dni | ECMWF IFS 9 km | tabuľku deň × stredisko (pruh, dobré %, teplota hore, šanca na prašan, nový sneh, silnejší vietor) a hodinový graf (teplota hore/dole, sneh, nárazy) |
 | Výhľad na 10 dní | ECMWF ensemble 0,25°, 51 scenárov | podiel scenárov s dobrým / priemerným / zlým dňom (nekalibrovaný) a rozpätie snehu |
 
@@ -31,6 +31,15 @@ nízka oblačnosť a vlhkosť), kalibrovaná na šiestich automatoch GeoSphere z
 súčin dažďa ≥ 1 mm alebo nárazu > 60 km/h. Áno/nie verdikty mali ako pravdepodobnosť Brierovu zručnosť
 okolo nuly, kalibrované 0,3–0,6 pri 0–1 dni (METODIKA §5.3–5.4). Pod názvom strediska sú zložky od
 20 % („dážď dole 40 %“), mäkký sneh a pri najbližšom dni inverzia od 50 % („hore teplejšie než dole“).
+
+**Predpoklad snehu (od 16. 10. 2026, krok 8):** deň sa hodnotí, len keď je na čom lyžovať. Modelová výška
+snehu ICON-D2 pri hornej stanici o 9:00 dáva cez kalibrovanú krivku pravdepodobnosť, že tam je pokrývka
+aspoň 30 cm (4 zimy, 17 staníc s meraním: BSS 0,46, AUC 0,95; pri modeli 0 cm je sneh len v 1 % dní,
+pri 30 cm v polovici). Pod 50 % stránka ukáže sivé **Bez snehu** bez pruhu a dôvodov; prašan, teploty a
+vietor ostávajú. Ďalšie dni berú dnešnú úroveň z ICON-D2 a pridajú k nej len zmenu podľa svojho modelu
+(výška snehu z IFS 9 km sa proti staniciam neosvedčila, ansámbel archív nemá). Bežné termíny sezóny
+stredísk sú v `src/config.ts` (`season`) a stránka ich len poznamená („mimo sezóny“). Posledný deň
+10-dňového výhľadu, na ktorý ranný beh ansámblu ešte nesiaha, sa vypustí namiesto „Nedostatok dát“.
 
 **Prašan** = aspoň 15 cm nového snehu pri hornej stanici od 9:00 predošlého dňa do 9:00. Karta aj
 tabuľka ukazujú kalibrovanú pravdepodobnosť (`powderSnow`); od 20 % svieti **POWDER ALERT** (prvé dva
@@ -93,6 +102,7 @@ len denník. Čo ďalej, kedy a čo čaká na majiteľa: [TODO.md](TODO.md).
 | 5 – prospektívne overovanie | 5a hotovo 4. 10. 2026, vyhodnotenie po sezóne 2026/27 | každý čerstvý beh CI pripíše riadok do `data/prospective/<sezóna>.jsonl`: strediská, šesť staníc s pravdou (rovnaká požiadavka, ten istý beh), 51 členov ansámblu v okne; `npm run verify` po sezóne: METODIKA §5.2 |
 | 6 – kvalita dňa | hotovo 4. 10. 2026 | `npm run rules` + `npm run quality`: dnešné áno/nie pravidlá sú zle kalibrované (dážď varuje priveľa, vietor z IFS bez zručnosti, zamračenie primálo), kalibrované pravdepodobnosti majú BSS 0,3–0,6 pri 0–1 d; teplota počas sneženia z ICON-D2 presná, z IFS +1 °C; inverziu vidí len ICON-D2; vietor pri powderi a slnečný vrchol nad hmlou sa predpovedať nedajú. Snímka v3 nesie `quality` (P dážď, P veterno / stojace lanovky, P zamračené, P dobrý deň = súčin, inverzia, teplota počas sneženia s pásmom, náraz v okne); deterministické horizonty doťahujú nízku oblačnosť a vlhkosť: [data/rules](data/rules), [data/quality](data/quality), METODIKA §4.5, §5.3–5.4 |
 | 7 – zobrazenie pravdepodobností | hotovo 5. 10. 2026 | rozhodnutie majiteľa 5. 10.: stránka ukazuje pravdepodobnosti namiesto áno/nie. Snímka v4: deterministické dni nesú `goodPct / fairPct / badPct` (zlé = súčin P dážď ≥ 1 mm a P náraz > 60 km/h, overené proti priamemu fitu: ICON-D2 BSS 0,24–0,29, IFS 0,05; dobré = overený súčin, mäkký sneh ho vynuluje). Karta a tabuľka: pruh + „dobré X %“, dôvody s pravdepodobnosťou od 20 %, riadok „Prašan do rána (≥ 15 cm)“ s POWDER ALERT / POZOR, „Nový sneh do rána: okolo / až“ s pásmom suchý / vlhší / mokrý, inverzia od 50 % pri najbližšom dni; text „Ako sa počítajú percentá?“ prepísaný; pätička uvádza GeoSphere a eHYD; `docs/` obnovené živým načítaním: METODIKA §4.6 |
+| 8 – predpoklad snehu | hotovo 16. 10. 2026 | majiteľ 16. 10.: stránka v októbri hodnotila dni bez snehu. `npm run backtest:fetch -- --only=snow` + `npm run cover`: modelová výška snehu proti nameranej (17 staníc, nov–apr): ICON-D2 4 zimy BSS 0,46, AUC 0,95, P(≥ 30 cm │ model 0) 0,01; IFS 9 km 2 zimy BSS 0,25, biasy −43 až +23 cm → brána len z ICON-D2 (`src/cover-model.ts`), ostatné horizonty kotvené na jej úroveň + vlastná zmena (predpoklad, overí sezóna). Snímka v5: `snowCover` na každom dni aj v logu; stránka „Bez snehu“ pod 50 %, sezóna stredísk ako poznámka, posledný deň výhľadu bez dát sa vypúšťa: [data/cover](data/cover), METODIKA §4.7, §5.5 |
 
 Offline skripty bežia cez `npm run` (tsx), surové dáta držia v `~/.cache/ztlzdrf` mimo gitu
 (`ZTLZDRF_CACHE` ho presmeruje), do gitu idú len malé odvodené JSON a správy. Dáta: Open-Meteo (CC BY 4.0,
@@ -109,6 +119,7 @@ npm run model            # fit a výber modelu úhrnu → data/model/
 npm run verify           # po sezóne: log predpovedí proti pravde → data/prospective/REPORT-*.md
 npm run rules            # pravidlá stránky proti staniciam → data/rules/
 npm run quality          # kvalita powderu, inverzie, oblak, dobrý deň; krivky pre stránku → data/quality/
+npm run cover            # krok 8: modelová výška snehu proti nameranej → data/cover/ (najprv npm run backtest:fetch -- --only=snow)
 ```
 
 ## Lokálne

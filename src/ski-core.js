@@ -36,6 +36,9 @@ export const VARS = ["temperature_2m", "precipitation", "wind_gusts_10m", "sunsh
 /** The deterministic horizons also ask for these (step 6: low cloud and humidity sharpen the overcast
  * probability from ICON-D2); the ensemble does not, and a response without them still parses. */
 export const DET_EXTRA_VARS = ["cloud_cover_low", "relative_humidity_2m"];
+/** Every horizon also asks for the model's snow depth (step 8: the snow-cover precondition of a ski
+ * day); a response without it still parses, and its days then carry no cover. */
+export const COVER_VARS = ["snow_depth"];
 
 /** Verified live 2026-10-03 (extras 2026-10-04). Other units are a changed API, not something to convert silently. */
 export const EXPECTED_UNITS = {
@@ -45,6 +48,7 @@ export const EXPECTED_UNITS = {
   sunshine_duration: "s",
   cloud_cover_low: "%",
   relative_humidity_2m: "%",
+  snow_depth: "m",
 };
 
 export const HORIZON_KEYS = ["now", "short", "long"];
@@ -183,7 +187,7 @@ export function pointsUrl(cfg, key, firstDate, pts) {
     longitude: pts.map((p) => p.longitude).join(","),
     elevation: pts.map((p) => p.elevation).join(","),
     models: h.model,
-    hourly: [...VARS, ...(h.ensemble ? [] : DET_EXTRA_VARS)].join(","),
+    hourly: [...VARS, ...COVER_VARS, ...(h.ensemble ? [] : DET_EXTRA_VARS)].join(","),
     start_date: startDate,
     end_date: endDate,
     timezone: cfg.timezone,
@@ -271,6 +275,8 @@ export function parsePoints(json, what) {
         // Optional (deterministic horizons only): all null when the response lacks them.
         lowCloud: column(h, `cloud_cover_low${s}`, len),
         humidity: column(h, `relative_humidity_2m${s}`, len),
+        // Optional for every horizon (m): all null when the response lacks it.
+        snowDepth: column(h, `snow_depth${s}`, len),
       })),
     };
   });
@@ -689,6 +695,66 @@ export function dayShares(verdict, quality) {
   return { goodPct, fairPct: 100 - goodPct - badPct, badPct };
 }
 
+/**
+ * @typedef {{ topCm: number, probability: number }} SnowCover
+ */
+
+/**
+ * The snow-cover precondition of a ski day (step 8, METODIKA §4.7): the model's snow depth at the
+ * top station when the lifts open, as the calibrated probability that a station under such a value
+ * measures at least cfg.cover.coverCm. Only ICON-D2's depth verified well enough to carry a curve;
+ * the other horizons take ICON-D2's depth on the first day as the level (`anchorCm`) and add their
+ * own model's change since that day, so a storm or a thaw in the outlook still counts while the
+ * level stays the verified one. One member gives one value; several (the ensemble) give the median
+ * depth and the mean probability. Null without a curve or a value - a missing depth never passes as
+ * "no snow".
+ *
+ * @param {{ a: number, b: number }} curve
+ * @param {number | null} [anchorCm]
+ * @param {string | null} [anchorDate]
+ * @returns {SnowCover | null}
+ */
+export function snowCover(members, date, cfg, idx, curve, anchorCm = null, anchorDate = null) {
+  if (!curve) return null;
+  const i = idx.get(localTimeMs(date, cfg.liftOpenHour, cfg.timezone));
+  const i0 = anchorCm === null ? undefined : idx.get(localTimeMs(anchorDate, cfg.liftOpenHour, cfg.timezone));
+  if (i === undefined || (anchorCm !== null && i0 === undefined)) return null;
+  const cms = [];
+  for (const m of members) {
+    const v = m.snowDepth ? m.snowDepth[i] : null;
+    const v0 = anchorCm === null ? 0 : m.snowDepth ? m.snowDepth[i0] : null;
+    if (v === null || v === undefined || v0 === null || v0 === undefined) return null;
+    cms.push(Math.max(0, anchorCm === null ? v * 100 : anchorCm + (v - v0) * 100));
+  }
+  if (!cms.length) return null;
+  const probs = cms.map((cm) => logistic(curve.a + curve.b * Math.sqrt(cm)));
+  const sorted = [...cms].sort((a, b) => a - b);
+  return { topCm: Math.round(sorted[Math.floor(sorted.length / 2)]), probability: round3(probs.reduce((a, p) => a + p, 0) / probs.length) };
+}
+
+/** The curve a horizon's cover is judged with (always the anchor model's) and whether the horizon's
+ * own depth is the level (the anchor model) or only a change on top of `anchors`. */
+function coverPlan(cfg, model, anchors) {
+  const cover = cfg.cover;
+  if (!cover) return null;
+  const curve = cover.curves[cover.anchor];
+  if (!curve) return null;
+  if (model === cover.anchor) return { curve, anchored: false };
+  return anchors ? { curve, anchored: true, anchors } : null;
+}
+
+/** The anchor model's depth (cm) at each resort's top station when the first day's lifts open, or null. */
+export function coverAnchors(points, cfg, firstDate) {
+  const out = {};
+  cfg.resorts.forEach((resort, r) => {
+    const { top } = resortPoints(points, cfg, r);
+    const i = indexByTime(top.timesMs).get(localTimeMs(firstDate, cfg.liftOpenHour, cfg.timezone));
+    const v = i === undefined || !top.members[0].snowDepth ? null : top.members[0].snowDepth[i];
+    out[resort.id] = v === null || v === undefined ? null : Math.max(0, v * 100);
+  });
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Horizons
 // ---------------------------------------------------------------------------
@@ -724,10 +790,12 @@ function hourlyFor(top, base, dates, cfg) {
  * good / fair / bad shares drawn from it, the POWDER_SNEH probability of the day (null without a
  * law for the model), plus the hourly lines behind it.
  */
-export function judgeDeterministic(points, cfg, dates, law = null, publishedMs = 0, model = null) {
+export function judgeDeterministic(points, cfg, dates, law = null, publishedMs = 0, model = null, anchors = null) {
+  const plan = coverPlan(cfg, model, anchors);
   return cfg.resorts.map((resort, r) => {
     const { top, base } = resortPoints(points, cfg, r);
     const idx = indexByTime(top.timesMs);
+    const cover = (date) => (!plan ? null : plan.anchored ? (plan.anchors[resort.id] === null ? null : snowCover(top.members, date, cfg, idx, plan.curve, plan.anchors[resort.id], dates[0])) : snowCover(top.members, date, cfg, idx, plan.curve));
     return {
       id: resort.id,
       days: dates.map((date, i) => {
@@ -739,6 +807,7 @@ export function judgeDeterministic(points, cfg, dates, law = null, publishedMs =
           powderSnow: powderSnow(top.members[0], date, cfg, idx, law, publishedMs, i),
           quality,
           ...dayShares(verdict, quality),
+          snowCover: cover(date),
         };
       }),
       hourly: hourlyFor(top, base, dates, cfg),
@@ -761,14 +830,16 @@ export function percentile(sorted, q) {
  * or a member short of a value makes the day `null` with a reason ("members" / "horizon") instead
  * of a better-looking percentage.
  */
-export function summarizeEnsemble(points, cfg, dates) {
+export function summarizeEnsemble(points, cfg, dates, anchors = null) {
   const expected = cfg.horizons.long.expectedMembers;
+  const plan = coverPlan(cfg, cfg.horizons.long.model, anchors);
   return cfg.resorts.map((resort, r) => {
     const { top, base } = resortPoints(points, cfg, r);
     const idx = indexByTime(top.timesMs);
+    const cover = (date) => (!plan ? null : plan.anchored ? (plan.anchors[resort.id] === null ? null : snowCover(top.members, date, cfg, idx, plan.curve, plan.anchors[resort.id], dates[0])) : snowCover(top.members, date, cfg, idx, plan.curve));
     const complete = top.members.length === expected && base.members.length === expected;
     const days = dates.map((date) => {
-      const none = { date, goodPct: null, fairPct: null, badPct: null, snowCm: null, expected };
+      const none = { date, goodPct: null, fairPct: null, badPct: null, snowCm: null, expected, snowCover: null };
       if (!complete) return { ...none, reason: "members" };
       const counts = { good: 0, fair: 0, bad: 0 };
       const snows = [];
@@ -789,6 +860,7 @@ export function summarizeEnsemble(points, cfg, dates) {
         snowCm: snows.length === expected ? { p10: percentile(snows, 0.1), p50: percentile(snows, 0.5), p90: percentile(snows, 0.9) } : null,
         expected,
         reason: null,
+        snowCover: cover(date),
       };
     });
     return { id: resort.id, days };
@@ -804,8 +876,9 @@ export function summarizeEnsemble(points, cfg, dates) {
  * days, powderLaw and publishedAtMs on horizons. 3 (4 Oct 2026): quality (calibrated day-rule
  * probabilities, good-day probability, inversion, snow temperature, window gust) on deterministic days.
  * 4 (5 Oct 2026): softSnow on verdicts and goodPct / fairPct / badPct on deterministic days, the shares
- * the page draws instead of the yes/no verdict. */
-export const SKI_SNAPSHOT_VERSION = 4;
+ * the page draws instead of the yes/no verdict. 5 (16 Oct 2026): snowCover (model depth at the top,
+ * probability of a cover) on every day; the ensemble horizon drops a trailing day it cannot judge. */
+export const SKI_SNAPSHOT_VERSION = 5;
 
 /**
  * Everything the page draws, derived once by whoever has the raw responses - the generator, or the
@@ -815,24 +888,40 @@ export function buildSkiSnapshot(responses, cfg, fetchedAtMs) {
   const firstDate = firstSkiDate(fetchedAtMs, cfg);
   /** @type {Record<string, { model: string, label: string, runAtMs: number | null, publishedAtMs: number | null, powderLaw: string | null, dates: string[], grids: object[], resorts: { id: string, days: Record<string, any>[], hourly?: object }[] }>} */
   const horizons = {};
+  /** The anchor model's depth per resort, once its horizon has been parsed (HORIZON_KEYS puts it first). */
+  let anchors = null;
   for (const key of HORIZON_KEYS) {
     const h = cfg.horizons[key];
     const dates = horizonDates(cfg, key, firstDate);
     const points = parsePoints(responses[key].data, h.label);
+    if (!h.ensemble && cfg.cover && h.model === cfg.cover.anchor && !anchors) anchors = coverAnchors(points, cfg, firstDate);
     const lastNeeded = localTimeMs(dates[dates.length - 1], cfg.liftCloseHour, cfg.timezone);
     const runAtMs = resolveRun(responses[key].meta, lastNeeded);
     // The ensemble has no calibrated law yet (no member archive to fit one on), so its days carry none.
     const law = h.ensemble ? null : cfg.powder.laws[h.model] ?? null;
     const publishedMs = law ? publishedAtMs(runAtMs, fetchedAtMs, cfg.powder.publishDelayH[h.model]) : null;
+    let shownDates = dates;
+    let resorts = h.ensemble ? summarizeEnsemble(points, cfg, dates, anchors) : judgeDeterministic(points, cfg, dates, law, publishedMs, h.model, anchors);
+    if (h.ensemble) {
+      // The ensemble reaches about ten days from its run, so early in the day the last day's lift
+      // hours are not there yet. A trailing day no resort can judge for want of hours is dropped
+      // rather than shown as a gap (step 8); a gap inside the horizon still shows as one.
+      let n = dates.length;
+      while (n > 1 && resorts.every((r) => r.days[n - 1].goodPct === null && r.days[n - 1].reason === "horizon")) n--;
+      if (n < dates.length) {
+        shownDates = dates.slice(0, n);
+        resorts = resorts.map((r) => ({ ...r, days: r.days.slice(0, n) }));
+      }
+    }
     horizons[key] = {
       model: h.model,
       label: h.label,
       runAtMs,
       publishedAtMs: publishedMs,
       powderLaw: law ? h.model : null,
-      dates,
+      dates: shownDates,
       grids: points.map((p) => p.grid),
-      resorts: h.ensemble ? summarizeEnsemble(points, cfg, dates) : judgeDeterministic(points, cfg, dates, law, publishedMs, h.model),
+      resorts,
     };
   }
   return { version: SKI_SNAPSHOT_VERSION, fetchedAtMs, firstDate, config: cfg, horizons };

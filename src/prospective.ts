@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SkiConfig } from "./config.js";
 import { fetchJson } from "./fetch-json.js";
-import { HORIZON_KEYS, SKI_SNAPSHOT_VERSION, dayQuality, indexByTime, parsePoints, pointsUrl, powderSnow, windowSnowCm } from "./ski-core.js";
+import { HORIZON_KEYS, SKI_SNAPSHOT_VERSION, dayQuality, indexByTime, localTimeMs, parsePoints, pointsUrl, powderSnow, snowCover, windowSnowCm } from "./ski-core.js";
 import type { SkiSnapshot } from "./ski.js";
 
 /**
@@ -70,13 +70,16 @@ export async function fetchStationResponses(cfg: SkiConfig, firstDate: string): 
 
 const tenth = (v: number | null): number | null => (v === null ? null : Math.round(v * 10) / 10);
 
-type Member = { temperature: (number | null)[]; precipitation: (number | null)[] };
+type Member = { temperature: (number | null)[]; precipitation: (number | null)[]; snowDepth?: (number | null)[] };
 type ParsedPoint = { timesMs: number[]; members: Member[] };
 
 /** One line of the log from what the generator has in hand. Station responses are optional - a failed
  * station fetch still leaves the resorts' line. */
 export function buildForecastLog(snapshot: SkiSnapshot, responses: Responses, stations: StationResponses | null, cfg: SkiConfig): ForecastLogLine {
   const line: ForecastLogLine = { v: FORECAST_LOG_VERSION, fetchedAtMs: snapshot.fetchedAtMs, firstDate: snapshot.firstDate, snapshotVersion: SKI_SNAPSHOT_VERSION, modelVersion: cfg.powder.version, horizons: {} };
+  /** The anchor model's depth at each verification station on the first day (as coverAnchors does for resorts). */
+  let stationAnchors: (number | null)[] | null = null;
+  const coverCurve = cfg.cover.curves[cfg.cover.anchor as keyof typeof cfg.cover.curves];
   for (const key of HORIZON_KEYS as HorizonKey[]) {
     const h = snapshot.horizons[key] as { model: string; runAtMs: number | null; publishedAtMs: number | null; dates: string[]; resorts: { id: string; days: Record<string, unknown>[] }[] };
     const ensemble = cfg.horizons[key].ensemble;
@@ -85,13 +88,13 @@ export function buildForecastLog(snapshot: SkiSnapshot, responses: Responses, st
     h.resorts.forEach((r, ri) => {
       resorts[r.id] = r.days.map((d, di) => {
         if (!ensemble) {
-          const { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality, goodPct, fairPct, badPct } = d as Record<string, unknown>;
-          return { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality, goodPct, fairPct, badPct };
+          const { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality, goodPct, fairPct, badPct, snowCover } = d as Record<string, unknown>;
+          return { date, status, freshSnowCm, rainBaseMm, maxGustKmh, sunHours, powderSnow, quality, goodPct, fairPct, badPct, snowCover };
         }
-        const { date, goodPct, fairPct, badPct, snowCm } = d as Record<string, unknown>;
+        const { date, goodPct, fairPct, badPct, snowCm, snowCover } = d as Record<string, unknown>;
         const top = points![2 * ri];
         const idx = indexByTime(top.timesMs);
-        return { date, goodPct, fairPct, badPct, snowCm, members: top.members.map((m) => tenth(windowSnowCm(m, h.dates[di], cfg, idx))) };
+        return { date, goodPct, fairPct, badPct, snowCm, snowCover, members: top.members.map((m) => tenth(windowSnowCm(m, h.dates[di], cfg, idx))) };
       });
     });
     const entry: ForecastLogLine["horizons"][string] = { model: h.model, runAtMs: h.runAtMs, publishedAtMs: h.publishedAtMs, resorts };
@@ -102,10 +105,15 @@ export function buildForecastLog(snapshot: SkiSnapshot, responses: Responses, st
       const pts = parsePoints(raw, `${h.model} stanice`) as ParsedPoint[];
       if (pts.length !== VERIFICATION_STATIONS.length) throw new Error(`stanice: ${pts.length} bodov namiesto ${VERIFICATION_STATIONS.length}`);
       entry.stations = {};
+      if (h.model === cfg.cover.anchor && !stationAnchors) {
+        stationAnchors = pts.map((p) => { const i = indexByTime(p.timesMs).get(localTimeMs(snapshot.firstDate, cfg.liftOpenHour, cfg.timezone)); const v = i === undefined ? null : p.members[0].snowDepth?.[i]; return v == null ? null : Math.max(0, v * 100); });
+      }
       VERIFICATION_STATIONS.forEach((s, si) => {
         const idx = indexByTime(pts[si].timesMs);
+        const anchorCm = h.model === cfg.cover.anchor ? null : stationAnchors?.[si] ?? null;
+        const cover = (date: string) => (h.model === cfg.cover.anchor ? snowCover(pts[si].members, date, cfg, idx, coverCurve) : anchorCm === null ? null : snowCover(pts[si].members, date, cfg, idx, coverCurve, anchorCm, snapshot.firstDate));
         // A station is its own base: no inversion, rain at the station itself.
-        entry.stations![s.id] = h.dates.map((date, di) => ({ date, powderSnow: powderSnow(pts[si].members[0], date, cfg, idx, law, publishedMs, di), quality: dayQuality(pts[si].members[0], pts[si].members[0], date, cfg, idx, h.model) }));
+        entry.stations![s.id] = h.dates.map((date, di) => ({ date, powderSnow: powderSnow(pts[si].members[0], date, cfg, idx, law, publishedMs, di), quality: dayQuality(pts[si].members[0], pts[si].members[0], date, cfg, idx, h.model), snowCover: cover(date) }));
       });
     }
     line.horizons[key] = entry;

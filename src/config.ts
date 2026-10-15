@@ -10,7 +10,13 @@
  *
  * Snow report links go to the resort's own lift/piste status where one exists, else to bergfex
  * (Falkert has none; Hochrindl's own page only links to bergfex).
+ *
+ * `season` is the usual operating season as the resorts announced it for 2025/26 (Bad Kleinkirchheim's
+ * winter info sheet; bergfex for Turracher Höhe; austria.info for the opening days of Falkert and
+ * Hochrindl, Hochrindl's ski-school listing for its closing; Falkert's closing is assumed). The page
+ * only notes it - whether lifts run depends on snow, which the snow-cover gate judges (step 8).
  */
+import { COVER_MODEL } from "./cover-model.js";
 import { POWDER_MODEL } from "./powder-model.js";
 import { QUALITY_MODEL } from "./quality-model.js";
 
@@ -26,6 +32,7 @@ export const SKI_RESORTS = [
       snowReport: "https://www.badkleinkirchheim.com/skigebiet/pisten-anlagen/",
       webcam: "https://www.badkleinkirchheim.com/info-kontakt/webcams/",
     },
+    season: { opens: "12-05", closes: "04-06" },
   },
   {
     id: "falkert",
@@ -37,6 +44,7 @@ export const SKI_RESORTS = [
       snowReport: "https://www.bergfex.at/falkert/schneebericht/",
       webcam: "https://www.heidialm.at/de/service/wetter-und-webcams",
     },
+    season: { opens: "12-13", closes: "04-06" },
   },
   {
     id: "turracher-hoehe",
@@ -48,6 +56,7 @@ export const SKI_RESORTS = [
       snowReport: "https://www.turracherhoehe.at/de/winter/bahnen-und-pisten",
       webcam: "https://www.turracherhoehe.at/de/aktuelles/webcams",
     },
+    season: { opens: "11-22", closes: "04-26" },
   },
   {
     id: "hochrindl",
@@ -59,6 +68,7 @@ export const SKI_RESORTS = [
       snowReport: "https://www.bergfex.at/hochrindl/schneebericht/",
       webcam: "https://www.hochrindl.at/webcams/",
     },
+    season: { opens: "12-06", closes: "03-15" },
   },
 ];
 
@@ -126,6 +136,8 @@ export const SKI_CONFIG = {
   powder: POWDER_MODEL,
   /** Calibrated probabilities of the day rules, inversion and snow temperature (src/quality-model.ts, METODIKA §4.5). */
   quality: QUALITY_MODEL,
+  /** The snow-cover precondition: ICON-D2 depth at the top station, calibrated against measured depth (src/cover-model.ts, METODIKA §4.7). */
+  cover: COVER_MODEL,
 };
 
 export type SkiConfig = typeof SKI_CONFIG;
