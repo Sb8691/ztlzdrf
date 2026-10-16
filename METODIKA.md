@@ -29,6 +29,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 16. 10. 2026 | Krok 9: lavínový stupeň na karte najbližšieho dňa zo správy LWD Kärnten v systéme Euregia (CAAML v6 na static.avalanche.report, CC BY 4.0 podľa Open Data avalanche.report – súhlas LWD netreba, žiadosť majiteľa ostáva pre staničné súbory); región = mikroregión EAWS hornej stanice (Turracher Höhe korutánsky, dolná stanica v Štajersku ignorovaná); zobrazenie stupeň + výška + denný chod + tendencia, bez nemeckého textu (voľba majiteľa z troch); správa na deň lanoviek, inak včerajšia, nič staršie; 404 = bez správy; len karta, nie tabuľky; snímka v6 | majiteľ (žiadosť LWD odoslaná, plán a zobrazenie schválené 16. 10.), Fable |
 | 16. 10. 2026 | Krok 8: deň sa hodnotí len s pokrývkou – brána z modelovej výšky snehu ICON-D2 (overená, 4 zimy, 17 staníc), IFS 9 km ako brána zamietnutý (2 zimy, biasy oboch znamienok); ostatné horizonty kotvené na úroveň ICON-D2 prvého dňa + vlastná zmena (predpoklad, overí sezóna 2026/27); „Bez snehu“ pod P 0,5 bez pruhu a dôvodov, prašan ostáva; sezónne termíny stredísk len ako poznámka; posledný deň výhľadu bez hodín prevádzky sa vypúšťa; snímka v5 | majiteľ (plán schválený 16. 10.), Fable |
 | 5. 10. 2026 | Krok 7: stránka ukazuje pravdepodobnosti namiesto áno/nie (rozhodnutie majiteľa); jeden vizuálny jazyk = pruh dobré / ujde / zlé + „dobré X %“ aj pri deterministických dňoch; P(zlé) = súčin, overené proti priamemu fitu; dôvody od 20 %, inverzia od 50 %, prašan v tabuľke od 5 % (voľby zobrazenia); stará značka prašanu 10 cm / 72 h zo stránky preč; GeoSphere a eHYD v pätičke, LWD nie; snímka v4; `docs/` obnovené živým načítaním mimo sezóny CI (log mimo repozitára) | majiteľ (áno 5. 10.), Fable |
 | 4. 10. 2026 | Krok 6b–6d: značka vetra pri powderi a „slnečný vrchol nad sivým údolím“ sa nevydávajú (bez zručnosti); inverzia len z ICON-D2; teplota počas sneženia z IFS +1,0 °C; dobrý deň = súčin kalibrovaných zložiek; krivky z predstihu 0 bez závislosti od predstihu; deterministické horizonty doťahujú nízku oblačnosť a vlhkosť; snímka v3 | Fable |
@@ -151,6 +152,10 @@ Villacher Alpe + Kanzelhöhe, spolu ~470 búrok) stačia na fázu, pomer sneh/vo
 - eHYD: bez CORS, len generátor/offline. smet.hydrographie.info: bez CORS.
 - Zdroje na stránku: Open-Meteo (už), GeoSphere („Datenquelle: GeoSphere Austria“), eHYD („Datenquelle:
   ehyd.gv.at“), EUMETSAT CM SAF pri satelite.
+- Lavínová správa (krok 9, 16. 10. 2026): `static.avalanche.report/bulletins/` (presmeruje na `avalanche.report`)
+  s CORS `*` aj bez Origin; Open Data avalanche.report: „All data provided, such as the avalanche report, weather
+  station data, etc., are licensed under CC BY 4.0“ – platí aj pre spoločne vydávanú správu Kärnten (§4.8). Web
+  LWD Kärnten sám (Impressum: každé ďalšie použitie len s písomným súhlasom) strojový výstup nemá.
 
 ### 3.6 Návrh pravdy pre každú zložku (na schválenie)
 
@@ -667,6 +672,74 @@ ostáva; posledný deň výhľadu) schválený s odporúčanými voľbami.
 - **Testy:** pokrývka priamo / kotvená / bez hodnoty, ansámbel po členoch, orezanie výhľadu a diera
   uprostred, stránka („Bez snehu“ bez pruhu, poznámka sezóny s prelomom roka, kratší výhľad s vysvetlením).
 
+### 4.8 Lavínové nebezpečenstvo na karte (krok 9, 16. 10. 2026)
+
+Majiteľ 16. 10. 2026: pridať lavínové nebezpečenstvo k strediskám; písomnú žiadosť LWD Kärnten odoslal.
+Plán schválený s odporúčaným zobrazením (stupeň + výška + denný chod + tendencia, bez nemeckého textu správy).
+
+- **Zdroj (overené 16. 10. 2026):** LWD Kärnten vydáva od 29. 11. 2025 správu v spoločnom systéme Euregia
+  (ALBINA; blog.avalanche.report „NEWS in Avalanche Bulletins for 2025/26 season“: cezhraničné spoločné
+  bulletiny s Východným Tirolskom, automatický preklad do 6 jazykov). Súbory:
+  `https://static.avalanche.report/bulletins/<dátum>/<dátum>_AT-02_de_CAAMLv6.json` (CAAML v6 JSON, ~10 kB,
+  HTTP 301 na `avalanche.report`, CORS `*`; aj en/it/fr/es/ca/oc a XML; `AT-02.json` v tom istom priečinku je
+  interný formát ALBINA s autormi). V priečinku `latest/` sú len regióny Euregia (EUREGIO, AT-07, IT-32-BZ,
+  IT-32-TN), AT-02 nie – preto adresa podľa dátumu. Sezóna 2025/26: súbory 28. 11. 2025 – 1. 5. 2026, mimo nej
+  404 (API `api.avalanche.report/albina/api/bulletins/latest?region=AT-02` → 2. 5. 2026, samotné volania
+  `caaml/json` pre AT-02 vracajú prázdny zoznam). Zrkadlo všetkých služieb EAWS
+  `static.avalanche.report/eaws_bulletins/<dátum>/<dátum>-AT-02.json` (pyAvaCore) existuje tiež, ale celý
+  archív bol 7. 10. 2026 pregenerovaný (last-modified), preto berieme originál. Vlastný web LWD Kärnten
+  strojový výstup nemá (navigácia: info, standards, wetter-schneedecke, blog); starý zdroj
+  `avalanche-warnings.eu/public/kaernten/caaml` má expirovaný certifikát. Štajersko (dolná stanica Turrachbahn)
+  vydáva cez rakúsku platformu `static.lawinen-warnung.eu/bulletins/` (AT-03…AT-06, `latest/` má len SI a
+  GEOSPHERE), licencia neoverená – nepoužité.
+- **Licencia:** stránka Open Data avalanche.report (`/content/more/open-data/en.html`): „All data provided,
+  such as the avalanche report, weather station data, etc., are licensed under CC BY 4.0“. Správa Kärnten je
+  súčasťou tohto spoločného reportu, preto ide na stránku s uvedením zdroja (pätička: Lawinenwarndienst
+  Kärnten v spoločnej správe lawinen.report, CC BY 4.0). Písomný súhlas LWD (žiadosť majiteľa z 16. 10.)
+  ostáva relevantný len pre staničné SMET súbory (§3.5).
+- **Časy:** vydanie o 17:00 miestneho času na nasledujúci deň s platnosťou 17:00 → 17:00 (`validTime`
+  16:00Z v zime, 15:00Z v letnom čase), o 8:00 možná aktualizácia, ktorá prepíše ten istý súbor
+  (`publicationTime` 07:00Z, napr. 1. 12. 2025 a 25. 1. 2026; príručka avalanche.report). Pre deň lanoviek D sa
+  skúša súbor D, potom D−1 (po 16:00 je D zajtrajšok a jeho správa vychádza až o 17:00; stránka vtedy napíše
+  „správa na D−1, platí do 17:00“); nič staršie, lebo správa, ktorá skončila včera, o dnešku nehovorí. 404 je
+  stav „bez správy“, nie chyba (bez opakovania); zlyhanie siete alebo neznámy tvar nechá stránku bez správy
+  s vetou pod nadpisom a predpoveď nestratí. CI o 16:13 UTC už vidí večerné vydanie; otvorená stránka sa
+  obnoví do hodiny a vezme aj rannú aktualizáciu.
+- **Regióny:** mikroregióny EAWS z `regions.avalanches.org/micro-regions/AT-02_micro-regions.geojson.json`
+  (polygóny s `start_date`/`end_date`; Kärnten prekreslené k 1. 10. 2022 a 1. 8. 2025), bod v polygóne pre
+  stanice lanoviek: Kaiserburgbahn II → AT-02-04-02 Nockberge Süd (Sonnwiesenbahn dole je v AT-02-04-01),
+  Falkertlift → AT-02-04-01 Nockberge Mitte, Kornockbahn → AT-02-04-01 (Turrachbahn dole → AT-06-18,
+  Štajersko), Kruckenlift → AT-02-05-02 Gurktaler Alpen Süd. Stránka berie región hornej stanice (tam sa
+  lyžuje). `npm run regions` (`scripts/avalanche-regions.ts`, cache 7 dní) to zopakuje pred sezónou a skončí
+  chybou, keď `avalancheRegion` v `src/config.ts` nesedí.
+- **Čo sa berie:** `dangerRatings[]` (`mainValue` low/moderate/considerable/high/very_high → 1–5;
+  `no_snow`/`no_rating` bez stupňa), `elevation.lowerBound`/`upperBound` (metre ako reťazec alebo
+  `treeline`), `validTimePeriod` all_day/earlier/later, `tendency[0].tendencyType`, `regions[].name`,
+  `publicationTime`, `validTime`. Texty (`highlights`, `comment`) sa neberú (rozhodnutie majiteľa; stránka na
+  správu odkazuje). Tvary zo sezóny 2025/26 (13 dní prezretých): jeden stupeň na celý deň; dva stupne s
+  hranicou 1800/1900 m; ráno/popoludní s hranicou lesa (25. 1. 2026); v apríli správa bez Nockberge Süd a
+  Gurktaler Alpen (región → null, karta „Lavínová správa pre túto oblasť nevyšla“). Fixtúry
+  `src/fixtures/avalanche/` sú tieto skutočné súbory orezané na bulletiny s našimi regiónmi.
+- **Zobrazenie (§4.6):** riadok pod hlavičkou karty (za značkou prašanu, pred dôvodmi): číslo vo farbách
+  stupnice EAWS (1 #ccff66, 2 #ffff00, 3 #ff9900, 4 #ff0000, 5 #800000, vždy s číslom) + slovenský názov
+  stupňa (nízke, mierne, zvýšené, vysoké, veľmi vysoké – slová stupnice HZS), „nad/pod 1800 m“, „nad/pod
+  hranicou lesa“, „ráno …; popoludní …“, „ďalší deň bez zmeny / stúpa / klesá“, názov regiónu; odkaz
+  „Lavínová správa“ na `lawinen.report/bulletin/<dátum>`; v riadku zdroja sekcie „lavínová správa dnes 8:00“;
+  bez správy jedna veta pod nadpisom a žiadny odkaz; odsek v „Ako sa počítajú percentá?“ a pätička so zdrojom
+  a licenciou. Tabuľky na 3 a 10 dní bez lavín – správa je na jeden deň, pre D+1 má len tendenciu.
+- **Snímka v6:** `avalanche: { date, publishedAtMs, validFromMs, validToMs, pageUrl, resorts: { <id>:
+  { regionId, regionName, ratings: [{ level, period, lower, upper }], maxLevel, noSnow, tendency } | null } }
+  | null`. Log predpovedí (§5.2) sa nemení, nesie len `snapshotVersion` 6.
+- **Testy:** adresa a poradie dní; parser na štyroch skutočných dňoch + syntetický `no_snow`/`no_rating` a
+  chybný tvar; snímka v6 a odmietnutie v5; generátor s podvrhnutým `fetch` (D → 404 → D−1; všetko 404 →
+  null; zlyhanie siete → null bez výnimky); stránka (riadok na každej karte, denný chod, región bez správy,
+  včerajšia správa po 16:00 s „platí do dnes 17:00“, bez správy jedna veta a bez odkazu, pätička, odkazy
+  len na povolené adresy).
+- **Limity:** stupeň platí pre voľný terén mimo zabezpečených zjazdoviek; na otvorenej zjazdovke rozhoduje
+  stredisko (stránka to píše). Jeden región na stredisko; Turracher Höhe má dolnú stanicu v Štajersku s inou
+  službou. Zdroj je tretia strana (Euregio) – pri zmene adresy alebo sady regiónov stačí `avalanche` v
+  `src/config.ts`.
+
 ## 5. Výsledky podľa predstihu
 
 ### 5.1 Krok 2 – backtest a baseline (4. 10. 2026)
@@ -933,6 +1006,10 @@ jedna korekcia; prah ≥ 50 cm má kalibrovaný BSS −0,15.
   modelu je neoverený predpoklad; nad 1 700 m model podhodnocuje (Villacher Alpe), čo brána rieši len
   pravdepodobnosťou. Sezónne termíny stredísk sú z jednej zimy.
 
+- Lavínový stupeň (§4.8) je prevzatý údaj na jeden deň pre mikroregión hornej stanice, nie predpoveď stránky;
+  o zjazdovkách nehovorí, mimo sezóny lavínovej služby (2025/26: 28. 11. – 1. 5.) chýba a medzi 16:00 a 17:00
+  (deň lanoviek = zajtra) je k dispozícii len dnešná správa.
+
 ## 7. Prekalibrovanie
 
 Po sezóne 2026/27: `npm run verify` nad `data/prospective/2026-27.jsonl` (§5.2) rozhodne, či koeficienty
@@ -954,4 +1031,5 @@ npm run verify            # po sezóne: data/prospective/<sezóna>.jsonl proti p
 npm run rules             # krok 6a: pravidlá stránky (dážď, nárazy, slnko) proti staniciam podľa predstihu → data/rules/{REPORT.md,rules-verification.json}
 npm run quality           # krok 6b/6c: teplota počas sneženia, vietor v okne, inverzie, oblak, dobrý deň; krivky pre stránku → data/quality/{REPORT.md,quality-verification.json,quality-model.json}; --only=snowtemp,gust,inversion,sunnytop,overcast,good,curves
 npm run cover             # krok 8: modelová výška snehu (ICON-D2, IFS) proti nameranej pokrývke → data/cover/{REPORT.md,cover-verification.json,cover-model.json}; vstup: npm run backtest:fetch -- --only=snow
+npm run regions           # krok 9: mikroregióny EAWS pre stanice lanoviek (regions.avalanches.org, cache 7 dní) proti avalancheRegion v src/config.ts; chyba pri nezhode
 ```

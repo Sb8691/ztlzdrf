@@ -1,7 +1,8 @@
 # TODO – ako pokračovať
 
-Stav k 16. 10. 2026: kroky 0–8 (8 = predpoklad snehu z modelovej pokrývky, 16. 10.) sú hotové. Stránka
-ukazuje kalibrované pravdepodobnosti, POWDER ALERT a očakávaný nový sneh, a bez pokrývky „Bez snehu“; CI
+Stav k 16. 10. 2026: kroky 0–9 (8 = predpoklad snehu z modelovej pokrývky, 9 = lavínový stupeň zo správy LWD
+Kärnten cez lawinen.report, oba 16. 10.) sú hotové. Stránka ukazuje kalibrované pravdepodobnosti, POWDER ALERT
+a očakávaný nový sneh, bez pokrývky „Bez snehu“ a na karte najbližšieho dňa lavínový stupeň regiónu; CI
 loguje predpovede od novembra. Rozhodujúci test modelu je sezóna 2026/27. Čísla, definície a
 rozhodnutia sú v [METODIKA.md](METODIKA.md), denník krokov v [README.md](README.md); tu je len to,
 čo treba urobiť a kedy.
@@ -10,7 +11,7 @@ rozhodnutia sú v [METODIKA.md](METODIKA.md), denník krokov v [README.md](READM
 
 1. Prečítať [METODIKA.md](METODIKA.md) (aspoň §1 definície, §2 denník rozhodnutí, §4.1 tvar modelu,
    §4.4 zapojenie, §4.6 zobrazenie, §6 limity, §7 prekalibrovanie) a tento súbor.
-2. `npm ci && npm run build && npm test && npm run check:scripts` – musí prejsť (62 testov).
+2. `npm ci && npm run build && npm test && npm run check:scripts` – musí prejsť (70 testov).
 3. Pracovný postup ostáva: krátky plán → „Áno“ → práca po malých krokoch, každý krok jeden commit →
    správa (výsledok jednou vetou, tabuľka s CI, čo je overené a čo predpoklad) → push až po schválení.
    Slovenčina s majiteľom; kód, komentáre a commity po anglicky. Každý podstatný krok dostane riadok v
@@ -18,9 +19,11 @@ rozhodnutia sú v [METODIKA.md](METODIKA.md), denník krokov v [README.md](READM
 
 ## Čaká na majiteľa
 
-- [ ] **LWD Kärnten** – list so žiadosťou o súhlas s nekomerčným použitím staníc Turracherhöhe 2900265 a
-      Falkert 2900240 (Abteilung 3, abt3.katastrophenschutz@ktn.gv.at). Kým nepríde, dáta sa používajú len
-      súkromne (`~/.cache/ztlzdrf/lwd-ktn/`), nie sú v gite a na stránke sa neuvádzajú.
+- [ ] **LWD Kärnten** – žiadosť o súhlas s nekomerčným použitím staníc Turracherhöhe 2900265 a Falkert 2900240
+      (Abteilung 3, abt3.katastrophenschutz@ktn.gv.at) majiteľ odoslal 16. 10. 2026, odpoveď čaká. Kým nepríde,
+      staničné dáta sa používajú len súkromne (`~/.cache/ztlzdrf/lwd-ktn/`), nie sú v gite a na stránke sa
+      neuvádzajú. Lavínová správa je iný prípad: od zimy 2025/26 vychádza v spoločnom systéme lawinen.report pod
+      CC BY 4.0 a na stránke už je (krok 9, METODIKA §4.8).
 - [ ] **Prah POWDER ALERT** p* = 0,20 (N = 4) je predvolená hodnota, nie meranie. Potvrdiť alebo zmeniť
       jedno číslo `alert.minProb` v `src/powder-model.ts` podľa rozhodovacej tabuľky v
       `data/model/REPORT.md` (p* = 1/(N + 1), N = koľko zbytočných ciest stojí za jeden zmeškaný powder deň).
@@ -30,6 +33,12 @@ rozhodnutia sú v [METODIKA.md](METODIKA.md), denník krokov v [README.md](READM
 
 ## Kalendár sezóny 2026/27
 
+- **Pred sezónou** – `npm run regions`: mikroregióny EAWS sa menia (polygóny majú dátumy platnosti), skript
+  skončí chybou, keď `avalancheRegion` v `src/config.ts` nesedí s hornou stanicou.
+- **Koniec novembra 2026 – prvá lavínová správa** (2025/26 vyšla 28. 11.): skontrolovať, že karty ukazujú
+  stupeň a odkaz „Lavínová správa“ a v riadku zdroja je „lavínová správa …“. Ak nie, overiť, či existuje
+  `https://static.avalanche.report/bulletins/<dátum>/<dátum>_AT-02_de_CAAMLv6.json`; pri zmene adresy alebo
+  sady regiónov stačí upraviť `avalanche` v `src/config.ts` (METODIKA §4.8).
 - **1. 11. 2026 – CI štartuje** (`.github/workflows/ski.yml`, 04:13 / 10:13 / 16:13 UTC, len nov–apr).
   Po prvom behu skontrolovať: pribudol commit s `docs/` a `data/prospective/2026-27.jsonl`; riadok má
   `stations` (6 staníc) aj `members` (51 hodnôt na deň D+1 a ďalej); ~3 riadky za deň, 17–24 kB na riadok.
@@ -73,10 +82,13 @@ rozhodnutia sú v [METODIKA.md](METODIKA.md), denník krokov v [README.md](READM
 ## Kde čo je
 
 - Stránka: `src/ski-core.js` (celý výpočet, bez importov, vkladá sa do stránky), `src/ski-ui.js`
-  (kreslenie), `src/ski-page.ts` (HTML, CSS, pätička), `src/config.ts` (strediská, horizonty, pravidlá),
+  (kreslenie), `src/ski-page.ts` (HTML, CSS, pätička), `src/config.ts` (strediská, región lavínovej správy, horizonty, pravidlá, zdroj správy),
   koeficienty `src/powder-model.ts` a `src/quality-model.ts` (kópie `data/model/powder-model.json` a
   `data/quality/quality-model.json`, testy rovnosti), generátor `src/ski.ts`, log `src/prospective.ts`.
 - Offline skripty `scripts/*.ts`, knižnica `scripts/lib/`; príkazy v METODIKA §8 a v README.
+- Lavíny: `avalancheUrl` / `avalancheDates` / `parseAvalanche` v `src/ski-core.js`, `fetchAvalanche` v
+  `src/ski.ts`, riadok karty v `src/ski-ui.js`, fixtúry zo skutočných správ 2025/26 v `src/fixtures/avalanche/`,
+  regióny `scripts/avalanche-regions.ts` (`npm run regions`).
 - Výsledky: `data/truth`, `data/backtest`, `data/model`, `data/rules`, `data/quality`,
   `data/prospective` (každý má `REPORT.md`).
 - Surové dáta: `~/.cache/ztlzdrf` (presmerovateľné cez `ZTLZDRF_CACHE`), mimo gitu.

@@ -22,6 +22,10 @@ const STAGE_WORD = { alert: "POWDER ALERT", pozor: "POWDER POZOR", vyhlad: "POWD
 const CONCERN_FROM = 0.2;
 /** The 3-day table names the powder chance from here on, so dry days stay quiet. */
 const POWDER_LINE_FROM = 0.05;
+/** EAWS danger levels in Slovak, the words the Slovak mountain rescue service uses for the same scale. */
+const LEVEL_WORD = { 1: "nízke", 2: "mierne", 3: "zvýšené", 4: "vysoké", 5: "veľmi vysoké" };
+/** The bulletin's tendency for the day after it. */
+const TENDENCY_WORD = { steady: "ďalší deň bez zmeny", increasing: "ďalší deň stúpa", decreasing: "ďalší deň klesá" };
 const NB = " ";
 
 function esc(s) {
@@ -145,11 +149,67 @@ function powderRows(day, cfg) {
   return rows;
 }
 
-function links(resort) {
+function links(resort, ava) {
+  const bulletin = ava ? `<a href="${esc(ava.pageUrl)}" target="_blank" rel="noopener">Lavínová správa</a>` : "";
   return (
     `<p class="sk-links"><a href="${esc(resort.links.snowReport)}" target="_blank" rel="noopener">Snehová správa</a>` +
-    `<a href="${esc(resort.links.webcam)}" target="_blank" rel="noopener">Webkamera</a></p>`
+    `<a href="${esc(resort.links.webcam)}" target="_blank" rel="noopener">Webkamera</a>${bulletin}</p>`
   );
+}
+
+/** The danger level in its EAWS colour; the number is always there, never colour alone. */
+function levelMark(level) {
+  return `<b class="sk-lvl sk-lvl${level}">${level}</b>`;
+}
+
+/** "1800 m" or "hranicou lesa", after "nad" / "pod". */
+function boundText(bound) {
+  return bound === "treeline" ? "hranicou lesa" : `${num(Number(bound))}${NB}m`;
+}
+
+/**
+ * The danger ratings of one region as one phrase: "3 zvýšené lavínové nebezpečenstvo nad 1800 m,
+ * 1 nízke pod 1800 m"; with a daily course "ráno …; popoludní …". Within a part of the day the higher
+ * level (the one above the bound) comes first.
+ */
+function ratingsText(ratings) {
+  const parts = [];
+  for (const period of ["all_day", "earlier", "later"]) {
+    const rs = ratings.filter((r) => r.period === period).sort((a, b) => b.level - a.level);
+    if (!rs.length) continue;
+    const prefix = period === "earlier" ? "ráno " : period === "later" ? "popoludní " : "";
+    const items = rs.map((r, i) => {
+      const where = r.lower && r.upper ? ` medzi ${boundText(r.lower)} a ${boundText(r.upper)}` : r.lower ? ` nad ${boundText(r.lower)}` : r.upper ? ` pod ${boundText(r.upper)}` : "";
+      return `${levelMark(r.level)} ${LEVEL_WORD[r.level]}${!parts.length && i === 0 ? " lavínové nebezpečenstvo" : ""}${where}`;
+    });
+    parts.push(prefix + items.join(", "));
+  }
+  return parts.join("; ");
+}
+
+/**
+ * The avalanche line of a card (step 9): the danger ratings of the resort's region, the tendency, the
+ * region's name, and a note when the bulletin in hand is for the day before the lift day (tomorrow's
+ * edition is not out before 17:00). Nothing without a bulletin at all; a muted line when the bulletin
+ * does not name the region (spring).
+ */
+function avalancheLine(ava, resort, liftDate, nowMs, cfg) {
+  if (!ava) return "";
+  const e = ava.resorts[resort.id];
+  if (!e) return `<p class="sk-ava"><span class="sk-none">Lavínová správa pre túto oblasť nevyšla.</span></p>`;
+  const bits = [];
+  if (e.maxLevel === null) bits.push(e.noSnow ? "lavínová správa bez stupňa (bez snehu)" : "lavínová správa bez stupňa");
+  else bits.push(ratingsText(e.ratings));
+  if (e.tendency) bits.push(TENDENCY_WORD[e.tendency]);
+  bits.push(esc(e.regionName));
+  if (ava.date !== liftDate) bits.push(`správa na ${esc(dayLabel(ava.date))}${ava.validToMs ? `, platí do ${esc(clockLabel(ava.validToMs, nowMs, cfg.timezone))}` : ""}`);
+  return `<p class="sk-ava">${bits.join(" · ")}</p>`;
+}
+
+/** " · lavínová správa dnes 8:00" for the section's source line, "" without a bulletin. */
+function avalancheSource(ava, nowMs, cfg) {
+  if (!ava || !ava.publishedAtMs) return "";
+  return ` · lavínová správa ${esc(clockLabel(ava.publishedAtMs, nowMs, cfg.timezone))}`;
 }
 
 /** The snow-cover gate (step 8): true when the cover probability is known and below the configured
@@ -181,7 +241,7 @@ function seasonNote(resort, isoDate) {
 // 1. The next lift day
 // ---------------------------------------------------------------------------
 
-function nowCard(resort, day, cfg) {
+function nowCard(resort, day, cfg, ava, nowMs) {
   const rows = [];
   const plain = (k, v) => rows.push([k, esc(v)]);
   rows.push(...powderRows(day, cfg));
@@ -202,9 +262,10 @@ function nowCard(resort, day, cfg) {
     `<article class="sk-card">` +
     `<header><h3>${esc(resort.name)}</h3>${gated ? NO_SNOW_MARK : shareMark(day)}</header>` +
     flag +
+    avalancheLine(ava, resort, day.date, nowMs, cfg) +
     `<p class="sk-why">${esc(why)}</p>` +
     `<dl>${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join("")}</dl>` +
-    links(resort) +
+    links(resort, ava) +
     `</article>`
   );
 }
@@ -389,7 +450,11 @@ function method(cfg) {
   const r = cfg.rules;
   const p = cfg.powder;
   const st = cfg.quality.snowTemp;
+  const a = cfg.avalanche;
   const alertDays = p.stages[0].maxDayOffset + 1;
+  const avalanche = a
+    ? `<p><b>Lavínové nebezpečenstvo</b> je stupeň 1 až 5 z lavínovej správy, ktorú ${esc(a.provider.name)} vydáva od zimy 2025/26 v spoločnom systéme ${esc(a.site.name)}: o 17:00 na nasledujúci deň, ráno o 8:00 môže prísť aktualizácia. Stredisko dostane stupeň mikroregiónu, v ktorom leží jeho horná stanica. „Nad“ a „pod“ je výška, od ktorej stupeň platí, „ráno“ a „popoludní“ jeho zmena počas dňa, „ďalší deň“ tendencia na deň po správe. Stupeň hovorí o voľnom teréne mimo zabezpečených zjazdoviek; na otvorenej zjazdovke zodpovedá za bezpečnosť stredisko, pri vyšších stupňoch však bývajú zatvorené lanovky, zjazdovky aj cesty.</p>`
+    : "";
   return (
     `<details class="sk-method"><summary>Ako sa počítajú percentá?</summary>` +
     `<p>Hodnotí sa čas prevádzky lanoviek ${cfg.liftOpenHour}:00–${cfg.liftCloseHour}:00, pri každom stredisku pri najnižšej a najvyššej stanici lanovky. Deň je:</p>` +
@@ -399,6 +464,7 @@ function method(cfg) {
     `<li><b>dobrý</b>, keď nič z toho.</li>` +
     `</ul>` +
     `<p><b>Bez snehu</b> znamená, že podľa modelu ICON-D2 nie je pri hornej stanici pokrývka aspoň ${cfg.cover.coverCm}${NB}cm, takže sa deň nehodnotí. Pravdepodobnosť pokrývky vychádza z toho, ako často stanice v okolí pri danej modelovej výške snehu naozaj mali aspoň ${cfg.cover.coverCm}${NB}cm (štyri zimy, 17 staníc); hodnotí sa od ${pct(cfg.cover.gate.minProb)}. Ďalšie dni berú dnešnú výšku snehu z ICON-D2 a pridajú k nej zmenu podľa svojho modelu. Bežné termíny sezóny stredísk stránka len poznamená; či lanovky bežia, povie snehová správa.</p>` +
+    avalanche +
     `<p>Na najbližší deň a na tri dni sú pruh a percentá <b>pravdepodobnosti</b>. Pre každé pravidlo sa z predpovedaného dažďa, nárazu a slnka zoberie, ako často sa pri takej predpovedi naozaj splnilo – na šiestich horských staniciach GeoSphere Austria v okolí za štyri zimy. „Dobré“ je pravdepodobnosť, že sa nesplní žiadne (mäkký sneh sa berie z teploty priamo), „zlé“, že dole naprší aspoň ${num(r.rainBadMm, 1)}${NB}mm alebo zafúka nad ${r.gustBadKmh}${NB}km/h. Samotné áno/nie podľa predpovede pri overení neobstálo: dážď hlásilo viac než dvakrát častejšie, než prišiel, a vietor na vrcholoch z modelu na tri dni nesedí vôbec. Od štvrtého dňa tieto pravdepodobnosti strácajú hodnotu.</p>` +
     `<p><b>Prašan</b> je aspoň ${p.thresholdCm}${NB}cm nového snehu pri hornej stanici od ${p.windowHour}:00 predošlého dňa do ${p.windowHour}:00. Percento vychádza z predpovedaného úhrnu a z toho, ako sa predpovede s rovnakým predstihom trafili v minulých zimách na staniciach, kde sa nový sneh meria. <b>POWDER ALERT</b> svieti od ${Math.round(p.alert.minProb * 100)}${NB}% na prvé ${alertDays} dni, <b>POWDER POZOR</b> ďalej. „Okolo“ je stredná hodnota, „až“ hodnota, pod ktorou ostane deväť z desiatich prípadov. Suchý, vlhší alebo mokrý sneh je podľa teploty počas sneženia (do ${num(st.dryC)}${NB}°C, do ${num(st.wetC)}${NB}°C, teplejšie). Či prašan rozfúka vietor, sa predpovedať nedá. Nový sneh za 3 dni je súčet za ${r.freshSnowHours}${NB}h pred otvorením a počas dňa.</p>` +
     `<p>Či padá dážď alebo sneh, určuje teplota v danej výške: do ${num(r.snowMaxTempC)}${NB}°C sneh, nad ňou dážď.</p>` +
@@ -425,10 +491,10 @@ function renderSki(snapshot, nowMs) {
 
   return (
     (stale ? `<p class="sk-warn">Tieto dáta sú staršie a začínajú dňom, ktorý už je za nami. Obnovte predpoveď.</p>` : "") +
-    `<section class="sk-section"><h2>${esc(longDayLabel(H.now.dates[0]))}</h2><p class="sk-src">Najbližší lyžiarsky deň · ${esc(source(H.now))}</p>` +
-    `<p class="sk-note">Pruh a percento sú pravdepodobnosť, že deň bude dobrý, ujde alebo zlý; pod názvom strediska je, čo ho môže pokaziť. „Bez snehu“: model nevidí hore pokrývku aspoň ${cfg.cover.coverCm}${NB}cm.</p>` +
+    `<section class="sk-section"><h2>${esc(longDayLabel(H.now.dates[0]))}</h2><p class="sk-src">Najbližší lyžiarsky deň · ${esc(source(H.now))}${avalancheSource(snapshot.avalanche, nowMs, cfg)}</p>` +
+    `<p class="sk-note">Pruh a percento sú pravdepodobnosť, že deň bude dobrý, ujde alebo zlý; pod názvom strediska je, čo ho môže pokaziť. „Bez snehu“: model nevidí hore pokrývku aspoň ${cfg.cover.coverCm}${NB}cm.${snapshot.avalanche ? "" : " Lavínová správa pre tento deň nie je k dispozícii."}</p>` +
     LEGEND +
-    `<div class="sk-cards">${cfg.resorts.map((r, i) => nowCard(r, now[i].days[0], cfg)).join("")}</div></section>` +
+    `<div class="sk-cards">${cfg.resorts.map((r, i) => nowCard(r, now[i].days[0], cfg, snapshot.avalanche, nowMs)).join("")}</div></section>` +
     `<section class="sk-section"><h2>Najbližšie ${H.short.dates.length} dni</h2><p class="sk-src">${esc(source(H.short))}</p>` +
     `<p class="sk-note">Pod pruhom: teplota pri hornej stanici počas prevádzky, šanca na prašan, nový sneh za 3 dni a silnejší vietor.</p>` +
     dayTable(H.short.dates, short, cfg, shortCell, `Pravdepodobnosti dobrého, priemerného a zlého dňa na najbližšie ${H.short.dates.length} dni`) +
@@ -459,6 +525,14 @@ async function getJson(url) {
   const json = await res.json();
   if (json && json.error) throw new Error(json.reason || "chyba Open-Meteo");
   return json;
+}
+
+/** fetch + JSON for a file that may simply not exist: null on 404, an error on anything else. */
+async function getJsonOrNull(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 function paint() {
@@ -495,7 +569,20 @@ async function refresh() {
       }
       responses[key] = { data, meta };
     }
-    const next = buildSkiSnapshot(responses, cfg, Date.now());
+    // The bulletin is an extra: a missing file is a normal state, and a failure never fails the refresh.
+    let avalanche = null;
+    try {
+      for (const date of avalancheDates(first)) {
+        const json = await getJsonOrNull(avalancheUrl(cfg, date));
+        if (json) {
+          avalanche = parseAvalanche(json, cfg, date);
+          break;
+        }
+      }
+    } catch {
+      avalanche = null;
+    }
+    const next = buildSkiSnapshot(responses, cfg, Date.now(), avalanche);
     if (seq !== state.seq) return;
     state.snapshot = next;
     state.error = null;

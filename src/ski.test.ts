@@ -7,10 +7,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SKI_CONFIG } from "./config.js";
 import { clientBundle, clientRender, renderSkiPage } from "./ski-page.js";
-import { readSnapshot } from "./ski.js";
+import { fetchAvalanche, readSnapshot } from "./ski.js";
 import {
   HOUR_MS,
   addDays,
+  avalancheDates,
+  avalancheUrl,
   buildSkiSnapshot,
   curveProb,
   dayQuality,
@@ -22,6 +24,7 @@ import {
   localMidnightMs,
   localTimeMs,
   metaUrl,
+  parseAvalanche,
   parsePoints,
   percentile,
   powderLawAt,
@@ -398,9 +401,9 @@ test("POWDER_SNEH: stupeň podľa poradia dňa, značka ALERT od prahu p* = 1 / 
   assert.deepEqual(stages, ["alert", "alert", "pozor"]);
 });
 
-test("snímka v5: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
+test("snímka v6: powderSnow na deterministických dňoch, ansámbel bez zákona, konfigurácia sedí s fitom", () => {
   const snap = snapshotFor();
-  assert.equal(snap.version, 5);
+  assert.equal(snap.version, 6);
   assert.equal(snap.horizons.short.powderLaw, "ecmwf_ifs");
   assert.equal(snap.horizons.now.powderLaw, "icon_d2");
   assert.equal(snap.horizons.long.powderLaw, null);
@@ -518,8 +521,8 @@ test("kvalita dňa: teplota počas sneženia s korekciou modelu, pásma, náraz 
 // ---------------------------------------------------------------------------
 
 type HorizonKey = "now" | "short" | "long";
-/** A whole snapshot as the generator would build it at 10:00 on `day`, every horizon from `fill` unless `perHorizon` names its own. */
-function snapshotFor(fill: Fill = () => ({}), fetchedAtMs?: number, day = DAY, perHorizon: Partial<Record<HorizonKey, Fill>> = {}) {
+/** A whole snapshot as the generator would build it at 10:00 on `day`, every horizon from `fill` unless `perHorizon` names its own; without a bulletin unless one is given. */
+function snapshotFor(fill: Fill = () => ({}), fetchedAtMs?: number, day = DAY, perHorizon: Partial<Record<HorizonKey, Fill>> = {}, avalanche: Avalanche | null = null) {
   const range = (key: HorizonKey) => requestDates(cfg, key, day);
   const data = (key: HorizonKey, members = 1) => response(range(key).startDate, range(key).endDate, perHorizon[key] ?? fill, members);
   return buildSkiSnapshot(
@@ -529,7 +532,8 @@ function snapshotFor(fill: Fill = () => ({}), fetchedAtMs?: number, day = DAY, p
       long: { data: data("long", cfg.horizons.long.expectedMembers), meta: null },
     },
     cfg,
-    fetchedAtMs ?? at(10, day)
+    fetchedAtMs ?? at(10, day),
+    avalanche
   );
 }
 
@@ -590,7 +594,7 @@ test("stránka: tri časti, štyri karty, odkazy len na strediská a zdroj dát"
   assert.equal([...html.matchAll(/class="sk-card"/g)].length, cfg.resorts.length);
   assert.equal([...html.matchAll(/class="sk-hourly"/g)].length, cfg.resorts.length);
   assert.equal([...html.matchAll(/<tr><th scope="row">/g)].length, cfg.horizons.short.days + cfg.horizons.long.days);
-  const allowed = new Set(["https://open-meteo.com/", "https://data.hub.geosphere.at/", "https://ehyd.gv.at/", ...cfg.resorts.flatMap((r) => [r.links.snowReport, r.links.webcam])]);
+  const allowed = new Set(["https://open-meteo.com/", "https://data.hub.geosphere.at/", "https://ehyd.gv.at/", cfg.avalanche.provider.url, cfg.avalanche.site.url, ...cfg.resorts.flatMap((r) => [r.links.snowReport, r.links.webcam])]);
   const markup = page.replace(/<script type="module">[\s\S]*?<\/script>/, "");
   const hrefs = [...markup.matchAll(/href="([^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, "&"));
   for (const href of hrefs) assert.ok(allowed.has(href), `neočakávaný odkaz ${href}`);
@@ -644,6 +648,151 @@ test("stránka: bez pokrývky „Bez snehu“ namiesto pruhu, sezóna len ako po
   assert.match(short, /Výhľad na 9 dní/);
   assert.match(short, /Posledný deň pribudne s novým behom modelu\./);
   assert.doesNotMatch(mainOf(renderSkiPage(snapshotFor())), /Posledný deň pribudne/);
+});
+
+// ---------------------------------------------------------------------------
+// The avalanche bulletin (step 9)
+// ---------------------------------------------------------------------------
+
+type Avalanche = ReturnType<typeof parseAvalanche>;
+type Rating = { level: number; period: string; lower: string | null; upper: string | null };
+type Entry = { regionId: string; regionName: string; ratings: Rating[]; maxLevel: number | null; noSnow: boolean; tendency: string | null } | null;
+
+/** Real Kärnten bulletins of the 2025/26 season (CAAML v6, German, avalanche.report), cut to the
+ * bulletins that name the resorts' regions; dates chosen for the shapes they carry. */
+function bulletin(date: string): unknown {
+  return JSON.parse(readFileSync(new URL(`./fixtures/avalanche/${date}_AT-02_de.json`, import.meta.url), "utf8"));
+}
+const entry = (ava: Avalanche, id: string): Entry => ava.resorts[id] as Entry;
+
+test("lavíny: adresa správy podľa dňa; najprv deň lanoviek, potom deň pred ním, nič staršie", () => {
+  assert.equal(avalancheUrl(cfg, "2026-02-10"), "https://static.avalanche.report/bulletins/2026-02-10/2026-02-10_AT-02_de_CAAMLv6.json");
+  assert.deepEqual(avalancheDates("2027-01-01"), ["2027-01-01", "2026-12-31"]);
+  for (const r of cfg.resorts) assert.match(r.avalancheRegion, /^AT-02-\d\d(-\d\d)?$/, r.name);
+});
+
+test("lavíny: stupne regiónu hornej stanice s výškou, denným chodom a tendenciou; región bez správy je null", () => {
+  // 10 Feb 2026, evening edition, two bulletins: Nockberge considerable above 1800 m, Gurktal moderate above 1900 m.
+  const feb = parseAvalanche(bulletin("2026-02-10"), cfg, "2026-02-10");
+  assert.equal(feb.date, "2026-02-10");
+  assert.equal(feb.pageUrl, "https://lawinen.report/bulletin/2026-02-10");
+  assert.equal(feb.publishedAtMs, Date.parse("2026-02-09T16:00:00Z"));
+  assert.equal(feb.validFromMs, Date.parse("2026-02-09T16:00:00Z"));
+  assert.equal(feb.validToMs, Date.parse("2026-02-10T16:00:00Z"));
+  assert.deepEqual(entry(feb, "falkert"), {
+    regionId: "AT-02-04-01",
+    regionName: "Nockberge Mitte",
+    ratings: [
+      { level: 1, period: "all_day", lower: null, upper: "1800" },
+      { level: 3, period: "all_day", lower: "1800", upper: null },
+    ],
+    maxLevel: 3,
+    noSnow: false,
+    tendency: "steady",
+  });
+  assert.equal(entry(feb, "turracher-hoehe")!.regionId, "AT-02-04-01");
+  assert.equal(entry(feb, "bad-kleinkirchheim")!.regionName, "Nockberge Süd");
+  assert.equal(entry(feb, "hochrindl")!.maxLevel, 2);
+  assert.deepEqual(entry(feb, "hochrindl")!.ratings.map((r) => [r.level, r.lower ?? r.upper]), [[1, "1900"], [2, "1900"]]);
+  // 25 Jan 2026, the 08:00 update: one bulletin for all three regions, rising in the afternoon above the treeline.
+  const jan = parseAvalanche(bulletin("2026-01-25"), cfg, "2026-01-25");
+  assert.equal(jan.publishedAtMs, Date.parse("2026-01-25T07:00:00Z"));
+  assert.deepEqual(entry(jan, "hochrindl")!.ratings, [
+    { level: 1, period: "earlier", lower: null, upper: null },
+    { level: 1, period: "later", lower: null, upper: "treeline" },
+    { level: 2, period: "later", lower: "treeline", upper: null },
+  ]);
+  assert.equal(entry(jan, "hochrindl")!.maxLevel, 2);
+  // 20 Apr 2026: only Nockberge Mitte still has a bulletin; summer time moves the validity to 15:00 UTC.
+  const apr = parseAvalanche(bulletin("2026-04-20"), cfg, "2026-04-20");
+  assert.equal(entry(apr, "falkert")!.tendency, "decreasing");
+  assert.equal(entry(apr, "bad-kleinkirchheim"), null);
+  assert.equal(entry(apr, "hochrindl"), null);
+  assert.equal(apr.validToMs, Date.parse("2026-04-20T15:00:00Z"));
+  // 29 Nov 2025, the first joint bulletin of Kärnten in the Euregio system.
+  assert.equal(entry(parseAvalanche(bulletin("2025-11-29"), cfg, "2025-11-29"), "turracher-hoehe")!.maxLevel, 1);
+  // Values without a level ("no_snow", "no_rating") carry none; a body without bulletins is an error, not a blank.
+  const odd = parseAvalanche({ bulletins: [{ regions: [{ regionID: "AT-02-04-01", name: "X" }], dangerRatings: [{ mainValue: "no_snow", validTimePeriod: "all_day" }, { mainValue: "no_rating" }] }] }, cfg, "2027-01-15");
+  assert.deepEqual(entry(odd, "falkert"), { regionId: "AT-02-04-01", regionName: "X", ratings: [], maxLevel: null, noSnow: true, tendency: null });
+  assert.equal(odd.publishedAtMs, null);
+  assert.throws(() => parseAvalanche({ foo: 1 }, cfg, "2027-01-15"), /bez zoznamu/);
+});
+
+test("lavíny: snímka v6 nesie správu alebo null; staršia snímka sa odmietne", () => {
+  assert.equal(snapshotFor().avalanche, null);
+  const feb = parseAvalanche(bulletin("2026-02-10"), cfg, "2026-02-10");
+  const snap = snapshotFor(() => ({}), undefined, "2026-02-10", {}, feb);
+  assert.equal(snap.version, 6);
+  assert.deepEqual(snap.avalanche, feb);
+  const dir = mkdtempSync(join(tmpdir(), "ztlzdrf-ski-"));
+  const path = join(dir, "ski.json");
+  writeFileSync(path, JSON.stringify({ ...snap, version: 5 }));
+  assert.equal(readSnapshot(path), null);
+});
+
+test("lavíny: generátor berie správu na deň lanoviek, inak včerajšiu; 404 je stav, zlyhanie siete necháva stránku bez správy", async () => {
+  const real = globalThis.fetch;
+  const calls: string[] = [];
+  const stub = (handler: (url: string) => Response) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      calls.push(url);
+      return handler(url);
+    }) as typeof fetch;
+  };
+  const notFound = () => new Response("", { status: 404, statusText: "Not Found" });
+  try {
+    stub((url) => (url.includes("/2027-01-15/") ? notFound() : new Response(JSON.stringify(bulletin("2026-02-10")), { status: 200, headers: { "content-type": "application/json" } })));
+    const ava = await fetchAvalanche(cfg, "2027-01-15");
+    assert.equal(ava!.date, "2027-01-14");
+    assert.equal(entry(ava!, "falkert")!.maxLevel, 3);
+    assert.deepEqual(calls, [avalancheUrl(cfg, "2027-01-15"), avalancheUrl(cfg, "2027-01-14")]);
+    stub(notFound);
+    assert.equal(await fetchAvalanche(cfg, "2027-01-15"), null);
+    stub(() => {
+      throw new TypeError("fetch failed");
+    });
+    assert.equal(await fetchAvalanche(cfg, "2027-01-15"), null);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test("stránka: lavínový stupeň na karte s výškou, denným chodom a tendenciou, odkaz na správu; bez správy jedna veta", () => {
+  const render = clientRender();
+  const feb = parseAvalanche(bulletin("2026-02-10"), cfg, "2026-02-10");
+  const page = renderSkiPage(snapshotFor(() => ({}), undefined, "2026-02-10", {}, feb));
+  const html = mainOf(page);
+  assert.equal([...html.matchAll(/class="sk-ava"/g)].length, cfg.resorts.length);
+  assert.match(html, /<p class="sk-ava"><b class="sk-lvl sk-lvl3">3<\/b> zvýšené lavínové nebezpečenstvo nad 1800\u00a0m, <b class="sk-lvl sk-lvl1">1<\/b> nízke pod 1800\u00a0m · ďalší deň bez zmeny · Nockberge Mitte<\/p>/);
+  assert.match(html, /<b class="sk-lvl sk-lvl2">2<\/b> mierne lavínové nebezpečenstvo nad 1900\u00a0m, <b class="sk-lvl sk-lvl1">1<\/b> nízke pod 1900\u00a0m · ďalší deň bez zmeny · Gurktaler Alpen Süd/);
+  assert.equal([...html.matchAll(/href="https:\/\/lawinen\.report\/bulletin\/2026-02-10"/g)].length, cfg.resorts.length);
+  assert.match(html, /lavínová správa včera 17:00/);
+  assert.doesNotMatch(html, /nie je k dispozícii/);
+  // The method text and the footer name the source and its licence.
+  assert.match(html, /<b>Lavínové nebezpečenstvo<\/b> je stupeň 1 až 5/);
+  assert.match(page, /<a href="https:\/\/lawinenwarndienst\.ktn\.gv\.at\/" target="_blank" rel="noopener">Lawinenwarndienst Kärnten<\/a> v spoločnej správe <a href="https:\/\/lawinen\.report\/" target="_blank" rel="noopener">lawinen\.report<\/a> \(CC BY 4\.0\)/);
+  // A daily course: morning, then afternoon with the treeline.
+  const jan = parseAvalanche(bulletin("2026-01-25"), cfg, "2026-01-25");
+  const janHtml = render.renderSki(snapshotFor(() => ({}), undefined, "2026-01-25", {}, jan), at(10, "2026-01-25"));
+  assert.match(janHtml, /ráno <b class="sk-lvl sk-lvl1">1<\/b> nízke lavínové nebezpečenstvo; popoludní <b class="sk-lvl sk-lvl2">2<\/b> mierne nad hranicou lesa, <b class="sk-lvl sk-lvl1">1<\/b> nízke pod hranicou lesa · ďalší deň bez zmeny/);
+  // Spring: a region the bulletin no longer names gets a muted line, the others their level.
+  const apr = parseAvalanche(bulletin("2026-04-20"), cfg, "2026-04-20");
+  const aprHtml = render.renderSki(snapshotFor(() => ({}), undefined, "2026-04-20", {}, apr), at(10, "2026-04-20"));
+  assert.equal([...aprHtml.matchAll(/Lavínová správa pre túto oblasť nevyšla\./g)].length, 2);
+  assert.match(aprHtml, /<b class="sk-lvl sk-lvl1">1<\/b> nízke lavínové nebezpečenstvo · ďalší deň klesá · Nockberge Mitte/);
+  // After the lifts close the lift day is tomorrow, whose bulletin is not out before 17:00: today's is shown as such.
+  const today = parseAvalanche({ bulletins: [{ regions: cfg.resorts.map((r) => ({ regionID: r.avalancheRegion, name: "R" })), dangerRatings: [{ mainValue: "moderate", validTimePeriod: "all_day" }], publicationTime: "2026-02-08T16:00:00Z", validTime: { startTime: "2026-02-08T16:00:00Z", endTime: "2026-02-09T16:00:00Z" }, tendency: [{ tendencyType: "increasing" }] }] }, cfg, "2026-02-09");
+  const evening = at(16, "2026-02-09") + 30 * 60_000;
+  const snap = snapshotFor(() => ({}), evening, "2026-02-10", {}, today);
+  assert.equal(snap.firstDate, "2026-02-10");
+  const lateHtml = render.renderSki(snap, evening);
+  assert.match(lateHtml, /<b class="sk-lvl sk-lvl2">2<\/b> mierne lavínové nebezpečenstvo · ďalší deň stúpa · R · správa na \S+ 9\.\u00a02\., platí do dnes 17:00<\/p>/);
+  // No bulletin at all: no line on the cards, no bulletin link, one sentence under the heading.
+  const none = mainOf(renderSkiPage(snapshotFor()));
+  assert.doesNotMatch(none, /class="sk-ava"/);
+  assert.doesNotMatch(none, /lawinen\.report\/bulletin/);
+  assert.equal([...none.matchAll(/Lavínová správa pre tento deň nie je k dispozícii\./g)].length, 1);
 });
 
 test("vložená snímka sa dá prečítať späť a vložený kód je bez import/export", () => {

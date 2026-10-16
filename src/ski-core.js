@@ -868,6 +868,107 @@ export function summarizeEnsemble(points, cfg, dates, anchors = null) {
 }
 
 // ---------------------------------------------------------------------------
+// The avalanche bulletin (step 9, METODIKA §4.8)
+// ---------------------------------------------------------------------------
+
+/** EAWS danger levels as CAAML v6 names them. Anything else ("no_snow", "no_rating") carries no level. */
+export const AVALANCHE_LEVELS = { low: 1, moderate: 2, considerable: 3, high: 4, very_high: 5 };
+
+/** The CAAML v6 JSON of the bulletin whose main day is `date` - its folder on the open-data host. */
+export function avalancheUrl(cfg, date) {
+  const a = cfg.avalanche;
+  return `${a.base}/${date}/${date}_${a.set}_${a.lang}_CAAMLv6.json`;
+}
+
+/**
+ * Which bulletin days to try for a lift day, in order: the day itself (its bulletin comes out the
+ * evening before, around 17:00), else the day before - still valid until 17:00 when the lift day is
+ * tomorrow and tomorrow's edition is not out yet. Nothing older: a bulletin that ended yesterday
+ * says nothing about today.
+ */
+export function avalancheDates(firstDate) {
+  return [firstDate, addDays(firstDate, -1)];
+}
+
+function isoMs(s) {
+  const ms = typeof s === "string" ? Date.parse(s) : NaN;
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** An elevation bound as the bulletin writes it: metres as a string, or "treeline"; else null. */
+function bound(v) {
+  if (v === undefined || v === null) return null;
+  return v === "treeline" ? "treeline" : /^\d+$/.test(String(v)) ? String(v) : null;
+}
+
+/** One danger rating as the page needs it: level, part of the day, and the elevation it holds from
+ * (`lower`, "above") or to (`upper`, "below"). Null for a value without a level. */
+function parseRating(r) {
+  const level = r && AVALANCHE_LEVELS[r.mainValue];
+  if (!level) return null;
+  const e = r.elevation || {};
+  return {
+    level,
+    period: r.validTimePeriod === "earlier" || r.validTimePeriod === "later" ? r.validTimePeriod : "all_day",
+    lower: bound(e.lowerBound),
+    upper: bound(e.upperBound),
+  };
+}
+
+/**
+ * The bulletin of `date` reduced to one entry per resort: the danger ratings of the micro-region its
+ * top station lies in (cfg.resorts[].avalancheRegion), the highest of them, and the tendency for the
+ * day after. A resort whose region no bulletin names gets null - in spring the service drops regions
+ * without snow. Texts are not kept: the page shows levels, and links to the bulletin for the rest.
+ * Publication and validity are those of the bulletins used (the file's when none applies).
+ */
+export function parseAvalanche(json, cfg, date) {
+  /** @type {Record<string, { regionId: string, regionName: string, ratings: { level: number, period: string, lower: string | null, upper: string | null }[], maxLevel: number | null, noSnow: boolean, tendency: string | null } | null>} */
+  const resorts = {};
+  const list = json && Array.isArray(json.bulletins) ? json.bulletins : null;
+  if (!list) throw new Error("Lavínová správa: odpoveď bez zoznamu bulletinov");
+  const names = (b) => (Array.isArray(b.regions) ? b.regions.filter((r) => r && typeof r.regionID === "string") : []);
+  const used = new Set();
+  for (const resort of cfg.resorts) {
+    const b = list.find((x) => x && names(x).some((r) => r.regionID === resort.avalancheRegion));
+    if (!b) {
+      resorts[resort.id] = null;
+      continue;
+    }
+    used.add(b);
+    const region = names(b).find((r) => r.regionID === resort.avalancheRegion);
+    const raw = Array.isArray(b.dangerRatings) ? b.dangerRatings : [];
+    const ratings = raw.map(parseRating).filter(Boolean);
+    const t = Array.isArray(b.tendency) && b.tendency[0] ? b.tendency[0].tendencyType : null;
+    resorts[resort.id] = {
+      regionId: resort.avalancheRegion,
+      regionName: typeof region.name === "string" && region.name ? region.name : resort.avalancheRegion,
+      ratings,
+      maxLevel: ratings.length ? Math.max(...ratings.map((r) => r.level)) : null,
+      noSnow: raw.some((r) => r && r.mainValue === "no_snow"),
+      tendency: t === "increasing" || t === "decreasing" || t === "steady" ? t : null,
+    };
+  }
+  const pool = used.size ? [...used] : list;
+  const pick = (f, reduce) => {
+    const xs = pool.map(f).filter((v) => v !== null);
+    return xs.length ? reduce(...xs) : null;
+  };
+  return {
+    /** @type {string} */
+    date,
+    /** @type {number | null} */
+    publishedAtMs: pick((b) => isoMs(b.publicationTime), Math.max),
+    /** @type {number | null} */
+    validFromMs: pick((b) => isoMs(b.validTime && b.validTime.startTime), Math.min),
+    /** @type {number | null} */
+    validToMs: pick((b) => isoMs(b.validTime && b.validTime.endTime), Math.max),
+    pageUrl: `${cfg.avalanche.pageUrl}${date}`,
+    resorts,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The snapshot embedded in the page (and re-made in the browser on refresh)
 // ---------------------------------------------------------------------------
 
@@ -877,14 +978,21 @@ export function summarizeEnsemble(points, cfg, dates, anchors = null) {
  * probabilities, good-day probability, inversion, snow temperature, window gust) on deterministic days.
  * 4 (5 Oct 2026): softSnow on verdicts and goodPct / fairPct / badPct on deterministic days, the shares
  * the page draws instead of the yes/no verdict. 5 (16 Oct 2026): snowCover (model depth at the top,
- * probability of a cover) on every day; the ensemble horizon drops a trailing day it cannot judge. */
-export const SKI_SNAPSHOT_VERSION = 5;
+ * probability of a cover) on every day; the ensemble horizon drops a trailing day it cannot judge.
+ * 6 (16 Oct 2026): avalanche (the bulletin's day, its times and per-resort danger ratings, or null). */
+export const SKI_SNAPSHOT_VERSION = 6;
+
+/** @typedef {ReturnType<typeof parseAvalanche>} Avalanche */
 
 /**
  * Everything the page draws, derived once by whoever has the raw responses - the generator, or the
- * page after a refresh. `responses[key]` is `{ data, meta }` for each of HORIZON_KEYS.
+ * page after a refresh. `responses[key]` is `{ data, meta }` for each of HORIZON_KEYS; `avalanche`
+ * is parseAvalanche's result for the first lift day, or null when there is no bulletin (the fetch is
+ * the caller's, since a missing bulletin is a normal state and never fails a snapshot).
+ *
+ * @param {Avalanche | null} [avalanche]
  */
-export function buildSkiSnapshot(responses, cfg, fetchedAtMs) {
+export function buildSkiSnapshot(responses, cfg, fetchedAtMs, avalanche = null) {
   const firstDate = firstSkiDate(fetchedAtMs, cfg);
   /** @type {Record<string, { model: string, label: string, runAtMs: number | null, publishedAtMs: number | null, powderLaw: string | null, dates: string[], grids: object[], resorts: { id: string, days: Record<string, any>[], hourly?: object }[] }>} */
   const horizons = {};
@@ -924,5 +1032,5 @@ export function buildSkiSnapshot(responses, cfg, fetchedAtMs) {
       resorts,
     };
   }
-  return { version: SKI_SNAPSHOT_VERSION, fetchedAtMs, firstDate, config: cfg, horizons };
+  return { version: SKI_SNAPSHOT_VERSION, fetchedAtMs, firstDate, config: cfg, horizons, avalanche };
 }

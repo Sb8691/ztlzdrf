@@ -17,7 +17,8 @@
     "verify": "tsx scripts/verify-prospective.ts",
     "rules": "tsx scripts/rules-verify.ts",
     "quality": "tsx scripts/quality-verify.ts",
-    "cover": "tsx scripts/cover-verify.ts"
+    "cover": "tsx scripts/cover-verify.ts",
+    "regions": "tsx scripts/avalanche-regions.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

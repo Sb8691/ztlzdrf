@@ -1,0 +1,59 @@
+{
+ "bulletins": [
+  {
+   "bulletinID": "dbb2ded5-e812-4f6f-8d46-1e4ee1285e6b",
+   "publicationTime": "2026-04-19T15:00:00Z",
+   "validTime": {
+    "startTime": "2026-04-19T15:00:00Z",
+    "endTime": "2026-04-20T15:00:00Z"
+   },
+   "unscheduled": false,
+   "lang": "de",
+   "regions": [
+    {
+     "name": "Gurktaler Alpen Mitte",
+     "regionID": "AT-02-05-01"
+    },
+    {
+     "name": "Nockberge Mitte",
+     "regionID": "AT-02-04-01"
+    },
+    {
+     "name": "Goldeckgruppe",
+     "regionID": "AT-02-12-02"
+    },
+    {
+     "name": "Gailtaler Alpen Ost",
+     "regionID": "AT-02-12-01"
+    },
+    {
+     "name": "Karnische Alpen Oisternig",
+     "regionID": "AT-02-16"
+    },
+    {
+     "name": "Gailtaler Alpen Mitte",
+     "regionID": "AT-02-11"
+    }
+   ],
+   "dangerRatings": [
+    {
+     "mainValue": "low",
+     "validTimePeriod": "all_day"
+    }
+   ],
+   "tendency": [
+    {
+     "highlights": "Die Aktivität von nassen Lawinen nimmt mit dem Ende der Regenfälle ab.",
+     "tendencyType": "decreasing",
+     "validTime": {
+      "startTime": "2026-04-20T15:00:00Z",
+      "endTime": "2026-04-21T15:00:00Z"
+     }
+    }
+   ],
+   "avalancheActivity": {
+    "highlights": "Gebietsweise noch geringe Gefahr von nassen Lawinen. Es liegt an Nordhängen nur noch wenig Schnee."
+   }
+  }
+ ]
+}

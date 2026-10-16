@@ -15,6 +15,12 @@
  * winter info sheet; bergfex for Turracher Höhe; austria.info for the opening days of Falkert and
  * Hochrindl, Hochrindl's ski-school listing for its closing; Falkert's closing is assumed). The page
  * only notes it - whether lifts run depends on snow, which the snow-cover gate judges (step 8).
+ *
+ * `avalancheRegion` is the EAWS micro-region the top station lies in (step 9): the ski terrain is up
+ * there, and the Kärnten bulletin rates by micro-region. Found by point-in-polygon in the official
+ * region geodata (regions.avalanches.org, 2026-10-16; `npm run regions` repeats the check, since the
+ * polygons carry start and end dates). Turracher Höhe's valley station is already in Styria
+ * (AT-06-18, a different service on a different platform); the page follows the top station.
  */
 import { COVER_MODEL } from "./cover-model.js";
 import { POWDER_MODEL } from "./powder-model.js";
@@ -33,6 +39,8 @@ export const SKI_RESORTS = [
       webcam: "https://www.badkleinkirchheim.com/info-kontakt/webcams/",
     },
     season: { opens: "12-05", closes: "04-06" },
+    /** Nockberge Süd */
+    avalancheRegion: "AT-02-04-02",
   },
   {
     id: "falkert",
@@ -45,6 +53,8 @@ export const SKI_RESORTS = [
       webcam: "https://www.heidialm.at/de/service/wetter-und-webcams",
     },
     season: { opens: "12-13", closes: "04-06" },
+    /** Nockberge Mitte */
+    avalancheRegion: "AT-02-04-01",
   },
   {
     id: "turracher-hoehe",
@@ -57,6 +67,8 @@ export const SKI_RESORTS = [
       webcam: "https://www.turracherhoehe.at/de/aktuelles/webcams",
     },
     season: { opens: "11-22", closes: "04-26" },
+    /** Nockberge Mitte (Kornock); the Turrachbahn valley station is in Styria's AT-06-18 */
+    avalancheRegion: "AT-02-04-01",
   },
   {
     id: "hochrindl",
@@ -69,6 +81,8 @@ export const SKI_RESORTS = [
       webcam: "https://www.hochrindl.at/webcams/",
     },
     season: { opens: "12-06", closes: "03-15" },
+    /** Gurktaler Alpen Süd */
+    avalancheRegion: "AT-02-05-02",
   },
 ];
 
@@ -138,6 +152,24 @@ export const SKI_CONFIG = {
   quality: QUALITY_MODEL,
   /** The snow-cover precondition: ICON-D2 depth at the top station, calibrated against measured depth (src/cover-model.ts, METODIKA §4.7). */
   cover: COVER_MODEL,
+  /**
+   * The avalanche bulletin (step 9, METODIKA §4.8). Since winter 2025/26 Lawinenwarndienst Kärnten
+   * issues it in the Euregio system (avalanche.report / lawinen.report), which publishes every bulletin
+   * as CAAML v6 JSON under CC BY 4.0 with CORS open: one file per day and region set, the 17:00 edition
+   * covering the next day from 17:00 to 17:00, an 08:00 update replacing the same file. The service's
+   * own site has no machine-readable feed. Verified 2026-10-16; the 2025/26 files run 28 Nov - 1 May.
+   */
+  avalanche: {
+    /** `${base}/${date}/${date}_${set}_${lang}_CAAMLv6.json` */
+    base: "https://static.avalanche.report/bulletins",
+    set: "AT-02",
+    lang: "de",
+    /** The bulletin of a date for a reader, in the German interface: `${pageUrl}${date}`. */
+    pageUrl: "https://lawinen.report/bulletin/",
+    provider: { name: "Lawinenwarndienst Kärnten", url: "https://lawinenwarndienst.ktn.gv.at/" },
+    site: { name: "lawinen.report", url: "https://lawinen.report/" },
+    licence: "CC BY 4.0",
+  },
 };
 
 export type SkiConfig = typeof SKI_CONFIG;

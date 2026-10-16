@@ -1,0 +1,97 @@
+{
+ "bulletins": [
+  {
+   "bulletinID": "26bdc5af-a7b9-45f1-be19-058f7b8a29e0",
+   "publicationTime": "2026-01-25T07:00:00Z",
+   "validTime": {
+    "startTime": "2026-01-24T16:00:00Z",
+    "endTime": "2026-01-25T16:00:00Z"
+   },
+   "unscheduled": true,
+   "lang": "de",
+   "regions": [
+    {
+     "name": "Gurktaler Alpen Süd",
+     "regionID": "AT-02-05-02"
+    },
+    {
+     "name": "Saualpe Süd",
+     "regionID": "AT-02-06-02"
+    },
+    {
+     "name": "Gurktaler Alpen Mitte",
+     "regionID": "AT-02-05-01"
+    },
+    {
+     "name": "Nockberge Mitte",
+     "regionID": "AT-02-04-01"
+    },
+    {
+     "name": "Nockberge Süd",
+     "regionID": "AT-02-04-02"
+    },
+    {
+     "name": "Koralpe West",
+     "regionID": "AT-02-08"
+    },
+    {
+     "name": "Packalpe",
+     "regionID": "AT-02-07"
+    },
+    {
+     "name": "Goldeckgruppe",
+     "regionID": "AT-02-12-02"
+    },
+    {
+     "name": "Gailtaler Alpen Ost",
+     "regionID": "AT-02-12-01"
+    },
+    {
+     "name": "Gailtaler Alpen Mitte",
+     "regionID": "AT-02-11"
+    },
+    {
+     "name": "Villacher Alpe",
+     "regionID": "AT-02-13"
+    },
+    {
+     "name": "Saualpe Nord",
+     "regionID": "AT-02-06-01"
+    }
+   ],
+   "dangerRatings": [
+    {
+     "mainValue": "low",
+     "validTimePeriod": "earlier"
+    },
+    {
+     "mainValue": "low",
+     "elevation": {
+      "upperBound": "treeline"
+     },
+     "validTimePeriod": "later"
+    },
+    {
+     "mainValue": "moderate",
+     "elevation": {
+      "lowerBound": "treeline"
+     },
+     "validTimePeriod": "later"
+    }
+   ],
+   "tendency": [
+    {
+     "highlights": "Neu- und Triebschnee bleiben störanfällig.",
+     "tendencyType": "steady",
+     "validTime": {
+      "startTime": "2026-01-25T16:00:00Z",
+      "endTime": "2026-01-26T16:00:00Z"
+     }
+    }
+   ],
+   "avalancheActivity": {
+    "highlights": "Anstieg der Lawinengefahr im Tagesverlauf. Triebschnee meiden."
+   }
+  }
+ ]
+}

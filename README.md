@@ -6,7 +6,7 @@ Hochrindl** – v troch horizontoch:
 
 | Časť stránky | Model (cez [Open-Meteo](https://open-meteo.com/)) | Čo ukazuje |
 |---|---|---|
-| Najbližší lyžiarsky deň | DWD ICON-D2 2,2 km (do 4. 10. 2026 GeoSphere AROME; ICON-D2 je jediný krátkodobý model so zimným archívom, takže jeho POWDER_SNEH je overený) | kartu na stredisko: „Bez snehu“, keď ICON-D2 nevidí hore pokrývku aspoň 30 cm; inak pruh a pravdepodobnosť dobrého / ujde / zlého dňa, čo ho môže pokaziť (s pravdepodobnosťou), šanca na prašan (≥ 15 cm do rána) s POWDER ALERT, očakávaný nový sneh, nový sneh za 3 dni, teploty, vietor, slnko, odkazy na snehovú správu a webkameru |
+| Najbližší lyžiarsky deň | DWD ICON-D2 2,2 km (do 4. 10. 2026 GeoSphere AROME; ICON-D2 je jediný krátkodobý model so zimným archívom, takže jeho POWDER_SNEH je overený) | kartu na stredisko: „Bez snehu“, keď ICON-D2 nevidí hore pokrývku aspoň 30 cm; inak pruh a pravdepodobnosť dobrého / ujde / zlého dňa, čo ho môže pokaziť (s pravdepodobnosťou), šanca na prašan (≥ 15 cm do rána) s POWDER ALERT, očakávaný nový sneh, nový sneh za 3 dni, teploty, vietor, slnko, lavínový stupeň 1–5 pre región hornej stanice (LWD Kärnten cez lawinen.report) s výškou, denným chodom a tendenciou, odkazy na snehovú správu, webkameru a lavínovú správu |
 | Najbližšie 3 dni | ECMWF IFS 9 km | tabuľku deň × stredisko (pruh, dobré %, teplota hore, šanca na prašan, nový sneh, silnejší vietor) a hodinový graf (teplota hore/dole, sneh, nárazy) |
 | Výhľad na 10 dní | ECMWF ensemble 0,25°, 51 scenárov | podiel scenárov s dobrým / priemerným / zlým dňom (nekalibrovaný) a rozpätie snehu |
 
@@ -47,6 +47,17 @@ dni) alebo **POWDER POZOR** (tretí deň). Pri očakávanom snehu je „okolo“
 k tomu suchý / vlhší / mokrý podľa teploty počas sneženia. Stará značka „prašan“ pri 10 cm za 72 h zo
 stránky zmizla; súčet za 3 dni ostal ako údaj.
 
+**Lavínové nebezpečenstvo (od 16. 10. 2026, krok 9):** karta najbližšieho dňa ukazuje stupeň 1–5 z lavínovej
+správy Lawinenwarndienst Kärnten, ktorá od zimy 2025/26 vychádza v spoločnom systéme Euregia
+([lawinen.report](https://lawinen.report/)) ako CAAML v6 JSON pod CC BY 4.0: o 17:00 na nasledujúci deň, o
+8:00 môže prísť aktualizácia. Stredisko dostane stupeň mikroregiónu EAWS, v ktorom leží jeho horná stanica
+(Bad Kleinkirchheim Nockberge Süd, Falkert a Turracher Höhe Nockberge Mitte, Hochrindl Gurktaler Alpen Süd;
+`npm run regions` to overí proti polygónom), s delením podľa výšky („nad 1800 m“, „hranica lesa“), ráno /
+popoludní a tendenciou na ďalší deň, v farbách stupnice EAWS so slovenskými názvami (nízke, mierne,
+zvýšené, vysoké, veľmi vysoké). Generátor aj tlačidlo Obnoviť berú správu na deň lanoviek, pred 17:00 ešte
+včerajšiu (stránka to povie), mimo sezóny správy (2025/26: 28. 11. – 1. 5.) nič. Stupeň platí pre voľný terén
+mimo zjazdoviek; texty správy stránka nepreberá, len na ňu odkazuje.
+
 Prahy sú v `src/config.ts` (`SKI_CONFIG.rules`), krivky v `src/quality-model.ts` a zákon prašanu v
 `src/powder-model.ts`; stránka všetko vypisuje z konfigurácie vloženej do snímky.
 
@@ -71,9 +82,9 @@ otvorená stránka sa obnoví sama, keď sú dáta staršie ako hodina.
   obnova dát.
 - `src/ski-page.ts` – poskladá `docs/index.html`; obsah predkreslí tým istým klientskym kódom
   (spusteným vo `vm`), takže stránka je čitateľná aj pred načítaním JavaScriptu.
-- `src/ski.ts` – generátor: postupne stiahne tri horizonty, uloží `docs/data/ski.json`, zapíše
+- `src/ski.ts` – generátor: postupne stiahne tri horizonty a lavínovú správu, uloží `docs/data/ski.json`, zapíše
   stránku. Snímku mladšiu ako 20 min použije znova; keď sťahovanie zlyhá, publikuje poslednú platnú.
-- `src/config.ts` – strediská (stanice, odkazy) a pravidlá.
+- `src/config.ts` – strediská (stanice, odkazy, región lavínovej správy), pravidlá a zdroje.
 
 Chýbajúce dáta sa nikdy nepočítajú ako nula: deň bez potrebnej hodnoty je „Nedostatok dát" a
 percentá ansámblu majú vždy menovateľ 51.
@@ -103,11 +114,13 @@ len denník. Čo ďalej, kedy a čo čaká na majiteľa: [TODO.md](TODO.md).
 | 6 – kvalita dňa | hotovo 4. 10. 2026 | `npm run rules` + `npm run quality`: dnešné áno/nie pravidlá sú zle kalibrované (dážď varuje priveľa, vietor z IFS bez zručnosti, zamračenie primálo), kalibrované pravdepodobnosti majú BSS 0,3–0,6 pri 0–1 d; teplota počas sneženia z ICON-D2 presná, z IFS +1 °C; inverziu vidí len ICON-D2; vietor pri powderi a slnečný vrchol nad hmlou sa predpovedať nedajú. Snímka v3 nesie `quality` (P dážď, P veterno / stojace lanovky, P zamračené, P dobrý deň = súčin, inverzia, teplota počas sneženia s pásmom, náraz v okne); deterministické horizonty doťahujú nízku oblačnosť a vlhkosť: [data/rules](data/rules), [data/quality](data/quality), METODIKA §4.5, §5.3–5.4 |
 | 7 – zobrazenie pravdepodobností | hotovo 5. 10. 2026 | rozhodnutie majiteľa 5. 10.: stránka ukazuje pravdepodobnosti namiesto áno/nie. Snímka v4: deterministické dni nesú `goodPct / fairPct / badPct` (zlé = súčin P dážď ≥ 1 mm a P náraz > 60 km/h, overené proti priamemu fitu: ICON-D2 BSS 0,24–0,29, IFS 0,05; dobré = overený súčin, mäkký sneh ho vynuluje). Karta a tabuľka: pruh + „dobré X %“, dôvody s pravdepodobnosťou od 20 %, riadok „Prašan do rána (≥ 15 cm)“ s POWDER ALERT / POZOR, „Nový sneh do rána: okolo / až“ s pásmom suchý / vlhší / mokrý, inverzia od 50 % pri najbližšom dni; text „Ako sa počítajú percentá?“ prepísaný; pätička uvádza GeoSphere a eHYD; `docs/` obnovené živým načítaním: METODIKA §4.6 |
 | 8 – predpoklad snehu | hotovo 16. 10. 2026 | majiteľ 16. 10.: stránka v októbri hodnotila dni bez snehu. `npm run backtest:fetch -- --only=snow` + `npm run cover`: modelová výška snehu proti nameranej (17 staníc, nov–apr): ICON-D2 4 zimy BSS 0,46, AUC 0,95, P(≥ 30 cm │ model 0) 0,01; IFS 9 km 2 zimy BSS 0,25, biasy −43 až +23 cm → brána len z ICON-D2 (`src/cover-model.ts`), ostatné horizonty kotvené na jej úroveň + vlastná zmena (predpoklad, overí sezóna). Snímka v5: `snowCover` na každom dni aj v logu; stránka „Bez snehu“ pod 50 %, sezóna stredísk ako poznámka, posledný deň výhľadu bez dát sa vypúšťa: [data/cover](data/cover), METODIKA §4.7, §5.5 |
+| 9 – lavínové nebezpečenstvo | hotovo 16. 10. 2026 | majiteľ 16. 10.: pridať lavínový stupeň k strediskám. Audit zdroja: LWD Kärnten od 29. 11. 2025 v systéme Euregia, CAAML v6 JSON na `static.avalanche.report/bulletins/<dátum>/<dátum>_AT-02_de_CAAMLv6.json` (CORS `*`, CC BY 4.0 podľa Open Data avalanche.report; vlastný web LWD strojový výstup nemá). Mikroregióny hornej stanice z polygónov EAWS (`npm run regions`). Snímka v6: `avalanche` (deň správy, časy, stupne za stredisko s výškou, ráno/popoludní, tendencia) alebo null; generátor aj prehliadač skúšajú deň lanoviek, potom deň pred ním, 404 = bez správy. Karta: farebné číslo EAWS + slovenský názov, výška, denný chod, tendencia, región, odkaz „Lavínová správa“; pätička so zdrojom a licenciou; fixtúry zo skutočných správ `src/fixtures/avalanche/`: METODIKA §4.8 |
 
 Offline skripty bežia cez `npm run` (tsx), surové dáta držia v `~/.cache/ztlzdrf` mimo gitu
 (`ZTLZDRF_CACHE` ho presmeruje), do gitu idú len malé odvodené JSON a správy. Dáta: Open-Meteo (CC BY 4.0,
-nekomerčne), GeoSphere Austria Data Hub (CC BY 4.0), eHYD („Datenquelle: ehyd.gv.at“, CC BY 4.0), LWD
-Kärnten (bez zverejnenej licencie – používa sa súkromne, majiteľ žiada o súhlas; súbory nie sú v gite).
+nekomerčne), GeoSphere Austria Data Hub (CC BY 4.0), eHYD („Datenquelle: ehyd.gv.at“, CC BY 4.0), lavínová
+správa LWD Kärnten cez avalanche.report / lawinen.report (CC BY 4.0), staničné SMET súbory LWD Kärnten (bez
+zverejnenej licencie – používajú sa súkromne, majiteľ požiadal o súhlas 16. 10. 2026; súbory nie sú v gite).
 
 ```sh
 npm test                 # testy stránky aj parserov
@@ -120,6 +133,7 @@ npm run verify           # po sezóne: log predpovedí proti pravde → data/pro
 npm run rules            # pravidlá stránky proti staniciam → data/rules/
 npm run quality          # kvalita powderu, inverzie, oblak, dobrý deň; krivky pre stránku → data/quality/
 npm run cover            # krok 8: modelová výška snehu proti nameranej → data/cover/ (najprv npm run backtest:fetch -- --only=snow)
+npm run regions          # krok 9: mikroregióny EAWS pre stanice lanoviek proti src/config.ts (polygóny regions.avalanches.org)
 ```
 
 ## Lokálne

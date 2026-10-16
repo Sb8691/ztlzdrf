@@ -96,7 +96,7 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .sk-card dl div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-top: 1px solid var(--grid); }
 .sk-card dt { color: var(--muted); }
 .sk-card dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
-.sk-links { display: flex; gap: 18px; margin: 8px 0 0; font-size: 0.88rem; }
+.sk-links { display: flex; flex-wrap: wrap; gap: 0 18px; margin: 8px 0 0; font-size: 0.88rem; }
 .sk-links a { display: inline-block; padding: 6px 0; }
 
 .sk-scroll { overflow-x: auto; }
@@ -119,6 +119,14 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .sk-card header .sk-prob { flex: none; width: 84px; align-items: flex-end; padding-top: 2px; }
 .sk-card header .sk-prob b { font-size: 0.9rem; }
 .sk-alert { display: inline-block; padding: 1px 6px; border-radius: 4px; background: var(--top); color: #fff; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em; vertical-align: 1px; white-space: nowrap; }
+.sk-ava { margin: 8px 0 0; font-size: 0.86rem; }
+/* EAWS danger-scale colours; the number is always in the badge, never colour alone. */
+.sk-lvl { display: inline-block; min-width: 1.5em; padding: 0 5px; border-radius: 4px; text-align: center; font-weight: 700; line-height: 1.35; color: #1d2125; }
+.sk-lvl1 { background: #ccff66; }
+.sk-lvl2 { background: #ffff00; }
+.sk-lvl3 { background: #ff9900; }
+.sk-lvl4 { background: #ff0000; color: #fff; }
+.sk-lvl5 { background: #800000; color: #fff; }
 
 .sk-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 8px; font-size: 0.8rem; color: var(--muted); }
 .sk-legend i { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
@@ -158,8 +166,14 @@ footer p { margin: 0 0 6px; }
 
 interface SnapshotLike {
   fetchedAtMs: number;
-  config: { resorts: { name: string }[] };
+  config: {
+    resorts: { name: string }[];
+    avalanche?: { provider: { name: string; url: string }; site: { name: string; url: string }; licence: string };
+  };
 }
+
+const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const link = (url: string, text: string): string => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>`;
 
 export function renderSkiPage(snapshot: SnapshotLike): string {
   const client = clientRender();
@@ -168,6 +182,8 @@ export function renderSkiPage(snapshot: SnapshotLike): string {
   const main = client.renderSki(snapshot, snapshot.fetchedAtMs);
   const meta = client.renderMetaText(snapshot, null);
   const names = snapshot.config.resorts.map((r) => r.name).join(", ");
+  const ava = snapshot.config.avalanche;
+  const avalancheCredit = ava ? `\n  <p>Lavínové nebezpečenstvo: ${link(ava.provider.url, ava.provider.name)} v spoločnej správe ${link(ava.site.url, ava.site.name)} (${esc(ava.licence)}).</p>` : "";
   // Escaping "<" keeps any string value from ending the JSON block early.
   const json = JSON.stringify(snapshot).replace(/</g, "\\u003c");
 
@@ -184,7 +200,7 @@ export function renderSkiPage(snapshot: SnapshotLike): string {
 <div class="sk-wrap">
 <header class="sk-head">
   <h1>Lyžiarske podmienky</h1>
-  <p class="sk-sub">${names.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>
+  <p class="sk-sub">${esc(names)}</p>
   <p class="sk-meta" id="sk-meta">${meta}</p>
   <p id="sk-status" hidden></p>
   <button type="button" id="sk-refresh">Obnoviť predpoveď</button>
@@ -193,7 +209,7 @@ export function renderSkiPage(snapshot: SnapshotLike): string {
 <footer>
   <p>Predpoveď nevie, či je stredisko otvorené ani aký je sneh na zjazdovke. Pred cestou pozrite snehovú správu a webkameru.</p>
   <p>Dáta: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (DWD ICON-D2, ECMWF IFS a ensemble).</p>
-  <p>Pravdepodobnosti sú kalibrované na meraniach <a href="https://data.hub.geosphere.at/" target="_blank" rel="noopener">GeoSphere Austria</a> (CC BY 4.0) a <a href="https://ehyd.gv.at/" target="_blank" rel="noopener">eHYD</a> (Datenquelle: ehyd.gv.at).</p>
+  <p>Pravdepodobnosti sú kalibrované na meraniach <a href="https://data.hub.geosphere.at/" target="_blank" rel="noopener">GeoSphere Austria</a> (CC BY 4.0) a <a href="https://ehyd.gv.at/" target="_blank" rel="noopener">eHYD</a> (Datenquelle: ehyd.gv.at).</p>${avalancheCredit}
 </footer>
 </div>
 <script type="application/json" id="sk-snapshot">${json}</script>

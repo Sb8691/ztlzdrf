@@ -1,0 +1,134 @@
+{
+ "bulletins": [
+  {
+   "bulletinID": "2df72b21-c3c7-4639-a58b-00275348aa9d",
+   "publicationTime": "2026-02-09T16:00:00Z",
+   "validTime": {
+    "startTime": "2026-02-09T16:00:00Z",
+    "endTime": "2026-02-10T16:00:00Z"
+   },
+   "unscheduled": false,
+   "lang": "de",
+   "regions": [
+    {
+     "name": "Nockberge Mitte",
+     "regionID": "AT-02-04-01"
+    },
+    {
+     "name": "Gurktaler Alpen Mitte",
+     "regionID": "AT-02-05-01"
+    },
+    {
+     "name": "Nockberge Süd",
+     "regionID": "AT-02-04-02"
+    },
+    {
+     "name": "Goldeckgruppe",
+     "regionID": "AT-02-12-02"
+    },
+    {
+     "name": "Gailtaler Alpen Ost",
+     "regionID": "AT-02-12-01"
+    },
+    {
+     "name": "Gailtaler Alpen Mitte",
+     "regionID": "AT-02-11"
+    },
+    {
+     "name": "Villacher Alpe",
+     "regionID": "AT-02-13"
+    }
+   ],
+   "dangerRatings": [
+    {
+     "mainValue": "low",
+     "elevation": {
+      "upperBound": "1800"
+     },
+     "validTimePeriod": "all_day"
+    },
+    {
+     "mainValue": "considerable",
+     "elevation": {
+      "lowerBound": "1800"
+     },
+     "validTimePeriod": "all_day"
+    }
+   ],
+   "tendency": [
+    {
+     "highlights": "Die Lawinenverhältnisse bleiben ungünstig.",
+     "tendencyType": "steady",
+     "validTime": {
+      "startTime": "2026-02-10T16:00:00Z",
+      "endTime": "2026-02-11T16:00:00Z"
+     }
+    }
+   ],
+   "avalancheActivity": {
+    "highlights": "Schwachschichten im Altschnee erfordern Vorsicht. Dies vor allem in der Höhe."
+   }
+  },
+  {
+   "bulletinID": "5892bb27-8613-4825-ac7c-991446c4280e",
+   "publicationTime": "2026-02-09T16:00:00Z",
+   "validTime": {
+    "startTime": "2026-02-09T16:00:00Z",
+    "endTime": "2026-02-10T16:00:00Z"
+   },
+   "unscheduled": false,
+   "lang": "de",
+   "regions": [
+    {
+     "name": "Gurktaler Alpen Süd",
+     "regionID": "AT-02-05-02"
+    },
+    {
+     "name": "Saualpe Süd",
+     "regionID": "AT-02-06-02"
+    },
+    {
+     "name": "Koralpe West",
+     "regionID": "AT-02-08"
+    },
+    {
+     "name": "Packalpe",
+     "regionID": "AT-02-07"
+    },
+    {
+     "name": "Saualpe Nord",
+     "regionID": "AT-02-06-01"
+    }
+   ],
+   "dangerRatings": [
+    {
+     "mainValue": "low",
+     "elevation": {
+      "upperBound": "1900"
+     },
+     "validTimePeriod": "all_day"
+    },
+    {
+     "mainValue": "moderate",
+     "elevation": {
+      "lowerBound": "1900"
+     },
+     "validTimePeriod": "all_day"
+    }
+   ],
+   "tendency": [
+    {
+     "highlights": "Kaum Rückgang der Lawinengefahr.",
+     "tendencyType": "steady",
+     "validTime": {
+      "startTime": "2026-02-10T16:00:00Z",
+      "endTime": "2026-02-11T16:00:00Z"
+     }
+    }
+   ],
+   "avalancheActivity": {
+    "highlights": "Einzelne Gefahrenstellen liegen an steilen Schattenhängen in der Höhe."
+   }
+  }
+ ]
+}

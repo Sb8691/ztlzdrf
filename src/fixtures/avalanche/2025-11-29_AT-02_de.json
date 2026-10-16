@@ -1,0 +1,63 @@
+{
+ "bulletins": [
+  {
+   "bulletinID": "5c5f6bcb-789a-4da7-96a2-4648e11a1193",
+   "publicationTime": "2025-11-28T18:06:01Z",
+   "validTime": {
+    "startTime": "2025-11-28T16:00:00Z",
+    "endTime": "2025-11-29T16:00:00Z"
+   },
+   "unscheduled": true,
+   "lang": "de",
+   "regions": [
+    {
+     "name": "Nockberge Mitte",
+     "regionID": "AT-02-04-01"
+    },
+    {
+     "name": "Gurktaler Alpen Mitte",
+     "regionID": "AT-02-05-01"
+    },
+    {
+     "name": "Nockberge Süd",
+     "regionID": "AT-02-04-02"
+    },
+    {
+     "name": "Goldeckgruppe",
+     "regionID": "AT-02-12-02"
+    },
+    {
+     "name": "Gailtaler Alpen Ost",
+     "regionID": "AT-02-12-01"
+    },
+    {
+     "name": "Gailtaler Alpen Mitte",
+     "regionID": "AT-02-11"
+    },
+    {
+     "name": "Villacher Alpe",
+     "regionID": "AT-02-13"
+    }
+   ],
+   "dangerRatings": [
+    {
+     "mainValue": "low",
+     "validTimePeriod": "all_day"
+    }
+   ],
+   "tendency": [
+    {
+     "highlights": "Rückgang der Lawinengefahr.",
+     "tendencyType": "steady",
+     "validTime": {
+      "startTime": "2025-11-29T16:00:00Z",
+      "endTime": "2025-11-30T16:00:00Z"
+     }
+    }
+   ],
+   "avalancheActivity": {
+    "highlights": "Einzelne Gefahrenstellen liegen in Rinnen und Mulden."
+   }
+  }
+ ]
+}

@@ -4,12 +4,12 @@ import { fileURLToPath } from "node:url";
 import { SKI_CONFIG, type SkiConfig } from "./config.js";
 import { fetchJson } from "./fetch-json.js";
 import { appendForecastLog, buildForecastLog, fetchStationResponses, type Responses, type StationResponses } from "./prospective.js";
-import { buildSkiSnapshot, HORIZON_KEYS, firstSkiDate, horizonUrl, metaUrl, SKI_SNAPSHOT_VERSION } from "./ski-core.js";
+import { avalancheDates, avalancheUrl, buildSkiSnapshot, HORIZON_KEYS, firstSkiDate, horizonUrl, metaUrl, parseAvalanche, SKI_SNAPSHOT_VERSION } from "./ski-core.js";
 import { renderSkiPage } from "./ski-page.js";
 
 /**
- * The generator behind the ski page (npm run ski / node dist/ski.js): fetch the three horizons,
- * keep the snapshot in docs/data/ski.json, write docs/index.html.
+ * The generator behind the ski page (npm run ski / node dist/ski.js): fetch the three horizons and
+ * the avalanche bulletin, keep the snapshot in docs/data/ski.json, write docs/index.html.
  *
  * A failed fetch is not fatal while an earlier snapshot exists: the page is republished from it,
  * still stamped with the time its data was really fetched, and the open page tries again itself.
@@ -73,8 +73,39 @@ export async function fetchSkiResponses(cfg: SkiConfig = SKI_CONFIG, nowMs = Dat
   return responses;
 }
 
+export type Avalanche = ReturnType<typeof parseAvalanche>;
+
+/**
+ * The avalanche bulletin for the first lift day, or the day before's while that one is still the
+ * valid one (step 9). Null when neither file exists - outside the service's season, or before the
+ * evening edition - and also when the fetch fails: the page then says the bulletin is not available,
+ * which is true either way, and never loses the forecast over it. A 404 is a normal state here, not
+ * an error worth a retry.
+ */
+export async function fetchAvalanche(cfg: SkiConfig, firstDate: string): Promise<Avalanche | null> {
+  for (const date of avalancheDates(firstDate)) {
+    let json: unknown;
+    try {
+      json = await fetchJson<unknown>(avalancheUrl(cfg, date), { retries: 1 });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/^404 /.test(message)) continue;
+      console.warn(`Lavínovú správu na ${date} sa nepodarilo stiahnuť (${message}) – stránka bude bez nej.`);
+      return null;
+    }
+    try {
+      return parseAvalanche(json, cfg, date);
+    } catch (err) {
+      console.warn(`Lavínová správa na ${date} má neznámy tvar (${err instanceof Error ? err.message : String(err)}) – stránka bude bez nej.`);
+      return null;
+    }
+  }
+  return null;
+}
+
 export async function fetchSkiSnapshot(cfg: SkiConfig = SKI_CONFIG, nowMs = Date.now()): Promise<SkiSnapshot> {
-  return buildSkiSnapshot(await fetchSkiResponses(cfg, nowMs), cfg, nowMs);
+  const responses = await fetchSkiResponses(cfg, nowMs);
+  return buildSkiSnapshot(responses, cfg, nowMs, await fetchAvalanche(cfg, firstSkiDate(nowMs, cfg)));
 }
 
 /** The prospective log line for a fresh fetch: stations are fetched best effort, the line is written either way. */
@@ -90,6 +121,16 @@ async function logForecasts(snapshot: SkiSnapshot, responses: Responses, cfg: Sk
 }
 
 function logSummary(s: SkiSnapshot): void {
+  const ava = s.avalanche;
+  if (ava) {
+    const levels = (s.config.resorts as { id: string }[]).map((r) => {
+      const e = ava.resorts[r.id];
+      return `${r.id} ${e ? e.maxLevel ?? "bez stupňa" : "bez správy"}`;
+    });
+    console.log(`Lavíny: správa na ${ava.date}${ava.publishedAtMs ? `, vydaná ${new Date(ava.publishedAtMs).toISOString()}` : ""}: ${levels.join(", ")}`);
+  } else {
+    console.log("Lavíny: bez správy.");
+  }
   for (const key of HORIZON_KEYS) {
     const h = s.horizons[key];
     console.log(`${h.label}: ${h.dates[0]} – ${h.dates[h.dates.length - 1]}${h.runAtMs ? `, beh ${new Date(h.runAtMs).toISOString()}` : ""}`);
@@ -118,9 +159,10 @@ async function main(): Promise<void> {
   } else {
     try {
       const responses = await fetchSkiResponses(cfg, now);
-      snapshot = buildSkiSnapshot(responses, cfg, now);
+      const avalanche = await fetchAvalanche(cfg, firstSkiDate(now, cfg));
+      snapshot = buildSkiSnapshot(responses, cfg, now, avalanche);
       writeIfChanged(SNAPSHOT_PATH, `${JSON.stringify(snapshot)}\n`);
-      console.log("Stiahnuté z Open-Meteo, snímka uložená.");
+      console.log(`Stiahnuté z Open-Meteo${avalanche ? " a lavínová správa" : ""}, snímka uložená.`);
       try {
         await logForecasts(snapshot, responses, cfg);
       } catch (err) {
