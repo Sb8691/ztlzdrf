@@ -1,8 +1,9 @@
 # METODIKA – presná predpoveď lyžovačky a POWDER ALERT
 
-Živý dokument k logickému modelu stránky **ztlzdrf** (štyri strediská v Nockbergoch). Prečítať na
-začiatku každej session. Kód a commity sú po anglicky, tento dokument po slovensky. Dátumy sú
-absolútne.
+Živý dokument k logickému modelu stránky **ztlzdrf** (štyri strediská v Nockbergoch): definície, dáta,
+overenie a všetky čísla. Vstupný bod projektu – čo stránka robí, stav, kalendár sezóny, otvorené body a
+pravidlá práce – je [README.md](README.md); prečítať na začiatku každej relácie spolu s ním. Kód a commity
+sú po anglicky, tento dokument po slovensky. Dátumy sú absolútne.
 
 ## 1. Definície
 
@@ -14,7 +15,10 @@ absolútne.
 - **POWDER_SNEH** = aspoň **15 cm nového snehu za 24 h** v bode merania (overiteľné jadro).
 - **POWDER ALERT** = POWDER_SNEH, ktorý je suchý, nezničený vetrom a lanovky pôjdu (prahy z literatúry,
   nefitujú sa). Značky „fresh tracks“ a „bluebird powder“. Stupne ALERT (D0–D+1), POZOR (D+2–D+3),
-  VÝHĽAD (D+4–D+9).
+  VÝHĽAD (D+4–D+9). **Na stránke dnes** (§4.4, §4.6) svieti značka, keď P(POWDER_SNEH) ≥ p* = 0,20;
+  suchosť ukazuje len pásmo teploty počas sneženia, vietor počas sneženia sa predpovedať nedá (§4.5) a
+  nárazy pre lanovky sú v pravdepodobnosti dňa, nie v podmienke značky. VÝHĽAD (ansámbel nemá
+  pravdepodobnosť), „fresh tracks“ a „bluebird powder“ zatiaľ nie sú.
 - **Super lyžovačka** = bez dažďa na zjazdovkách počas lanoviek, nárazy hore pod prahom (40 / 60 km/h),
   horná stanica väčšinu dňa mimo oblaku, dobrý povrch. Kalibrujú sa len zložky s pravdou.
 - **Sezóna** = zima pomenovaná podľa začiatku (2024/25 = august 2024 až júl 2025).
@@ -29,6 +33,7 @@ absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 23. 10. 2026 | Krok 10 (review repozitára): dokumentácia = README.md ako vstupný bod (TODO.md zlúčené doň) + METODIKA.md s podrobnosťami; opravy z review v poradí 10a dokumentácia, 10b stránka a log, 10c CI, 10d čísla, každý krok jeden commit; odvodené čísla zo staníc LWD v `data/` ostávajú, majiteľ požiadal LWD o súhlas s ich použitím. Review našlo nadsadený BSS brány pokrývky (§4.7, §5.5) a riadky ICON-D2 v backteste z neúplného archívu (§5.1) – prepočet v 10d | majiteľ (voľby 23. 10.), Claude |
 | 16. 10. 2026 | Krok 9: lavínový stupeň na karte najbližšieho dňa zo správy LWD Kärnten v systéme Euregia (CAAML v6 na static.avalanche.report, CC BY 4.0 podľa Open Data avalanche.report – súhlas LWD netreba, žiadosť majiteľa ostáva pre staničné súbory); región = mikroregión EAWS hornej stanice (Turracher Höhe korutánsky, dolná stanica v Štajersku ignorovaná); zobrazenie stupeň + výška + denný chod + tendencia, bez nemeckého textu (voľba majiteľa z troch); správa na deň lanoviek, inak včerajšia, nič staršie; 404 = bez správy; len karta, nie tabuľky; snímka v6 | majiteľ (žiadosť LWD odoslaná, plán a zobrazenie schválené 16. 10.), Fable |
 | 16. 10. 2026 | Krok 8: deň sa hodnotí len s pokrývkou – brána z modelovej výšky snehu ICON-D2 (overená, 4 zimy, 17 staníc), IFS 9 km ako brána zamietnutý (2 zimy, biasy oboch znamienok); ostatné horizonty kotvené na úroveň ICON-D2 prvého dňa + vlastná zmena (predpoklad, overí sezóna 2026/27); „Bez snehu“ pod P 0,5 bez pruhu a dôvodov, prašan ostáva; sezónne termíny stredísk len ako poznámka; posledný deň výhľadu bez hodín prevádzky sa vypúšťa; snímka v5 | majiteľ (plán schválený 16. 10.), Fable |
 | 5. 10. 2026 | Krok 7: stránka ukazuje pravdepodobnosti namiesto áno/nie (rozhodnutie majiteľa); jeden vizuálny jazyk = pruh dobré / ujde / zlé + „dobré X %“ aj pri deterministických dňoch; P(zlé) = súčin, overené proti priamemu fitu; dôvody od 20 %, inverzia od 50 %, prašan v tabuľke od 5 % (voľby zobrazenia); stará značka prašanu 10 cm / 72 h zo stránky preč; GeoSphere a eHYD v pätičke, LWD nie; snímka v4; `docs/` obnovené živým načítaním mimo sezóny CI (log mimo repozitára) | majiteľ (áno 5. 10.), Fable |
@@ -39,16 +44,16 @@ absolútne.
 | 4. 10. 2026 | Krok 4a: horizont D0 prepnutý z AROME na ICON-D2 (jediný krátkodobý model s overiteľným archívom); predstih od zverejnenia behu (IFS +7 h, ICON-D2 +1,5 h), bez metadát od času načítania; ansámbel zatiaľ bez pravdepodobnosti; snímka v2 s `powderSnow` | majiteľ (áno 4. 10.), Fable |
 | 4. 10. 2026 | Krok 3: fyzika = dnešné pravidlo stránky (fitované fázy, pomer sneh/voda, výškový faktor a vietor nepridávajú zručnosť; výškový faktor ťahá jediná vrcholová stanica a zhoršuje pásmo 1 700–1 950 m); rozdelenie dvojdielne na √cm; zákon: len sklon b klesá s predstihom (6 parametrov) – zákon bez predstihu má rovnaké CV skóre, zvolený ten so závislosťou kvôli extrapolácii | Fable |
 | 4. 10. 2026 | Krok 3: záporné ΔHS automatov = 0 cm; vzorka fitu = zimné dni, ručné stanice pri akejkoľvek pokrývke, automaty pri ≥ 30 cm; prah udalosti v spojitom rozdelení 15 cm (14,5 dáva to isté); kombinácia IFS + ICON-D2 pri 1 dni neprijatá (v šume) | Fable |
+| 4. 10. 2026 | Krok 2: overovacie body = stanice s pravdou (nie lanovky); IFS zverejnenie +7 h; len 00z/12z; LOSO klimatológia na primárnom filtri; Katschberg preberá klimatológiu Kanzelhöhe, LWD preberajú eHYD Turracher; blokový bootstrap 10 dní | Fable (schválené body 1–3 majiteľom) |
+| 4. 10. 2026 | Open-Meteo: 28 bodov × 11 premenných = ťažké volania → minútový limit čakáme, hodinový zastaví beh; Historical Forecast IFS kompletný, ICON-D2 do 12/2023 | Fable |
 | 3. 10. 2026 | POWDER = ≥ 15 cm / 24 h; stupne ALERT / POZOR / VÝHĽAD; najprv len POWDER_SNEH pre D0–D+2 | majiteľ (prompt) |
 | 3. 10. 2026 | Krok 0: audit dát bez zmien v repozitári; výsledok v `~/.cache/ztlzdrf/audit-2026-10-03/` | Fable |
 | 3. 10. 2026 | LWD Kärnten: dáta používať, majiteľ píše LWD so žiadosťou o súhlas; kópia ostáva mimo verejného repozitára (`~/.cache/ztlzdrf/lwd-ktn/`) | majiteľ |
 | 3. 10. 2026 | Návrh pravdy z auditu schválený (sekcia 3.6); hľadať ďalšie stanice eHYD pri strediskách | majiteľ |
 | 3. 10. 2026 | Predpoklady kroku 1: sezóna prevádzky 1. 12. – 15. 4.; pokrývka = HS ≥ 30 cm; búrka = súvislé dni ≥ 15 cm | Fable |
 | 3. 10. 2026 | Dátumové konvencie zdrojov určené empiricky proti INCA (3.9); eHYD = začiatok okna, GeoSphere ručný sneh = koniec okna, GeoSphere `rr` a SNOWGRID = začiatok | Fable (dáta) |
-| 3. 10. 2026 | Pravda pre POWDER_SNEH v poradí: ručný nový sneh → ΔHS automatov o 06 UTC → SNOWGRID len ako kontext (3.9) | Fable, čaká na schválenie |
+| 3. 10. 2026 | Pravda pre POWDER_SNEH v poradí: ručný nový sneh → ΔHS automatov o 06 UTC → SNOWGRID len ako kontext (3.9) | Fable (prijaté so schválením krokov 1–3) |
 | 3. 10. 2026 | eHYD rozšírené o 9 staníc do 25 km (St. Oswald, Innerkrems, Afritz, Maitratten-Sonnleiten, Sirnitz, Thomatal, Kendlbruck, Hochegg, Dreifaltigkeit) | majiteľ (áno na hľadanie), Fable (výber) |
-| 4. 10. 2026 | Krok 2: overovacie body = stanice s pravdou (nie lanovky); IFS zverejnenie +7 h; len 00z/12z; LOSO klimatológia na primárnom filtri; Katschberg preberá klimatológiu Kanzelhöhe, LWD preberajú eHYD Turracher; blokový bootstrap 10 dní | Fable (schválené body 1–3 majiteľom) |
-| 4. 10. 2026 | Open-Meteo: 28 bodov × 11 premenných = ťažké volania → minútový limit čakáme, hodinový zastaví beh; Historical Forecast IFS kompletný, ICON-D2 do 12/2023 | Fable |
 | 3. 10. 2026 | Surové dáta v `~/.cache/ztlzdrf/` (prepísateľné cez `ZTLZDRF_CACHE`), do gitu len malé odvodené JSON | Fable |
 
 ## 3. Dáta – audit (krok 0, 3. 10. 2026)
@@ -157,7 +162,7 @@ Villacher Alpe + Kanzelhöhe, spolu ~470 búrok) stačia na fázu, pomer sneh/vo
   station data, etc., are licensed under CC BY 4.0“ – platí aj pre spoločne vydávanú správu Kärnten (§4.8). Web
   LWD Kärnten sám (Impressum: každé ďalšie použitie len s písomným súhlasom) strojový výstup nemá.
 
-### 3.6 Návrh pravdy pre každú zložku (na schválenie)
+### 3.6 Návrh pravdy pre každú zložku (schválený majiteľom 3. 10. 2026)
 
 | Zložka | Primárna pravda | Kontrolná verzia | Poznámka |
 |---|---|---|---|
@@ -190,16 +195,15 @@ Villacher Alpe + Kanzelhöhe, spolu ~470 búrok) stačia na fázu, pomer sneh/vo
 - eHYD sieť staníc existuje ako WMS/WFS/OAPIF (`gis.lfrz.gv.at/api/ehyd/` vracia 403 priamo) a ako
   GeoPackage na data.gv.at – odkaz som nenašiel; doriešiť v kroku 1.
 
-### 3.8 Otvorené body / otázky
+### 3.8 Otvorené body auditu (stav k 23. 10. 2026)
 
-1. **LWD licencia a archív** – bez súhlasu nepoužívať verejne. Návrh: napísať LWD Kärnten (Abt. 3) so
-   žiadosťou o súhlas na nekomerčné overovanie; kópiu držať len súkromne (nie v `docs/`, nie v repozitári).
-2. Schváliť návrh pravdy (bod 6).
-3. Krok 1: dohľadať ďalšie stanice eHYD NLV pri strediskách (Ebene Reichenau, Innerkrems, Bad
-   Kleinkirchheim, Turrach, Hochrindl?) cez mapu eHYD alebo WFS – každá môže pridať 25 rokov ručného
-   nového snehu v inej výške.
-4. Rozpočet Open-Meteo pre backtest: IFS Single Runs 2 zimy × 182 dní × 2 behy ≈ 730 behov; ak funguje viac
-   bodov v jednom volaní, ~730–1 500 volaní – postupne, s cache, v rámci limitov.
+1. **LWD licencia a archív** – majiteľ požiadal LWD Kärnten (Abt. 3) 16. 10. 2026 o súhlas s nekomerčným
+   použitím; odpoveď čaká. Surové súbory ostávajú súkromne (`~/.cache/ztlzdrf/lwd-ktn/`, nie v gite).
+   Odvodené súhrny v `data/` (búrky, skóre podľa staníc) v repozitári sú a ostávajú; majiteľ požiadal aj o
+   súhlas s ich použitím (rozhodnutie 23. 10. 2026).
+2. Návrh pravdy (bod 6) – schválený 3. 10. 2026.
+3. Ďalšie stanice eHYD – doplnených 9 staníc do 25 km (§2, 3. 10. 2026).
+4. Rozpočet Open-Meteo pre backtest – stiahnuté v kroku 2 postupne, s cache, v rámci limitov (§5.1).
 
 ### 3.9 Krok 1 – pravda a klimatológia (3. 10. 2026)
 
@@ -474,17 +478,18 @@ proti 0,28–0,30. Dolné hranice CI pri 23–71 h ležia na nule, nie nad ňou 
 - Zverejnenie IFS = inicializácia + 7 h; len behy 00z/12z (predstihy 23, 35, …, 131 h). Stránka počíta
   predstih ako hodiny od zverejnenia behu, ktorý práve použila, do konca okna D−1 09:00 → D 09:00; pod
   23 h extrapoluje k predstihu 0 (archív pri 0 h dáva b 0,69, zákon 0,60 – konzistentné), nad 131 h drží
-  hodnoty pre 131 h, kde je zručnosť ≈ 0 (BSS −0,13, CRPSS 0,08) – pre D+5 a ďalej treba v kroku 4
-  rozhodnúť medzi klimatológiou a ensemblom (ENS archív členov neexistuje, nedá sa overiť).
+  hodnoty pre 131 h, kde je zručnosť ≈ 0 (BSS −0,13, CRPSS 0,08). Dni za horizontom IFS (D+3 a ďalej)
+  preto v kroku 4 ostali bez pravdepodobnosti prašanu (archív členov ENS neexistuje, nedá sa overiť; §4.4).
 - Koeficienty sú spoločné pre stanice (3 ručné: Villacher Alpe, Kanzelhöhe, Flattnitz; 3 automaty:
   Katschberg, LWD Turracher, LWD Falkert) a dve zimy, 24 udalostí na predstih; intervaly sú široké.
 - Okno modelu končí 06 UTC, okno produktu 09:00 SEČ: posun o 2–3 h sa zanedbáva.
-- AROME (dnešný model stránky pre D0) sa overiť nedá; návrh pre krok 4: ICON-D2 pre D0–D+1 (vlastný
-  zákon, 0–47 h), IFS 9 km pre D+1–D+4 (23–131 h). Výber potvrdí majiteľ.
+- AROME (model stránky pre D0 do 4. 10. 2026) sa overiť nedá; v kroku 4a ho nahradil ICON-D2 s vlastným
+  zákonom (0–47 h), IFS 9 km ostal pre D0–D+2 (zákon 23–131 h; §4.4).
 - Klimatológia v JSON (štyri vysoké ručné stanice): P(≥ 15 cm) po mesiacoch bez podmienky pokrývky
   (podmienka pokrývky v novembri necháva len dni hneď po búrkach) a sadzba v sezóne prevádzky s pokrývkou.
-- Prah ALERTu p* závisí od pomeru nákladov N (zmeškaný powder deň : zbytočná cesta), p* ≈ 1/(N + 1);
-  majiteľ rozhodne v kroku 4 z tabuľky zásahov/falošných poplachov za sezónu.
+- Prah ALERTu p* závisí od pomeru nákladov N (zmeškaný powder deň : zbytočná cesta), p* ≈ 1/(N + 1).
+  Majiteľ N neurčil, v kroku 4b je preto predvolené p* = 0,20 (N = 4; §4.4, rozhodovacia tabuľka v
+  `data/model/REPORT.md`).
 
 ### 4.4 Zapojenie do stránky (krok 4a, 4. 10. 2026)
 
@@ -621,7 +626,8 @@ aj pri deterministických dňoch, prašan s ALERTom, dôvody od 20 %, živé na�
   značka „prašan“ (10 cm / 72 h) sa nezobrazuje, pole `powder` ostáva. Náraz v okne sa nezobrazuje (bez
   zručnosti). Text „Ako sa počítajú percentá?“ vysvetľuje kalibráciu, hranice (~3 dni) a prašan z
   konfigurácie; pätička uvádza GeoSphere Austria (CC BY 4.0) a eHYD (Datenquelle: ehyd.gv.at) ako zdroje
-  kalibrácie. LWD Kärnten sa na stránke neuvádza, kým nepríde súhlas.
+  kalibrácie. Staničné dáta LWD Kärnten sa na stránke neuvádzajú, kým nepríde súhlas (lavínovú správu LWD
+  uvádza pätička od kroku 9, §4.8).
 - **Predpoklady (voľby zobrazenia, nie merania):** prah 20 % pre dôvody, 5 % pre riadok prašanu v
   tabuľke, 50 % pre inverziu; slová pásiem; „okolo / až“ pre medián a p90. Pri rovnakej modelovej teplote
   hore a dole dáva krivka inverzie 62 % – nulový modelový rozdiel je už inverzia oproti bežnému poklesu
@@ -650,8 +656,15 @@ ostáva; posledný deň výhľadu) schválený s odporúčanými voľbami.
   Villacher Alpe −28 cm, LWD body v 1 800–1 900 m sú bez biasu). IFS 9 km: 1 665 dvojíc, 2 zimy, BSS
   0,25 (jeden fold plochý), AUC 0,81, biasy staníc −43 až +23 cm a P(≥ 30 │ 0 cm) nad 1 700 m 0,34 →
   ako brána nepoužiteľný. Na spoločných dňoch IFS − ICON-D2 −5,8 cm, MAE 16 cm, zhoda áno/nie 0,81.
-- **Rozhodnutia:** krivka len z ICON-D2 (`src/cover-model.ts`: a −6,7266, b 1,2188 na √cm, test
-  rovnosti s `data/cover/cover-model.json`). Úroveň pokrývky pre všetky horizonty = ICON-D2 pri hornej
+- **Pozor (review 23. 10. 2026):** kalibrovaný BSS je nadsadený. Stanice, ktorých páry pokrývajú len jednu
+  sezónu (eHYD, LWD; 1 538 zo 6 971 párov ICON-D2), dostávajú v `withClimatology`
+  (`scripts/cover-verify.ts`) klimatológiu natvrdo 0,2 namiesto vlastnej (okolo 0,6). „17 staníc“ je
+  17 radov na 15 miestach (Kanzelhöhe a Flattnitz ručne aj automat). IFS 9 km má výšku snehu v zime 2024/25
+  len 9.–16. 1. 2025, „2 zimy“ sú teda fakticky jedna. Krivku (fit nepoužíva klimatológiu) ani rozhodnutie
+  „brána len z ICON-D2“ to nemení; čísla sa prepočítajú v kroku 10d.
+- **Rozhodnutia:** krivka len z ICON-D2 (`src/cover-model.ts`: a −6,7266, b 1,2188 na √cm, kópia
+  `data/cover/cover-model.json`; hodnoty sa 23. 10. 2026 zhodujú, test rovnosti chýba a pribudne v kroku
+  10b). Úroveň pokrývky pre všetky horizonty = ICON-D2 pri hornej
   stanici o otváracej hodine prvého dňa (`coverAnchors` v `src/ski-core.js`); ostatné modely k nej
   pridajú len svoju zmenu odvtedy (`snowCover` s `anchorCm`), ansámbel po členoch (medián cm, priemer
   P). Brána na stránke: P(pokrývka ≥ 30 cm) < 0,5 → „Bez snehu“, deň sa nehodnotí (pruh a dôvody sa
@@ -804,6 +817,12 @@ pri predstihu 0 aj 2016/17 →): 646 staničných dní, 24 udalostí; výber ria
 | ICON-D2, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 1066 | 40 | 0,03 | 0,04 | **0,15 (-0,01–0,38)** | 0,15 (0,00–0,36) | 0,00 (0,00–0,00) | 0,15 | 0,98 (0,96–0,99) | -1,0 | 1,8 / 3,9 |
 | ICON-D2, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 1066 | 40 | 0,02 | 0,04 | **0,37 (0,15–0,59)** | 0,42 (0,20–0,64) | 0,11 (0,00–0,25) | 0,40 | 0,98 (0,96–1,00) | -0,5 | 1,5 / 3,9 |
 | – | klimatológia (LOSO) | (vzorka IFS 23 h) | 1507 | 30 | 0,02 | 0,02 | 0,00 | – | – | – | 0,55 (0,42–0,66) | 2,1 | 3,6 |
+
+**Pozor (review 23. 10. 2026):** riadky „ICON-D2, Historical Forecast“ (predstih 0) v oboch tabuľkách sú
+zo správy vygenerovanej 4. 10. 2026 o 00:16, keď archív ICON-D2 ešte nebol celý (dosťahovaný o 00:27; preto
+n 542 a 1 066). Model prašanu (§4) bežal až na úplnom archíve, jeho čísla to nemení. Backtest navyše
+neoreže záporné ΔHS automatov na 0 cm ako model (§2, krok 3), takže MAE a bias sú trochu horšie, ako by
+mali byť; BSS, POD, FAR a AUC to nemení. Prepočet v kroku 10d.
 
 **Podľa stanice** (IFS surový `snowfall`, primárna vzorka; CI pri 1–4 udalostiach nič nehovoria):
 
@@ -978,12 +997,15 @@ jedna korekcia; prah ≥ 50 cm má kalibrovaný BSS −0,15.
 **Čo z toho plynie (overené):** výška snehu ICON-D2 je dobrý predpoklad lyžovania – keď model ukáže
 0 cm, sneh na lyžovanie je len v 1 % dní, pri 30 cm v polovici; IFS 9 km sa na to nehodí.
 
+**Pozor (review 23. 10. 2026):** stĺpec „BSS kal.“ je nadsadený a IFS má fakticky jednu zimu (§4.7);
+podiely podľa modelovej výšky, AUC a krivka platia. Prepočet v kroku 10d.
+
 ## 6. Limity
 
 - Žiadny dlhý rad pravdy neleží na hornej stanici lanovky; LWD body sú 1,4–1,6 km od nich a existujú len
   od 2025 (bez zverejnenej licencie).
 - Archív s predstihom: IFS 9 km od 14. 3. 2024, ICON-D2/ICON-EU previous runs od 19. 1. 2024 → dve zimy.
-  AROME (dnešný model pre D0) a členovia ensemblov zimný archív nemajú.
+  AROME (do 4. 10. 2026 model pre D0) a členovia ensemblov zimný archív nemajú.
 - Za dve zimy s predstihom je v regióne 10 búrok ≥ 15 cm (sezóna prevádzky, s pokrývkou) → binárna
   udalosť sa nekalibruje, modeluje sa spojitý úhrn.
 - SNOWGRID nie je pravda pre udalosť ≥ 15 cm (POD 0,2–0,3 mimo Villacher Alpe). Stanice 13–35 km od seba

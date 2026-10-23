@@ -335,8 +335,11 @@ function coveredSeasons(s: Series, minDays = 90): string[] {
   return [...n.entries()].filter(([, c]) => c >= minDays).map(([s]) => s).sort();
 }
 
+/** "12-01" -> "1. 12." (day first, as Slovak writes dates). */
+const dayMonth = (md: string): string => `${Number(md.slice(3, 5))}. ${Number(md.slice(0, 2))}.`;
+
 say("");
-say(`## Nezávislé búrky ≥ ${THRESHOLD_CM} cm / 24 h (sezóna prevádzky ${OPERATING_FROM.replace("-", ". ")}. – ${OPERATING_TO.replace("-", ". ")}., pokrývka ráno po sneženi ≥ ${COVER_CM} cm)`);
+say(`## Nezávislé búrky ≥ ${THRESHOLD_CM} cm / 24 h (sezóna prevádzky ${dayMonth(OPERATING_FROM)} – ${dayMonth(OPERATING_TO)}, pokrývka ráno po sneženi ≥ ${COVER_CM} cm)`);
 say("");
 say("| Rad | Sezóny s dátami | Dní ≥ 15 cm | Búrok | Búrok / sezónu (95 % CI) | Priemer búrky [cm] | Bez podmienky pokrývky | Celá zima nov–apr |");
 say("|---|---|---|---|---|---|---|---|");

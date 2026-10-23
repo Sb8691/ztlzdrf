@@ -14,7 +14,7 @@
 
 Konvencie (k): ehyd=0, ehyd-rr=0, geosphere=-1, geosphere-rr=0, snowgrid=0, spartacus=0, geosphere-auto=-1, lwd=-1. Deň merania M = d + k + 1.
 
-## Nezávislé búrky ≥ 15 cm / 24 h (sezóna prevádzky 12. 01. – 04. 15., pokrývka ráno po sneženi ≥ 30 cm)
+## Nezávislé búrky ≥ 15 cm / 24 h (sezóna prevádzky 1. 12. – 15. 4., pokrývka ráno po sneženi ≥ 30 cm)
 
 | Rad | Sezóny s dátami | Dní ≥ 15 cm | Búrok | Búrok / sezónu (95 % CI) | Priemer búrky [cm] | Bez podmienky pokrývky | Celá zima nov–apr |
 |---|---|---|---|---|---|---|---|

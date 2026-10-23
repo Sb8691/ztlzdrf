@@ -1,154 +1,265 @@
-# ztlzdrf – lyžiarske podmienky
+# ztlzdrf – lyžiarske podmienky pri Gnesau
 
-Jedna stránka na **https://sb8691.github.io/ztlzdrf/**: oplatí sa lyžovať a kde? Sleduje štyri
-strediská pri Gnesau (Korutánsko) – **Bad Kleinkirchheim / St. Oswald, Falkert, Turracher Höhe a
-Hochrindl** – v troch horizontoch:
+**Stránka: https://sb8691.github.io/ztlzdrf/** – oplatí sa lyžovať, kedy a kde? Štyri strediská
+v Nockbergoch (Korutánsko): **Bad Kleinkirchheim / St. Oswald, Falkert, Turracher Höhe a Hochrindl**.
+Statická stránka na GitHub Pages; predpovede z Open-Meteo, lavínový stupeň zo správy LWD Kärnten,
+pravdepodobnosti kalibrované na meraniach staníc z minulých zím.
 
-| Časť stránky | Model (cez [Open-Meteo](https://open-meteo.com/)) | Čo ukazuje |
+Tento súbor je vstupný bod: čo stránka robí, ako beží, ako na nej pracovať a čo čaká v sezóne.
+Definície, dáta, overenie a všetky čísla sú v [METODIKA.md](METODIKA.md).
+
+## Čo stránka ukazuje
+
+| Časť | Model (cez [Open-Meteo](https://open-meteo.com/)) | Čo ukazuje |
 |---|---|---|
-| Najbližší lyžiarsky deň | DWD ICON-D2 2,2 km (do 4. 10. 2026 GeoSphere AROME; ICON-D2 je jediný krátkodobý model so zimným archívom, takže jeho POWDER_SNEH je overený) | kartu na stredisko: „Bez snehu“, keď ICON-D2 nevidí hore pokrývku aspoň 30 cm; inak pruh a pravdepodobnosť dobrého / ujde / zlého dňa, čo ho môže pokaziť (s pravdepodobnosťou), šanca na prašan (≥ 15 cm do rána) s POWDER ALERT, očakávaný nový sneh, nový sneh za 3 dni, teploty, vietor, slnko, lavínový stupeň 1–5 pre región hornej stanice (LWD Kärnten cez lawinen.report) s výškou, denným chodom a tendenciou, odkazy na snehovú správu, webkameru a lavínovú správu |
-| Najbližšie 3 dni | ECMWF IFS 9 km | tabuľku deň × stredisko (pruh, dobré %, teplota hore, šanca na prašan, nový sneh, silnejší vietor) a hodinový graf (teplota hore/dole, sneh, nárazy) |
-| Výhľad na 10 dní | ECMWF ensemble 0,25°, 51 scenárov | podiel scenárov s dobrým / priemerným / zlým dňom (nekalibrovaný) a rozpätie snehu |
+| Najbližší lyžiarsky deň | DWD ICON-D2 2,2 km | karta na stredisko: pravdepodobnosť dobrého / ujde / zlého dňa a čo ho môže pokaziť, šanca na prašan s POWDER ALERT, očakávaný nový sneh, teploty, vietor, slnko, lavínový stupeň; odkazy na snehovú správu, webkameru a lavínovú správu |
+| Najbližšie 3 dni | ECMWF IFS 9 km | tabuľka deň × stredisko (pruh, dobré %, teplota hore, šanca na prašan, nový sneh, silnejší vietor) a hodinový graf (teplota hore a dole, sneh, nárazy) |
+| Výhľad na 10 dní | ECMWF ENS 0,25°, 51 scenárov | podiely scenárov dobré / ujde / zlé (nekalibrované) a rozpätie snehu |
 
-„Najbližší lyžiarsky deň" je dnešok, kým lanovky bežia (9:00–16:00), potom zajtrajšok.
+„Najbližší lyžiarsky deň“ je dnešok, kým lanovky bežia (9:00–16:00), potom zajtrajšok. Keď model
+nevidí pri hornej stanici aspoň 30 cm snehu, deň sa nehodnotí a karta ukáže **Bez snehu**. Predpoveď
+nevie, či je stredisko otvorené ani aký je sneh na zjazdovke – na to sú odkazy pri každom stredisku.
 
-## Ako sa hodnotí deň
+## Ako sa počíta
 
-Každé stredisko sa počíta pri **najnižšej a najvyššej stanici lanovky** (súradnice z OpenStreetMap,
-výšky staníc, nie marketingové rozpätia – tie často uvádzajú vrchol, kam lanovka nevedie). Za čas
-prevádzky lanoviek je deň:
+- **Dve stanice na stredisko:** najnižšia a najvyššia stanica lanovky (súradnice z OpenStreetMap,
+  výšky staníc, nie marketingové rozpätia). Open-Meteo pri `elevation=` prepočíta len teplotu; zrážky,
+  nárazy a slnko sú hodnoty bunky modelu. O daždi či snehu preto rozhoduje teplota stanice (do +1 °C
+  sneh, 7 cm snehu = 10 mm vody).
+- **Deň** sa posudzuje za čas prevádzky lanoviek. Zlý = dážď dole aspoň 1 mm alebo nárazy hore nad
+  60 km/h; ujde = slabý dážď (od 0,2 mm), nárazy nad 40 km/h, mäkký sneh (dole aspoň pol dňa nad 3 °C)
+  alebo menej ako hodina slnka; dobrý = nič z toho. Stránka neukazuje áno/nie, ale pravdepodobnosti:
+  každé pravidlo má logistickú krivku kalibrovanú na staniciach GeoSphere, „dobré“ je súčin, že nenastane
+  žiadne z nich. Pod názvom strediska sú zložky od 20 % a pri najbližšom dni inverzia od 50 %
+  (METODIKA §4.5–4.6).
+- **Predpoklad snehu:** modelová výška snehu ICON-D2 pri hornej stanici o 9:00 dáva pravdepodobnosť
+  pokrývky aspoň 30 cm; pod 50 % „Bez snehu“. Ďalšie dni berú túto úroveň a pridajú k nej zmenu podľa
+  svojho modelu (§4.7).
+- **Prašan** = aspoň 15 cm nového snehu pri hornej stanici od 9:00 predošlého dňa do 9:00.
+  Pravdepodobnosť je z kalibrovaného rozdelenia, ktoré sa s predstihom rozširuje; od 20 % svieti
+  **POWDER ALERT** (prvé dva dni) alebo **POWDER POZOR** (tretí deň). „Okolo / až“ = medián a
+  90. percentil, k tomu suchý / vlhší / mokrý podľa teploty počas sneženia (§4.1–4.4).
+- **Lavíny:** stupeň 1–5 mikroregiónu EAWS, v ktorom leží horná stanica, zo správy LWD Kärnten
+  ([lawinen.report](https://lawinen.report/)), s výškou, denným chodom a tendenciou. Len pre najbližší
+  deň a len pre voľný terén mimo zjazdoviek (§4.8).
+- **10-dňový výhľad:** podiely 51 scenárov ansámblu, nekalibrované; kalibrácia príde z logu sezóny
+  2026/27.
 
-- **zlý** – dážď dole aspoň 1 mm, alebo nárazy vetra nad 60 km/h;
-- **ujde** – slabý dážď dole (od 0,2 mm), nárazy nad 40 km/h, aspoň polovica dňa dole nad 3 °C
-  (mäkký sneh), alebo menej ako hodina slnka;
-- **dobrý** – nič z toho.
+Chýbajúce dáta sa nikdy nepočítajú ako nula: deň bez potrebnej hodnoty je „Nedostatok dát“ a percentá
+ansámblu majú vždy menovateľ 51. Prahy sú v `src/config.ts` (`SKI_CONFIG.rules`), krivky a zákony v
+`src/quality-model.ts`, `src/powder-model.ts` a `src/cover-model.ts`; stránka ich vypisuje z
+konfigurácie uloženej v snímke.
 
-Od 5. 10. 2026 (krok 7) stránka pri najbližšom dni a pri troch dňoch neukazuje áno/nie, ale
-**pravdepodobnosti**: pruh dobré / ujde / zlé a číslo „dobré X %“, rovnako ako 10-dňový výhľad. Pre
-každé pravidlo je to logistická krivka na hodnote modelu (dážď dole, náraz hore, slnko, pri ICON-D2 aj
-nízka oblačnosť a vlhkosť), kalibrovaná na šiestich automatoch GeoSphere za štyri zimy mimo vzorky;
-„dobré“ je súčin, že nenastane ani jedno (mäkký sneh ostáva z teploty áno/nie a dobré vynuluje), „zlé“
-súčin dažďa ≥ 1 mm alebo nárazu > 60 km/h. Áno/nie verdikty mali ako pravdepodobnosť Brierovu zručnosť
-okolo nuly, kalibrované 0,3–0,6 pri 0–1 dni (METODIKA §5.3–5.4). Pod názvom strediska sú zložky od
-20 % („dážď dole 40 %“), mäkký sneh a pri najbližšom dni inverzia od 50 % („hore teplejšie než dole“).
+## Zdroje dát a licencie
 
-**Predpoklad snehu (od 16. 10. 2026, krok 8):** deň sa hodnotí, len keď je na čom lyžovať. Modelová výška
-snehu ICON-D2 pri hornej stanici o 9:00 dáva cez kalibrovanú krivku pravdepodobnosť, že tam je pokrývka
-aspoň 30 cm (4 zimy, 17 staníc s meraním: BSS 0,46, AUC 0,95; pri modeli 0 cm je sneh len v 1 % dní,
-pri 30 cm v polovici). Pod 50 % stránka ukáže sivé **Bez snehu** bez pruhu a dôvodov; prašan, teploty a
-vietor ostávajú. Ďalšie dni berú dnešnú úroveň z ICON-D2 a pridajú k nej len zmenu podľa svojho modelu
-(výška snehu z IFS 9 km sa proti staniciam neosvedčila, ansámbel archív nemá). Bežné termíny sezóny
-stredísk sú v `src/config.ts` (`season`) a stránka ich len poznamená („mimo sezóny“). Posledný deň
-10-dňového výhľadu, na ktorý ranný beh ansámblu ešte nesiaha, sa vypustí namiesto „Nedostatok dát“.
+| Zdroj | Na čo | Licencia | Na stránke |
+|---|---|---|---|
+| [Open-Meteo](https://open-meteo.com/) (ICON-D2, IFS, ENS, archívy predpovedí) | predpovede, backtest | CC BY 4.0, bezplatne len nekomerčne | pätička |
+| [GeoSphere Austria Data Hub](https://data.hub.geosphere.at/) | merania na kalibráciu | CC BY 4.0 | pätička |
+| [eHYD](https://ehyd.gv.at/) | merania na kalibráciu (do 2023) | CC BY 4.0, „Datenquelle: ehyd.gv.at“ | pätička |
+| LWD Kärnten cez [avalanche.report](https://avalanche.report/) | lavínový stupeň (CAAML v6) | CC BY 4.0 | pätička |
+| LWD Kärnten, staničné súbory SMET | merania Turracherhöhe a Falkert na kalibráciu | bez zverejnenej licencie, majiteľ požiadal o súhlas 16. 10. 2026 | neuvádza sa |
+| OpenStreetMap | súradnice staníc lanoviek | ODbL | – |
 
-**Prašan** = aspoň 15 cm nového snehu pri hornej stanici od 9:00 predošlého dňa do 9:00. Karta aj
-tabuľka ukazujú kalibrovanú pravdepodobnosť (`powderSnow`); od 20 % svieti **POWDER ALERT** (prvé dva
-dni) alebo **POWDER POZOR** (tretí deň). Pri očakávanom snehu je „okolo“ medián a „až“ 90. percentil,
-k tomu suchý / vlhší / mokrý podľa teploty počas sneženia. Stará značka „prašan“ pri 10 cm za 72 h zo
-stránky zmizla; súčet za 3 dni ostal ako údaj.
-
-**Lavínové nebezpečenstvo (od 16. 10. 2026, krok 9):** karta najbližšieho dňa ukazuje stupeň 1–5 z lavínovej
-správy Lawinenwarndienst Kärnten, ktorá od zimy 2025/26 vychádza v spoločnom systéme Euregia
-([lawinen.report](https://lawinen.report/)) ako CAAML v6 JSON pod CC BY 4.0: o 17:00 na nasledujúci deň, o
-8:00 môže prísť aktualizácia. Stredisko dostane stupeň mikroregiónu EAWS, v ktorom leží jeho horná stanica
-(Bad Kleinkirchheim Nockberge Süd, Falkert a Turracher Höhe Nockberge Mitte, Hochrindl Gurktaler Alpen Süd;
-`npm run regions` to overí proti polygónom), s delením podľa výšky („nad 1800 m“, „hranica lesa“), ráno /
-popoludní a tendenciou na ďalší deň, v farbách stupnice EAWS so slovenskými názvami (nízke, mierne,
-zvýšené, vysoké, veľmi vysoké). Generátor aj tlačidlo Obnoviť berú správu na deň lanoviek, pred 17:00 ešte
-včerajšiu (stránka to povie), mimo sezóny správy (2025/26: 28. 11. – 1. 5.) nič. Stupeň platí pre voľný terén
-mimo zjazdoviek; texty správy stránka nepreberá, len na ňu odkazuje.
-
-Prahy sú v `src/config.ts` (`SKI_CONFIG.rules`), krivky v `src/quality-model.ts` a zákon prašanu v
-`src/powder-model.ts`; stránka všetko vypisuje z konfigurácie vloženej do snímky.
-
-Dôležité, overené 3. 10. 2026: parameter `elevation=` v Open-Meteo prepočíta **len teplotu**.
-Zrážky, nárazy a slnko sú hodnoty celej bunky modelu, rovnaké dole aj hore. Preto o tom, či na
-stanici prší alebo sneží, rozhoduje jej vlastná teplota (do +1 °C sneh, 7 cm snehu = 10 mm vody ako
-v Open-Meteo). Ansámbel má hrubú mriežku, takže v 10-dňovom výhľade sa strediská líšia hlavne
-teplotou.
-
-Predpoveď nevie, či je stredisko otvorené, ani aký je sneh na zjazdovke – na to sú odkazy na
-snehovú správu a webkameru pri každom stredisku.
+Surové súbory LWD nie sú v gite (`~/.cache/ztlzdrf/lwd-ktn/`). Odvodené súhrny z nich (počty búrok,
+skóre podľa staníc) v `data/` sú; majiteľ požiadal LWD o súhlas aj s ich použitím.
 
 ## Ako to funguje
 
-GitHub Pages servuje statické súbory, server tu nie je. `docs/index.html` preto nesie snímku dát aj
-kód, ktorý ju vypočítal a nakreslí – tlačidlo **Obnoviť predpoveď** sťahuje priamo z prehliadača a
-otvorená stránka sa obnoví sama, keď sú dáta staršie ako hodina.
+GitHub Pages servuje statické súbory, server tu nie je. `docs/index.html` nesie snímku dát aj kód,
+ktorý ju vypočítal a nakreslí:
 
-- `src/ski-core.js` – **celý výpočet**, čisté ESM JavaScript bez importov. Beží v Node (generátor
-  aj testy) a ten istý súbor sa vkladá do stránky.
-- `src/ski-ui.js` – vykreslenie stránky ako čistá funkcia zo snímky na HTML; v prehliadači aj
-  obnova dát.
-- `src/ski-page.ts` – poskladá `docs/index.html`; obsah predkreslí tým istým klientskym kódom
-  (spusteným vo `vm`), takže stránka je čitateľná aj pred načítaním JavaScriptu.
-- `src/ski.ts` – generátor: postupne stiahne tri horizonty a lavínovú správu, uloží `docs/data/ski.json`, zapíše
-  stránku. Snímku mladšiu ako 20 min použije znova; keď sťahovanie zlyhá, publikuje poslednú platnú.
-- `src/config.ts` – strediská (stanice, odkazy, región lavínovej správy), pravidlá a zdroje.
+```
+Open-Meteo ───────┐                              ┌─> docs/data/ski.json   (snímka, verzia 6)
+                  ├─> src/ski.ts (CI 3× denne) ──┼─> docs/index.html      (predkreslená stránka + kód)
+avalanche.report ─┘                              └─> data/prospective/<sezóna>.jsonl (log na overenie)
 
-Chýbajúce dáta sa nikdy nepočítajú ako nula: deň bez potrebnej hodnoty je „Nedostatok dát" a
-percentá ansámblu majú vždy menovateľ 51.
-
-## Automatické obnovovanie
-
-`.github/workflows/ski.yml` beží **len od novembra do apríla**, trikrát denne (04:13, 10:13 a
-16:13 UTC): build, testy, `node dist/ski.js` a commit `docs/`, ak sa niečo zmenilo. Dá sa spustiť aj
-ručne (Actions → Ski Conditions → Run workflow). Žiadne e-maily sa neposielajú.
-
-## Presnejšia predpoveď a POWDER ALERT (prebieha)
-
-Cieľ: kalibrovaná pravdepodobnosť **POWDER_SNEH** (aspoň 15 cm nového snehu za 24 h) pre štyri strediská
-na 10 lyžiarskych dní dopredu, overená na minulých sezónach mimo vzorky a zvlášť pre každý predstih,
-neskôr aj kvalita powderu a „super lyžovačka“. Postup ide po krokoch, každý krok je samostatný commit
-schválený majiteľom. Definície, rozhodnutia, dáta a všetky čísla sú v [METODIKA.md](METODIKA.md); tu je
-len denník. Čo ďalej, kedy a čo čaká na majiteľa: [TODO.md](TODO.md).
-
-| Krok | Stav | Čo vzniklo |
-|---|---|---|
-| 0 – audit dát | hotovo 3. 10. 2026 | zdroje predpovedí a pravdy, archívy, licencie, CORS: METODIKA §3.1–3.8 |
-| 1 – pravda a klimatológia | hotovo 3. 10. 2026 | `npm run truth:fetch` + `npm run truth`; 10 ručných staníc nového snehu (eHYD, GeoSphere), automaty, LWD, SNOWGRID; dátumové konvencie overené proti INCA; búrky ≥ 15 cm 3–5 za sezónu na stanicu, regionálne 7,4; ΔHS automatov = pravda, SNOWGRID nie: [data/truth](data/truth), METODIKA §3.9 |
-| 2 – backtest a baseline | hotovo 4. 10. 2026 | `npm run backtest:fetch` + `npm run backtest`: IFS 9 km celé behy, Previous Runs ICON-D2/ICON-EU/IFS 0,25°/GFS, Historical Forecast; len predpovede zverejnené pred koncom okna. Výsledok: deterministický prah 15 cm nemá zručnosť (BSS 0,13 pri 23 h, záporný od ~80 h) ani v dnešnom pravidle, ale AUC úhrnu 0,96–0,98 do 35 h a 0,9 do 71 h – informácia je, chýba kalibrácia: [data/backtest](data/backtest), METODIKA §5.1 |
-| 3 – model | hotovo 4. 10. 2026 | `npm run model`: fyzika pri predstihu 0 na 10 sezónach IFS a 4 ICON-D2 (14 staníc) – dnešné pravidlo stránky je rovnako dobrý vstup ako fitované varianty (wet-bulb, pomer sneh/voda, výška, vietor); zisk dáva kalibrovaná neistota: dvojdielne rozdelenie (P(sneží) a √úhrn okolo √x) so sklonom klesajúcim s predstihom, overené zima proti zime: BSS 0,26 (0,01–0,42) pri 23 h, 0,21 pri 71 h, 0,42 pri 0 h, ICON-D2 0,34 pri 1 dni; kombinácia modelov v šume. Koeficienty v `data/model/powder-model.json`: [data/model](data/model), METODIKA §4 |
-| 4 – zapojenie do stránky | hotovo 4. 10. 2026 | snímka v2: každý deň horizontov D0 (ICON-D2, nahradil AROME) a D0–D+2 (IFS 9 km) nesie `powderSnow` – úhrn okna D−1 09:00 → D 09:00, predstih, P(≥ 15 cm), medián a 90. percentil; koeficienty v `src/powder-model.ts` (kópia `data/model/powder-model.json`, test rovnosti); stupeň dňa (ALERT D0–D+1, POZOR D+2–D+3) a značka `alert` od p* = 0,20 (predvolené N = 4, majiteľ N neurčil; jedno číslo v `src/powder-model.ts`): METODIKA §4.4 |
-| 5 – prospektívne overovanie | 5a hotovo 4. 10. 2026, vyhodnotenie po sezóne 2026/27 | každý čerstvý beh CI pripíše riadok do `data/prospective/<sezóna>.jsonl`: strediská, šesť staníc s pravdou (rovnaká požiadavka, ten istý beh), 51 členov ansámblu v okne; `npm run verify` po sezóne: METODIKA §5.2 |
-| 6 – kvalita dňa | hotovo 4. 10. 2026 | `npm run rules` + `npm run quality`: dnešné áno/nie pravidlá sú zle kalibrované (dážď varuje priveľa, vietor z IFS bez zručnosti, zamračenie primálo), kalibrované pravdepodobnosti majú BSS 0,3–0,6 pri 0–1 d; teplota počas sneženia z ICON-D2 presná, z IFS +1 °C; inverziu vidí len ICON-D2; vietor pri powderi a slnečný vrchol nad hmlou sa predpovedať nedajú. Snímka v3 nesie `quality` (P dážď, P veterno / stojace lanovky, P zamračené, P dobrý deň = súčin, inverzia, teplota počas sneženia s pásmom, náraz v okne); deterministické horizonty doťahujú nízku oblačnosť a vlhkosť: [data/rules](data/rules), [data/quality](data/quality), METODIKA §4.5, §5.3–5.4 |
-| 7 – zobrazenie pravdepodobností | hotovo 5. 10. 2026 | rozhodnutie majiteľa 5. 10.: stránka ukazuje pravdepodobnosti namiesto áno/nie. Snímka v4: deterministické dni nesú `goodPct / fairPct / badPct` (zlé = súčin P dážď ≥ 1 mm a P náraz > 60 km/h, overené proti priamemu fitu: ICON-D2 BSS 0,24–0,29, IFS 0,05; dobré = overený súčin, mäkký sneh ho vynuluje). Karta a tabuľka: pruh + „dobré X %“, dôvody s pravdepodobnosťou od 20 %, riadok „Prašan do rána (≥ 15 cm)“ s POWDER ALERT / POZOR, „Nový sneh do rána: okolo / až“ s pásmom suchý / vlhší / mokrý, inverzia od 50 % pri najbližšom dni; text „Ako sa počítajú percentá?“ prepísaný; pätička uvádza GeoSphere a eHYD; `docs/` obnovené živým načítaním: METODIKA §4.6 |
-| 8 – predpoklad snehu | hotovo 16. 10. 2026 | majiteľ 16. 10.: stránka v októbri hodnotila dni bez snehu. `npm run backtest:fetch -- --only=snow` + `npm run cover`: modelová výška snehu proti nameranej (17 staníc, nov–apr): ICON-D2 4 zimy BSS 0,46, AUC 0,95, P(≥ 30 cm │ model 0) 0,01; IFS 9 km 2 zimy BSS 0,25, biasy −43 až +23 cm → brána len z ICON-D2 (`src/cover-model.ts`), ostatné horizonty kotvené na jej úroveň + vlastná zmena (predpoklad, overí sezóna). Snímka v5: `snowCover` na každom dni aj v logu; stránka „Bez snehu“ pod 50 %, sezóna stredísk ako poznámka, posledný deň výhľadu bez dát sa vypúšťa: [data/cover](data/cover), METODIKA §4.7, §5.5 |
-| 9 – lavínové nebezpečenstvo | hotovo 16. 10. 2026 | majiteľ 16. 10.: pridať lavínový stupeň k strediskám. Audit zdroja: LWD Kärnten od 29. 11. 2025 v systéme Euregia, CAAML v6 JSON na `static.avalanche.report/bulletins/<dátum>/<dátum>_AT-02_de_CAAMLv6.json` (CORS `*`, CC BY 4.0 podľa Open Data avalanche.report; vlastný web LWD strojový výstup nemá). Mikroregióny hornej stanice z polygónov EAWS (`npm run regions`). Snímka v6: `avalanche` (deň správy, časy, stupne za stredisko s výškou, ráno/popoludní, tendencia) alebo null; generátor aj prehliadač skúšajú deň lanoviek, potom deň pred ním, 404 = bez správy. Karta: farebné číslo EAWS + slovenský názov, výška, denný chod, tendencia, región, odkaz „Lavínová správa“; pätička so zdrojom a licenciou; fixtúry zo skutočných správ `src/fixtures/avalanche/`: METODIKA §4.8 |
-
-Offline skripty bežia cez `npm run` (tsx), surové dáta držia v `~/.cache/ztlzdrf` mimo gitu
-(`ZTLZDRF_CACHE` ho presmeruje), do gitu idú len malé odvodené JSON a správy. Dáta: Open-Meteo (CC BY 4.0,
-nekomerčne), GeoSphere Austria Data Hub (CC BY 4.0), eHYD („Datenquelle: ehyd.gv.at“, CC BY 4.0), lavínová
-správa LWD Kärnten cez avalanche.report / lawinen.report (CC BY 4.0), staničné SMET súbory LWD Kärnten (bez
-zverejnenej licencie – používajú sa súkromne, majiteľ požiadal o súhlas 16. 10. 2026; súbory nie sú v gite).
-
-```sh
-npm test                 # testy stránky aj parserov
-npm run truth:fetch      # história pravdy do cache (s cache zadarmo)
-npm run truth            # búrky, klimatológia, zhoda zdrojov → data/truth/
-npm run backtest:fetch   # archív predpovedí s predstihom do cache
-npm run backtest         # baseline podľa predstihu → data/backtest/
-npm run model            # fit a výber modelu úhrnu → data/model/
-npm run verify           # po sezóne: log predpovedí proti pravde → data/prospective/REPORT-*.md
-npm run rules            # pravidlá stránky proti staniciam → data/rules/
-npm run quality          # kvalita powderu, inverzie, oblak, dobrý deň; krivky pre stránku → data/quality/
-npm run cover            # krok 8: modelová výška snehu proti nameranej → data/cover/ (najprv npm run backtest:fetch -- --only=snow)
-npm run regions          # krok 9: mikroregióny EAWS pre stanice lanoviek proti src/config.ts (polygóny regions.avalanches.org)
+prehliadač: tlačidlo „Obnoviť predpoveď“, alebo pri otvorení či návrate na stránku s dátami staršími
+ako 60 min → ten istý výpočet znova
 ```
 
-## Lokálne
+- `src/ski-core.js` – **celý výpočet**, čisté ESM bez importov. Beží v Node (generátor, testy) a ten
+  istý súbor sa vkladá do stránky.
+- `src/ski-ui.js` – kreslenie (snímka → HTML) a v prehliadači obnova dát.
+- `src/ski-page.ts` – HTML, CSS, pätička; obsah predkreslí tým istým kódom vo `vm`, takže stránka je
+  čitateľná aj bez JavaScriptu.
+- `src/ski.ts` – generátor: stiahne tri horizonty a lavínovú správu, uloží snímku, zapíše stránku.
+  Snímku mladšiu ako 20 min použije znova; keď sťahovanie zlyhá, publikuje poslednú platnú.
+- `src/prospective.ts` – pri každom čerstvom stiahnutí pripíše riadok do sezónneho logu predpovedí.
+- `src/config.ts` – strediská (stanice, odkazy, sezóna, lavínový región), horizonty, pravidlá, zdroje.
+  `src/*-model.ts` sú kópie `data/*/…-model.json`, z ktorých ich vyrábajú offline skripty.
+- `src/fixtures/` – skutočné odpovede (lavínové správy 2025/26) pre testy; testy sú v `src/*.test.ts`
+  a `scripts/lib/*.test.ts`.
+- `scripts/` a `scripts/lib/` – offline skripty (nižšie); `data/<oblasť>/REPORT.md` – ich výsledky;
+  `prompts/fable-presna-predpoved.md` – pôvodné zadanie modelu z 3. 10. 2026.
+- `.github/workflows/ski.yml` – CI **len november až apríl** o 04:13, 10:13 a 16:13 UTC: build, testy,
+  generátor, commit `docs/` a `data/prospective/`, ak sa niečo zmenilo. Ručne: Actions → Ski
+  Conditions → Run workflow.
+
+Pri zmene tvaru snímky treba zvýšiť `SKI_SNAPSHOT_VERSION` v `src/ski-core.js`; starú snímku generátor
+odmietne a stiahne znova.
+
+## Vývoj
+
+Node 24 ako v CI.
 
 ```sh
 npm ci
-npm test
-npm run ski                                     # stiahne a zapíše docs/
-SKI_DOCS_DIR=/tmp/ski npm run ski               # zapíše inam ako do docs/
-SKI_DOCS_DIR=/tmp/ski SKI_LOG_DIR=/tmp/ski/log npm run ski   # aj log predpovedí mimo data/prospective/
-SKI_DOCS_DIR=/tmp/ski SKI_RENDER_ONLY=true npm run ski   # bez siete, z uloženej snímky
+npm run build && npm test && npm run check:scripts             # musí prejsť
+npm run ski                                                    # stiahne, zapíše docs/ aj riadok logu
+SKI_DOCS_DIR=/tmp/ski SKI_LOG_DIR=/tmp/ski/log npm run ski     # všetko mimo repozitára
+SKI_DOCS_DIR=/tmp/ski SKI_RENDER_ONLY=true npm run ski         # bez siete, z uloženej snímky
 ```
 
-`SKI_RENDER_ONLY` použije konfiguráciu uloženú v snímke – po zmene `src/config.ts` treba stiahnuť
-znova. Do `docs/` generujte cez `npm run build && node dist/ski.js`, presne ako CI.
+- `docs/` generovať ako CI: `npm run build && node dist/ski.js`. Mimo sezóny s `SKI_LOG_DIR` mimo
+  repozitára, aby ručné behy nešli do sezónneho logu.
+- `SKI_RENDER_ONLY=true` berie konfiguráciu zo snímky – po zmene `src/config.ts` treba stiahnuť znova.
+- V sezóne CI commituje trikrát denne: pred prácou `git pull --rebase`, `docs/` pregenerovať až potom.
+- Testy stránky počítajú vnútri `<main id="sk-main">` a odstraňujú modulový skript (vložený kód má tie
+  isté názvy tried). Fixtúra s rovnakou teplotou hore aj dole dáva inverziu 62 % – správne.
+- Zabitý `tsx` beh môže nechať proces `node`, ktorý zožerie procesor; ďalšie behy sú potom 100× pomalšie.
+- Dátumové konvencie zdrojov (eHYD, GeoSphere, LWD) sú overené proti INCA v METODIKA §3.9.
 
-Pôvodná aplikácia na natieranie terasy (august – október 2026) je v histórii gitu pred commitom
-„Judge ski days at four nearby resorts over three horizons".
+## Offline modely
+
+Ťažké výpočty bežia offline cez `npm run` (tsx). Surové dáta sú v `~/.cache/ztlzdrf` mimo gitu
+(`ZTLZDRF_CACHE` ho presmeruje); do gitu idú len malé odvodené JSON a správy `REPORT.md`.
+
+| Príkaz | Čo robí | Výstup |
+|---|---|---|
+| `npm run truth:fetch`, potom `npm run truth` | história meraní (eHYD, GeoSphere, LWD), búrky, klimatológia | `data/truth/` |
+| `npm run backtest:fetch`, potom `npm run backtest` | archív predpovedí s predstihom, skóre surových modelov | `data/backtest/` |
+| `npm run model` | zákon prašanu podľa predstihu | `data/model/` → `src/powder-model.ts` |
+| `npm run rules`, `npm run quality` | pravidlá dňa a krivky kvality proti staniciam | `data/rules/`, `data/quality/` → `src/quality-model.ts` |
+| `npm run cover` (najprv `npm run backtest:fetch -- --only=snow`) | modelová výška snehu proti nameranej | `data/cover/` → `src/cover-model.ts` |
+| `npm run regions` | mikroregióny EAWS staníc lanoviek proti `src/config.ts` | chyba pri nezhode |
+| `npm run verify` | po sezóne: log predpovedí proti pravde | `data/prospective/REPORT-<sezóna>.md` |
+
+Open-Meteo sa volá postupne; `scripts/lib/cache.ts` pri minútovom limite čaká a pri hodinovom skončí
+(exit 2) – potom pokračovať neskôr z cache. Prepínače jednotlivých skriptov: METODIKA §8.
+
+## Stav a denník krokov
+
+Stav k 23. 10. 2026: kroky 0–9 sú hotové a nasadené, krok 10 (opravy z review) prebieha. Rozhodujúci
+test modelu je sezóna 2026/27. Každý krok je samostatný commit schválený majiteľom; rozhodnutia s
+dátumom sú v METODIKA §2.
+
+| Krok | Hotovo | Čo pribudlo | METODIKA |
+|---|---|---|---|
+| 0 – audit dát | 3. 10. 2026 | zdroje predpovedí a meraní, archívy, licencie, CORS | §3.1–3.8 |
+| 1 – pravda a klimatológia | 3. 10. 2026 | 10 ručných staníc nového snehu, automaty, dátumové konvencie; 3–5 búrok ≥ 15 cm za sezónu na stanicu | §3.9 |
+| 2 – backtest | 4. 10. 2026 | pevný prah 15 cm nemá zručnosť, úhrn ale áno (AUC 0,96–0,98 do 35 h) | §5.1 |
+| 3 – model prašanu | 4. 10. 2026 | dvojdielne rozdelenie podľa predstihu: BSS 0,26 pri 23 h, ICON-D2 0,34 pri 1 dni | §4.1–4.3 |
+| 4 – zapojenie | 4. 10. 2026 | `powderSnow` v snímke, prvý deň z ICON-D2 (predtým AROME), ALERT od p* = 0,20 | §4.4 |
+| 5 – prospektívny log | 4. 10. 2026 | riadok na každý čerstvý beh CI, `npm run verify` po sezóne | §5.2 |
+| 6 – kvalita dňa | 4. 10. 2026 | kalibrované krivky dažďa, vetra, slnka a inverzie (BSS 0,3–0,6 pri 0–1 d) | §4.5, §5.3–5.4 |
+| 7 – pravdepodobnosti na stránke | 5. 10. 2026 | pruh dobré / ujde / zlé namiesto áno/nie | §4.6 |
+| 8 – predpoklad snehu | 16. 10. 2026 | „Bez snehu“ z modelovej pokrývky ICON-D2 (AUC 0,95) | §4.7, §5.5 |
+| 9 – lavínový stupeň | 16. 10. 2026 | stupeň EAWS regiónu hornej stanice na karte najbližšieho dňa | §4.8 |
+| 10 – review a opravy | 10a 23. 10. 2026 | review kódu, skriptov, dokumentácie a CI; 10a jeden README (TODO.md zlúčené), opravy METODIKA; čakajú 10b–10d (Otvorené) | §2 |
+
+## Sezóna 2026/27
+
+- **Pred 1. 11.** – kroky 10b a 10c (Otvorené) a skúšobný beh CI; `npm run regions` (polygóny EAWS majú
+  dátumy platnosti, skript skončí chybou, keď `avalancheRegion` nesedí).
+- **1. 11. – CI štartuje.** Po prvom behu: pribudol commit s `docs/` a `data/prospective/2026-27.jsonl`;
+  riadok má `stations` (6 staníc) aj `members` (51 hodnôt od D+1); ~3 riadky denne po 17–24 kB. Ak log CI
+  hlási „log bude bez staníc“, pozrieť `pointsUrl` a limity Open-Meteo.
+- **Koniec novembra – prvá lavínová správa** (2025/26 vyšla 28. 11.): karty ukazujú stupeň a odkaz
+  „Lavínová správa“. Ak nie, overiť, či existuje
+  `https://static.avalanche.report/bulletins/<dátum>/<dátum>_AT-02_de_CAAMLv6.json`; pri zmene adresy
+  stačí upraviť `avalanche` v `src/config.ts`.
+- **Počas sezóny** sa koeficienty nemenia (METODIKA §7). Opravy kódu a UI sú možné; pri zmene tvaru
+  snímky zvýšiť `SKI_SNAPSHOT_VERSION` – log nesie `v` aj `snapshotVersion`.
+- **Január 2027** – priebežná kontrola: `npm run verify` beží aj na čiastočnom logu, ak je v cache pravda
+  (`npm run truth:fetch`, `npm run truth`); čísla budú hrubé, ale ukážu hrubé chyby.
+- **Najneskôr marec 2027** – `npm run truth:fetch -- --only=lwd`: súbory LWD držia len 12 mesiacov
+  (len so súhlasom LWD).
+- **Máj 2027 – vyhodnotenie:** `npm run truth:fetch` → `npm run truth` → `npm run verify`
+  (→ `data/prospective/REPORT-2026-27.md`: BSS, spoľahlivosť a CRPS podľa predstihu a slotu CI, strediská
+  cez náhradné stanice `RESORT_PROXY`, rozhodovacia tabuľka pre p*). Potom podľa METODIKA §7 koeficienty
+  ostanú, alebo sa po opravách „na prefit“ (Otvorené) a s novou zimou v archíve (`npm run backtest:fetch`)
+  prefitujú: `model` → `src/powder-model.ts`, `rules` + `quality` → `src/quality-model.ts`,
+  `backtest:fetch -- --only=snow` + `cover` → `src/cover-model.ts`, a `version` sa zvýši. Z logu overiť
+  aj kotvenú zmenu pokrývky (`snowCover` staníc na D+1, D+2 a vo výhľade proti nameranej výške snehu).
+  Najprv správa majiteľovi, až potom zmena.
+- **Pred zimou 2027/28** – GitHub po 60 dňoch bez commitu vypína plánované workflow: v októbri
+  skontrolovať, že Ski Conditions je zapnutý; obnoviť `season` v `src/config.ts`; `npm run regions`.
+
+## Otvorené
+
+**Schválené 23. 10. 2026, čaká na prácu (krok 10, každé písmeno jeden commit):**
+
+- **10b – stránka a log (pred 1. 11.):** včerajšiu lavínovú správu brať len kým platí (`avalancheDates`);
+  otvorenú stránku obnoviť aj časovačom a pri zmene najbližšieho dňa po 16:00, vždy prekresliť; časový
+  limit sťahovania v prehliadači; zlá odpoveď staníc nesmie zahodiť riadok logu (`buildForecastLog`);
+  generátor má opakovať chybové odpovede Open-Meteo pod HTTP 200 a pri 429 čakať aspoň minútu; test
+  rovnosti `src/cover-model.ts` a `snowTemp` s JSON; podiely výhľadu so súčtom 100 %; v tabuľke „ujde“
+  namiesto „priemerný“; `docs/` pregenerovať.
+- **10c – CI:** akcie v7, `timeout-minutes`, ručný beh mimo sezóny bez zápisu do logu; potom skúšobný beh.
+- **10d – čísla:** klimatológia v `scripts/cover-verify.ts` z celého radu stanice (dnes 0,2 pri staniciach s
+  jednou sezónou), záporné ΔHS v `scripts/backtest-report.ts` orezať na 0, znova `npm run cover` a
+  `npm run backtest` (riadky ICON-D2 sú z neúplného archívu); čísla v METODIKA §4.7, §5.1, §5.5 a tu.
+
+**Čaká na majiteľa:**
+
+- **LWD Kärnten** – odpoveď na žiadosť zo 16. 10. 2026 (staničné dáta Turracherhöhe 2900265 a Falkert
+  2900240 a odvodené čísla v `data/`; Abteilung 3, abt3.katastrophenschutz@ktn.gv.at). Dovtedy sa surové
+  súbory používajú len súkromne a LWD sa ako zdroj meraní na stránke neuvádza. Lavínová správa je iný
+  prípad (CC BY 4.0, už na stránke).
+- **Prah POWDER ALERT** p* = 0,20 (N = 4) je predvolená hodnota, nie meranie: potvrdiť alebo zmeniť
+  `alert.minProb` v `src/powder-model.ts` podľa rozhodovacej tabuľky v `data/model/REPORT.md`
+  (p* = 1/(N + 1), N = koľko zbytočných ciest stojí za jeden zmeškaný powder deň).
+- **Spätná väzba na zobrazenie** – slová, poradie riadkov, prahy 20 % (dôvody), 5 % (prašan v tabuľke) a
+  50 % (inverzia) sú voľby, nie merania.
+
+**Na prefit po sezóne (máj 2027), teraz nemeniť:** stopové úhrny (eHYD 0,001 cm, šum ΔHS LWD) sa v
+`scripts/model-fit.ts` rátajú ako „snežilo“ – jeden prah 1 cm pre všetky zdroje; sklon predstihu ICON-D2
+fitovať na rovnakej vzorke staníc pri 0 h aj pri 1 dni; v `scripts/truth-fetch.ts` opraviť `yearChunks`
+(na jar 2028 by poslal zlú požiadavku), v `scripts/backtest-fetch.ts` dopĺňať čiastočne stiahnuté mesiace,
+v `scripts/lib/cache.ts` zapisovať atomicky.
+
+**Nápady (neschválené – najprv plán a „Áno“):**
+
+1. **„Kam zajtra“** – jeden riadok navrchu s najlepším strediskom na najbližší deň (cieľ zo zadania,
+   stránka ho dnes nerieši).
+2. **Kalibrácia 10-dňového výhľadu** z `members` v logu (dvojdielne rozdelenie na priemer a rozptyl
+   členov), potom aj pravdepodobnosť prašanu D+3–D+9 (stupeň VÝHĽAD). Potrebuje aspoň jednu sezónu logu.
+3. **Predstih v krivkách kvality** – dnes sú z predstihu 0; na logu overiť, či na D+1 a D+2 držia.
+4. **D+3 so stupňom POZOR** – štvrtý deň tabuľky (rozhodnutie majiteľa); IFS pri ~95 h má BSS len ~0,1.
+5. **Zo zadania nedorobené:** hysteréza stupňa ALERT medzi behmi, značky „fresh tracks“ a „bluebird powder“.
+6. **Stav povrchu snehu** (vek snehu, dážď na sneh, topenie a mrznutie za 14–30 dní) – chýba pravda
+   (SNOWGRID udalosti nevidí, výška snehu a teploty LWD by mohli stačiť na jednoduchý index); najprv audit,
+   potom plán.
+7. **Namerané hodnoty a snehová správa** v snímke cez generátor („koľko napadlo naozaj“; zdroje bez CORS
+   prehliadač načítať nevie) – nový zdroj = nová licencia = najprv otázka.
+8. **Technické:** jedna spoločná sekvencia sťahovania pre generátor aj prehliadač (dnes dve kópie, ktoré sa
+   rozišli); nesťahovať 10-dňový ansámbel (~2,3 MB), keď nepribudol nový beh; test obnovy v prehliadači a
+   testy na dňoch zmeny času; upratať zdvojené konštanty v skriptoch.
+9. **Pokrývka ďalej:** výška snehu v údolí (dolná stanica) ako druhá brána alebo poznámka; `npm run verify`
+   rozšíriť o skóre pokrývky.
+10. **UI drobnosti** podľa spätnej väzby: tooltipy v hodinovom grafe, náraz v powder okne (dnes skrytý, bez
+    zručnosti), vrstva „pre mamu“ (majiteľ zatiaľ nechcel).
+
+## Pravidlá práce na projekte
+
+- **Postup:** krátky plán → „Áno“ → malé kroky, každý jeden commit → správa (výsledok, overenie, čo je
+  predpoklad) → push až po schválení. Podstatný krok dostane riadok v denníku krokov tu a zápis v
+  METODIKA §2.
+- **Jazyk:** slovenčina s majiteľom a v dokumentoch; kód, komentáre a commity po anglicky.
+- **Architektúra:** statická stránka bez servera; živý výpočet len v `src/ski-core.js` (čistý, bez
+  importov a Node API); zdroj pre prehliadač musí mať CORS a rozumnú veľkosť. Ťažké veci offline v
+  TypeScripte, surové dáta v cache mimo gitu, Python len po dohode.
+- **Dáta:** Open-Meteo bezplatne len nekomerčne a šetrne; žiadne API kľúče, platené služby ani scraping
+  bez súhlasu majiteľa; licencie dodržať; nikam neposielať osobné údaje.
+- **Testy:** `npm run build && npm test` musí prejsť; nová logika má deterministické testy na fixtúrach
+  zo skutočných odpovedí.
+- **Zastaviť sa a opýtať:** na konci kroku, pred novým zdrojom dát, licenciou alebo veľkým sťahovaním a
+  keď dáta vyvrátia predpoklad kroku. Drobnosti v schválenom kroku rozhodnúť a zapísať ako predpoklad.
+- **Na začiatku relácie:** tento súbor a METODIKA §1, §2, §4 a §6–7; potom
+  `npm ci && npm run build && npm test && npm run check:scripts`.
+
+## História
+
+Do októbra 2026 bola v repozitári aplikácia na natieranie terasy; je v histórii gitu pred commitom
+„Judge ski days at four nearby resorts over three horizons“ (0eb2896).
