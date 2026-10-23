@@ -6,7 +6,8 @@ on:
     # at :00 (GitHub's busiest moment, when queued runs get delayed or dropped). Times are UTC:
     # 04:13 catches the overnight ICON-D2/ECMWF runs for the morning decision, 10:13 the 00z ECMWF
     # ensemble, 16:13 the midday ICON-D2 run for planning tomorrow. A run that comes hours late costs
-    # little: the open page re-fetches by itself once its data is older than an hour.
+    # little: the open page re-fetches by itself once its data is older than an hour. The months are
+    # also LOG_MONTHS in src/ski.ts (a test keeps the two equal).
     - cron: "13 4,10,16 * 11,12,1,2,3,4 *"
   workflow_dispatch:
 
@@ -23,10 +24,13 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    # A normal run takes about a minute; Open-Meteo's rate limits can add a few minutes of waiting
+    # (src/fetch-json.ts). Without a cap a hung run would hold the concurrency group for six hours.
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -36,7 +40,9 @@ jobs:
 
       # Fetches the three horizons, stores docs/data/ski.json, writes docs/index.html and appends the
       # run to data/prospective/<season>.jsonl for the season-end verification (src/prospective.ts).
-      # If Open-Meteo fails, the last valid snapshot is republished as it was (src/ski.ts).
+      # A manual run outside November-April writes that line to the runner's temp directory instead,
+      # so it is never committed. If Open-Meteo fails, the last valid snapshot is republished as it
+      # was (src/ski.ts).
       - name: Generate the page
         run: node dist/ski.js
 

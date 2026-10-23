@@ -33,6 +33,7 @@ sú po anglicky, tento dokument po slovensky. Dátumy sú absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 23. 10. 2026 | Krok 10c (CI): `actions/checkout` a `actions/setup-node` v7 (Node 24 natívne), limit behu 20 min; čerstvé načítanie mimo mesiacov cronu (november až apríl, `LOG_MONTHS` v `src/ski.ts`, test drží zhodu s `ski.yml`) zapíše riadok logu do dočasného priečinka systému namiesto `data/prospective/`, aby ručný beh v októbri neprimiešal riadok do sezóny; `SKI_LOG_DIR` platí vždy. Skúšobný beh cez `gh workflow run` | majiteľ (áno 23. 10.), Claude |
 | 23. 10. 2026 | Krok 10b (stránka a log): včerajšia lavínová správa len kým platí, prepadnutá sa nekreslí; otvorená stránka kontroluje každú minútu a pri návrate na kartu, či sú dáta staršie ako 60 min, či sa zmenil najbližší lyžiarsky deň alebo skončila platnosť lavínovej správy (generátor to isté s 20 min); po polnoci prekreslí relatívne časy; sťahovanie v prehliadači má limit 45 s a po neúspešnej obnove čaká 10 min; generátor opakuje chybové odpovede Open-Meteo pod HTTP 200 a pri 429 čaká aspoň 60 s; nečitateľná odpoveď pre stanice zahodí len stanice horizontu (`stationsError`), nie riadok logu; podiely ansámblu so súčtom 100 ako pri deterministických dňoch; testy zhody pre pokrývku a `snowTemp`. Prahy 45 s, 10 min a 60 s sú voľby, nie merania | majiteľ (áno 23. 10.), Claude |
 | 23. 10. 2026 | Krok 10 (review repozitára): dokumentácia = README.md ako vstupný bod (TODO.md zlúčené doň) + METODIKA.md s podrobnosťami; opravy z review v poradí 10a dokumentácia, 10b stránka a log, 10c CI, 10d čísla, každý krok jeden commit; odvodené čísla zo staníc LWD v `data/` ostávajú, majiteľ požiadal LWD o súhlas s ich použitím. Review našlo nadsadený BSS brány pokrývky (§4.7, §5.5) a riadky ICON-D2 v backteste z neúplného archívu (§5.1) – prepočet v 10d | majiteľ (voľby 23. 10.), Claude |
 | 16. 10. 2026 | Krok 9: lavínový stupeň na karte najbližšieho dňa zo správy LWD Kärnten v systéme Euregia (CAAML v6 na static.avalanche.report, CC BY 4.0 podľa Open Data avalanche.report – súhlas LWD netreba, žiadosť majiteľa ostáva pre staničné súbory); región = mikroregión EAWS hornej stanice (Turracher Höhe korutánsky, dolná stanica v Štajersku ignorovaná); zobrazenie stupeň + výška + denný chod + tendencia, bez nemeckého textu (voľba majiteľa z troch); správa na deň lanoviek, inak včerajšia, nič staršie; 404 = bez správy; len karta, nie tabuľky; snímka v6 | majiteľ (žiadosť LWD odoslaná, plán a zobrazenie schválené 16. 10.), Fable |
@@ -895,6 +896,8 @@ stránkou). Riadok (`src/prospective.ts`, formát `v: 1`):
   nepodarí stiahnuť, riadok sa zapíše bez nich a generátor to vypíše; log nikdy nezastaví stránku. Keď
   odpoveď pre stanice prišla, ale nedá sa prečítať (chybová odpoveď, chýbajúci bod), horizont nesie
   `stationsError` namiesto `stations` (od kroku 10b, 23. 10. 2026; predtým sa stratil celý riadok).
+  Čerstvé načítanie mimo novembra až apríla (miestny dátum načítania) zapíše riadok do dočasného
+  priečinka systému, nie do `data/prospective/` (od kroku 10c; `SKI_LOG_DIR` má prednosť).
 
 Veľkosť: ~20 kB na riadok, ~3 riadky denne, ~10 MB za sezónu v jednom textovom súbore. Riadok
 s rovnakým `fetchedAtMs` sa nezdvojí. Overené naživo 4. 10. 2026 (`SKI_LOG_DIR` do scratch adresára).

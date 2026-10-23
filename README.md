@@ -95,8 +95,9 @@ lavínovej správy → ten istý výpočet znova
 - `scripts/` a `scripts/lib/` – offline skripty (nižšie); `data/<oblasť>/REPORT.md` – ich výsledky;
   `prompts/fable-presna-predpoved.md` – pôvodné zadanie modelu z 3. 10. 2026.
 - `.github/workflows/ski.yml` – CI **len november až apríl** o 04:13, 10:13 a 16:13 UTC: build, testy,
-  generátor, commit `docs/` a `data/prospective/`, ak sa niečo zmenilo. Ručne: Actions → Ski
-  Conditions → Run workflow.
+  generátor, commit `docs/` a `data/prospective/`, ak sa niečo zmenilo; beh má limit 20 minút. Ručne:
+  Actions → Ski Conditions → Run workflow (alebo `gh workflow run ski.yml`); mimo novembra až apríla
+  taký beh obnoví stránku, ale riadok logu zapíše len do dočasného priečinka.
 
 Pri zmene tvaru snímky treba zvýšiť `SKI_SNAPSHOT_VERSION` v `src/ski-core.js`; starú snímku generátor
 odmietne a stiahne znova.
@@ -113,8 +114,9 @@ SKI_DOCS_DIR=/tmp/ski SKI_LOG_DIR=/tmp/ski/log npm run ski     # všetko mimo re
 SKI_DOCS_DIR=/tmp/ski SKI_RENDER_ONLY=true npm run ski         # bez siete, z uloženej snímky
 ```
 
-- `docs/` generovať ako CI: `npm run build && node dist/ski.js`. Mimo sezóny s `SKI_LOG_DIR` mimo
-  repozitára, aby ručné behy nešli do sezónneho logu.
+- `docs/` generovať ako CI: `npm run build && node dist/ski.js`. Mimo novembra až apríla ide riadok logu
+  sám do dočasného priečinka systému (`logDirFor` v `src/ski.ts`), v sezóne do `data/prospective/` –
+  ručné behy v sezóne preto spúšťať so `SKI_LOG_DIR` mimo repozitára.
 - `SKI_RENDER_ONLY=true` berie konfiguráciu zo snímky – po zmene `src/config.ts` treba stiahnuť znova.
 - V sezóne CI commituje trikrát denne: pred prácou `git pull --rebase`, `docs/` pregenerovať až potom.
 - Testy stránky počítajú vnútri `<main id="sk-main">` a odstraňujú modulový skript (vložený kód má tie
@@ -158,12 +160,13 @@ dátumom sú v METODIKA §2.
 | 7 – pravdepodobnosti na stránke | 5. 10. 2026 | pruh dobré / ujde / zlé namiesto áno/nie | §4.6 |
 | 8 – predpoklad snehu | 16. 10. 2026 | „Bez snehu“ z modelovej pokrývky ICON-D2 (AUC 0,95) | §4.7, §5.5 |
 | 9 – lavínový stupeň | 16. 10. 2026 | stupeň EAWS regiónu hornej stanice na karte najbližšieho dňa | §4.8 |
-| 10 – review a opravy | 10a, 10b 23. 10. 2026 | review kódu, skriptov, dokumentácie a CI; 10a jeden README (TODO.md zlúčené), opravy METODIKA; 10b stránka a log: platná lavínová správa, obnova otvorenej stránky, časové limity, log bez straty riadku; čakajú 10c–10d (Otvorené) | §2, §4.8, §5.2 |
+| 10 – review a opravy | 10a–10c 23. 10. 2026 | review kódu, skriptov, dokumentácie a CI; 10a jeden README (TODO.md zlúčené), opravy METODIKA; 10b stránka a log: platná lavínová správa, obnova otvorenej stránky, časové limity, log bez straty riadku; 10c CI: akcie v7, limit 20 min, ručný beh mimo sezóny mimo logu; čaká 10d (Otvorené) | §2, §4.8, §5.2 |
 
 ## Sezóna 2026/27
 
-- **Pred 1. 11.** – krok 10c (Otvorené) a skúšobný beh CI; `npm run regions` (polygóny EAWS majú dátumy
-  platnosti, skript skončí chybou, keď `avalancheRegion` nesedí).
+- **Pred 1. 11.** – `npm run regions` (polygóny EAWS majú dátumy platnosti, skript skončí chybou, keď
+  `avalancheRegion` nesedí). Po každej zmene workflow alebo generátora skúšobný beh (`gh workflow run
+  ski.yml`).
 - **1. 11. – CI štartuje.** Po prvom behu: pribudol commit s `docs/` a `data/prospective/2026-27.jsonl`;
   riadok má `stations` (6 staníc) aj `members` (51 hodnôt od D+1); ~3 riadky denne po 17–24 kB. Ak log CI
   hlási „log bude bez staníc“, pozrieť `pointsUrl` a limity Open-Meteo.
@@ -192,7 +195,6 @@ dátumom sú v METODIKA §2.
 
 **Schválené 23. 10. 2026, čaká na prácu (krok 10, každé písmeno jeden commit):**
 
-- **10c – CI:** akcie v7, `timeout-minutes`, ručný beh mimo sezóny bez zápisu do logu; potom skúšobný beh.
 - **10d – čísla:** klimatológia v `scripts/cover-verify.ts` z celého radu stanice (dnes 0,2 pri staniciach s
   jednou sezónou), záporné ΔHS v `scripts/backtest-report.ts` orezať na 0, znova `npm run cover` a
   `npm run backtest` (riadky ICON-D2 sú z neúplného archívu); čísla v METODIKA §4.7, §5.1, §5.5 a tu.

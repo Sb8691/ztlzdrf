@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SKI_CONFIG, type SkiConfig } from "./config.js";
 import { fetchJson } from "./fetch-json.js";
 import { appendForecastLog, buildForecastLog, fetchStationResponses, type Responses, type StationResponses } from "./prospective.js";
-import { avalancheCurrent, avalancheDates, avalancheUrl, buildSkiSnapshot, HORIZON_KEYS, firstSkiDate, horizonUrl, metaUrl, parseAvalanche, SKI_SNAPSHOT_VERSION, snapshotStale } from "./ski-core.js";
+import { avalancheCurrent, avalancheDates, avalancheUrl, buildSkiSnapshot, HORIZON_KEYS, firstSkiDate, horizonUrl, localDateOf, metaUrl, parseAvalanche, SKI_SNAPSHOT_VERSION, snapshotStale } from "./ski-core.js";
 import { renderSkiPage } from "./ski-page.js";
 
 /**
@@ -19,17 +20,35 @@ import { renderSkiPage } from "./ski-page.js";
  *
  * Every fresh fetch also appends one line to data/prospective/<season>.jsonl (src/prospective.ts),
  * the record the 2026/27 verification will be scored from; a failure there is a warning, never a
- * missing page.
+ * missing page. Outside the season months the line goes to the system temp directory instead
+ * (logDirFor).
  *
  * Env knobs for local work: SKI_DOCS_DIR (write into a scratch directory instead of docs/),
- * SKI_LOG_DIR (the forecast log elsewhere than data/prospective/), SKI_RENDER_ONLY=true (no network -
- * re-render the page from the stored snapshot, no log line).
+ * SKI_LOG_DIR (the forecast log elsewhere than data/prospective/, in any month), SKI_RENDER_ONLY=true
+ * (no network - re-render the page from the stored snapshot, no log line).
  */
 
 export const DOCS_DIR = process.env.SKI_DOCS_DIR ? resolve(process.env.SKI_DOCS_DIR) : fileURLToPath(new URL("../docs", import.meta.url));
 const SNAPSHOT_PATH = join(DOCS_DIR, "data", "ski.json");
 const PAGE_PATH = join(DOCS_DIR, "index.html");
-export const LOG_DIR = process.env.SKI_LOG_DIR ? resolve(process.env.SKI_LOG_DIR) : fileURLToPath(new URL("../data/prospective", import.meta.url));
+const REPO_LOG_DIR = fileURLToPath(new URL("../data/prospective", import.meta.url));
+const OFF_SEASON_LOG_DIR = join(tmpdir(), "ztlzdrf-prospective");
+
+/** The months the CI cron runs (.github/workflows/ski.yml) - the season the forecast log records.
+ * Keep the two in step. */
+export const LOG_MONTHS = [11, 12, 1, 2, 3, 4];
+
+/**
+ * Where a fresh fetch writes its log line (step 10c): SKI_LOG_DIR when set; else data/prospective/ in
+ * the season months (local date of the fetch), the system temp directory outside them. A manual CI
+ * run or a local run in October thus still goes through the stations and the log, but leaves the
+ * season's record alone.
+ */
+export function logDirFor(nowMs: number, cfg: SkiConfig, env: NodeJS.ProcessEnv = process.env): string {
+  if (env.SKI_LOG_DIR) return resolve(env.SKI_LOG_DIR);
+  const month = Number(localDateOf(nowMs, cfg.timezone).slice(5, 7));
+  return LOG_MONTHS.includes(month) ? REPO_LOG_DIR : OFF_SEASON_LOG_DIR;
+}
 
 export type SkiSnapshot = ReturnType<typeof buildSkiSnapshot>;
 
@@ -113,7 +132,7 @@ export async function fetchSkiSnapshot(cfg: SkiConfig = SKI_CONFIG, nowMs = Date
 }
 
 /** The prospective log line for a fresh fetch: stations are fetched best effort, the line is written either way. */
-async function logForecasts(snapshot: SkiSnapshot, responses: Responses, cfg: SkiConfig): Promise<void> {
+async function logForecasts(snapshot: SkiSnapshot, responses: Responses, cfg: SkiConfig, logDir: string): Promise<void> {
   let stations: StationResponses | null = null;
   try {
     stations = await fetchStationResponses(cfg, snapshot.firstDate);
@@ -124,7 +143,7 @@ async function logForecasts(snapshot: SkiSnapshot, responses: Responses, cfg: Sk
   for (const [key, h] of Object.entries(line.horizons)) {
     if (h.stationsError) console.warn(`Predpoveď staníc (${key}) sa nedala prečítať (${h.stationsError}) – riadok je bez nich.`);
   }
-  const { path, written } = appendForecastLog(line, LOG_DIR);
+  const { path, written } = appendForecastLog(line, logDir);
   console.log(written ? `Predpoveď zapísaná do ${path}${stations ? "" : " (bez staníc)"}.` : `${path} už má riadok z tohto načítania.`);
 }
 
@@ -172,7 +191,9 @@ async function main(): Promise<void> {
       writeIfChanged(SNAPSHOT_PATH, `${JSON.stringify(snapshot)}\n`);
       console.log(`Stiahnuté z Open-Meteo${avalanche ? " a lavínová správa" : ""}, snímka uložená.`);
       try {
-        await logForecasts(snapshot, responses, cfg);
+        const logDir = logDirFor(now, cfg);
+        if (logDir === OFF_SEASON_LOG_DIR) console.log(`Mimo sezóny logu (november až apríl): riadok ide do ${logDir}, nie do data/prospective/.`);
+        await logForecasts(snapshot, responses, cfg, logDir);
       } catch (err) {
         console.warn(`Log predpovedí sa nepodarilo zapísať: ${err instanceof Error ? err.message : String(err)}`);
       }

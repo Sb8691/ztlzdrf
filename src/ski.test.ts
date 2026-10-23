@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { SKI_CONFIG } from "./config.js";
 import { fetchJson } from "./fetch-json.js";
 import { clientBundle, clientRender, renderSkiPage } from "./ski-page.js";
-import { fetchAvalanche, readSnapshot } from "./ski.js";
+import { fetchAvalanche, LOG_MONTHS, logDirFor, readSnapshot } from "./ski.js";
 import {
   HOUR_MS,
   addDays,
@@ -1067,4 +1067,17 @@ test("snímka iného tvaru sa nepoužije", () => {
   const bad = mkdtempSync(join(tmpdir(), "ztlzdrf-ski-"));
   const r = runSkiCli({ SKI_DOCS_DIR: bad, SKI_RENDER_ONLY: "true" });
   assert.notEqual(r.status, 0, "bez snímky nemá generátor čo vymyslieť");
+});
+
+test("log predpovedí: v mesiacoch cronu do data/prospective/, mimo nich do dočasného priečinka; SKI_LOG_DIR má prednosť", () => {
+  const repo = join(REPO_ROOT, "data", "prospective");
+  assert.equal(logDirFor(at(10, "2026-11-01"), cfg, {}), repo);
+  assert.equal(logDirFor(at(18, "2027-04-30"), cfg, {}), repo, "posledný beh 30. 4. o 16:13 UTC ešte patrí do sezóny");
+  assert.notEqual(logDirFor(at(10, "2026-10-23"), cfg, {}), repo);
+  assert.notEqual(logDirFor(at(10, "2027-05-01"), cfg, {}), repo);
+  assert.equal(logDirFor(at(10, "2026-10-23"), cfg, { SKI_LOG_DIR: "/tmp/ski-log" }), resolve("/tmp/ski-log"));
+  // The same months as the CI schedule, so a scheduled run always logs into the repository.
+  const workflow = readFileSync(join(REPO_ROOT, ".github", "workflows", "ski.yml"), "utf8");
+  const cronMonths = workflow.match(/cron: "\d+ [\d,]+ \* ([\d,]+) \*"/)![1].split(",").map(Number);
+  assert.deepEqual([...cronMonths].sort((a, b) => a - b), [...LOG_MONTHS].sort((a, b) => a - b));
 });
