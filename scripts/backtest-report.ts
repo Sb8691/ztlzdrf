@@ -70,7 +70,7 @@ function climatology(st: typeof STATIONS[number], month: number, season: string)
     if (Number(d.slice(5, 7)) !== month || seasonOf(d) === season || !inOperatingWindow(d)) return;
     const v = truth.newSnowCm[i][k], hs = truth.hsCm[i][k];
     if (v === null || hs === null || hs < COVER) return;
-    n++; sum += v; if (v >= THRESHOLD) ev++;
+    n++; sum += Math.max(0, v); if (v >= THRESHOLD) ev++;
   });
   const out = { p: n ? ev / n : 0.05, mean: n ? sum / n : 2 };
   climCache.set(key, out);
@@ -182,7 +182,8 @@ function cases(source: string, label: string, variant: Variant, primary: boolean
     const c = climatology(st, month, seasonOf(fc.M));
     const value = variant === "snow" ? fc.snow : variant === "rule" ? fc.rule : c.mean;
     if (value === null) continue;
-    out.push({ day: fc.M, station: fc.station, obs: o.obs, fc: value, prob: variant === "clim" ? c.p : undefined, clim: c.p, climMean: c.mean });
+    // A negative automatic ΔHS is settling, not negative snowfall: zero, as in the model fit (step 10d).
+    out.push({ day: fc.M, station: fc.station, obs: Math.max(0, o.obs), fc: value, prob: variant === "clim" ? c.p : undefined, clim: c.p, climMean: c.mean });
   }
   return out;
 }

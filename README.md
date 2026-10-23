@@ -158,9 +158,9 @@ dátumom sú v METODIKA §2.
 | 5 – prospektívny log | 4. 10. 2026 | riadok na každý čerstvý beh CI, `npm run verify` po sezóne | §5.2 |
 | 6 – kvalita dňa | 4. 10. 2026 | kalibrované krivky dažďa, vetra, slnka a inverzie (BSS 0,3–0,6 pri 0–1 d) | §4.5, §5.3–5.4 |
 | 7 – pravdepodobnosti na stránke | 5. 10. 2026 | pruh dobré / ujde / zlé namiesto áno/nie | §4.6 |
-| 8 – predpoklad snehu | 16. 10. 2026 | „Bez snehu“ z modelovej pokrývky ICON-D2 (AUC 0,95) | §4.7, §5.5 |
+| 8 – predpoklad snehu | 16. 10. 2026 | „Bez snehu“ z modelovej pokrývky ICON-D2 (BSS 0,31, AUC 0,95) | §4.7, §5.5 |
 | 9 – lavínový stupeň | 16. 10. 2026 | stupeň EAWS regiónu hornej stanice na karte najbližšieho dňa | §4.8 |
-| 10 – review a opravy | 10a–10c 23. 10. 2026 | review kódu, skriptov, dokumentácie a CI; 10a jeden README (TODO.md zlúčené), opravy METODIKA; 10b stránka a log: platná lavínová správa, obnova otvorenej stránky, časové limity, log bez straty riadku; 10c CI: akcie v7, limit 20 min, ručný beh mimo sezóny mimo logu; čaká 10d (Otvorené) | §2, §4.8, §5.2 |
+| 10 – review a opravy | 23.–24. 10. 2026 | review kódu, skriptov, dokumentácie a CI; 10a jeden README (TODO.md zlúčené), opravy METODIKA; 10b stránka a log: platná lavínová správa, obnova otvorenej stránky, časové limity, log bez straty riadku; 10c CI: akcie v7, limit 20 min, ručný beh mimo sezóny mimo logu; 10d čísla: BSS brány pokrývky 0,31 namiesto 0,46 (klimatológia z dlhých radov), backtest na úplnom archíve ICON-D2 s orezaným ΔHS, krivky bez zmeny | §2, §4.7, §4.8, §5.1, §5.2, §5.5 |
 
 ## Sezóna 2026/27
 
@@ -192,12 +192,6 @@ dátumom sú v METODIKA §2.
   skontrolovať, že Ski Conditions je zapnutý; obnoviť `season` v `src/config.ts`; `npm run regions`.
 
 ## Otvorené
-
-**Schválené 23. 10. 2026, čaká na prácu (krok 10, každé písmeno jeden commit):**
-
-- **10d – čísla:** klimatológia v `scripts/cover-verify.ts` z celého radu stanice (dnes 0,2 pri staniciach s
-  jednou sezónou), záporné ΔHS v `scripts/backtest-report.ts` orezať na 0, znova `npm run cover` a
-  `npm run backtest` (riadky ICON-D2 sú z neúplného archívu); čísla v METODIKA §4.7, §5.1, §5.5 a tu.
 
 **Čaká na majiteľa:**
 

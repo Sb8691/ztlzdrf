@@ -33,6 +33,7 @@ sú po anglicky, tento dokument po slovensky. Dátumy sú absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 24. 10. 2026 | Krok 10d (čísla): BSS brány pokrývky sa počíta proti klimatológii radu a mesiaca z jeho dlhého záznamu od 1998/99 bez testovanej sezóny (krátke rady z dlhého ručného radu na tom istom mieste alebo blízkej stanice, ako pri modeli prašanu), CI so 60-dňovými blokmi, sezóna s menej ako 30 dňami dvojíc vypadne → ICON-D2 0,31 (0,17–0,43) namiesto 0,46, IFS fakticky 1 zima a aj v rámci vzorky −0,50; hodnotenie po staniciach zo spoločnej krivky. Backtest prepočítaný na úplnom archíve ICON-D2 a so záporným ΔHS orezaným na 0 ako v modeli: ICON-D2 pri 0 h 0,27 namiesto 0,36, MAE a bias všetkých riadkov nižšie, údajné nadhodnotenie IFS +1,0 cm/deň v 1 400–1 900 m bol artefakt. Krivky na stránke a koeficienty sa nemenia; text stránky „15 staníc“. Rok 1998/99, 60 dní a 30 dní sú voľby | majiteľ (áno 23. 10.), Claude |
 | 23. 10. 2026 | Krok 10c (CI): `actions/checkout` a `actions/setup-node` v7 (Node 24 natívne), limit behu 20 min; čerstvé načítanie mimo mesiacov cronu (november až apríl, `LOG_MONTHS` v `src/ski.ts`, test drží zhodu s `ski.yml`) zapíše riadok logu do dočasného priečinka systému namiesto `data/prospective/`, aby ručný beh v októbri neprimiešal riadok do sezóny; `SKI_LOG_DIR` platí vždy. Skúšobný beh cez `gh workflow run` | majiteľ (áno 23. 10.), Claude |
 | 23. 10. 2026 | Krok 10b (stránka a log): včerajšia lavínová správa len kým platí, prepadnutá sa nekreslí; otvorená stránka kontroluje každú minútu a pri návrate na kartu, či sú dáta staršie ako 60 min, či sa zmenil najbližší lyžiarsky deň alebo skončila platnosť lavínovej správy (generátor to isté s 20 min); po polnoci prekreslí relatívne časy; sťahovanie v prehliadači má limit 45 s a po neúspešnej obnove čaká 10 min; generátor opakuje chybové odpovede Open-Meteo pod HTTP 200 a pri 429 čaká aspoň 60 s; nečitateľná odpoveď pre stanice zahodí len stanice horizontu (`stationsError`), nie riadok logu; podiely ansámblu so súčtom 100 ako pri deterministických dňoch; testy zhody pre pokrývku a `snowTemp`. Prahy 45 s, 10 min a 60 s sú voľby, nie merania | majiteľ (áno 23. 10.), Claude |
 | 23. 10. 2026 | Krok 10 (review repozitára): dokumentácia = README.md ako vstupný bod (TODO.md zlúčené doň) + METODIKA.md s podrobnosťami; opravy z review v poradí 10a dokumentácia, 10b stránka a log, 10c CI, 10d čísla, každý krok jeden commit; odvodené čísla zo staníc LWD v `data/` ostávajú, majiteľ požiadal LWD o súhlas s ich použitím. Review našlo nadsadený BSS brány pokrývky (§4.7, §5.5) a riadky ICON-D2 v backteste z neúplného archívu (§5.1) – prepočet v 10d | majiteľ (voľby 23. 10.), Claude |
@@ -651,19 +652,22 @@ ostáva; posledný deň výhľadu) schválený s odporúčanými voľbami.
   dierami, napr. 3/2025 chýba), ansámbel 0,25° vôbec. `npm run backtest:fetch -- --only=snow` →
   `hist-snow-<model>.json` v cache (36 volaní, 12 MB).
 - **Overenie** (`npm run cover` = `scripts/cover-verify.ts`, výsledky §5.5, `data/cover/`): model o
-  06 UTC proti nameranej výške snehu ráno na 17 staniciach (ručné GeoSphere, automaty, LWD, eHYD do 2023;
-  SNOWGRID vynechaný ako model), mesiace nov–apr, udalosť stanica ≥ 30 cm (podmienka pokrývky z kroku 1).
-  ICON-D2: 6 971 dvojíc, 4 zimy, kalibrovaný BSS 0,46 (0,36–0,55), AUC 0,95, P(stanica ≥ 30 │ model
-  0 cm) = 0,01, P = 0,5 pri 30,5 cm modelu; bias +2,5 cm v pásme 1 200–1 700 m, −15 cm nad 1 700 m (ťahá
-  Villacher Alpe −28 cm, LWD body v 1 800–1 900 m sú bez biasu). IFS 9 km: 1 665 dvojíc, 2 zimy, BSS
-  0,25 (jeden fold plochý), AUC 0,81, biasy staníc −43 až +23 cm a P(≥ 30 │ 0 cm) nad 1 700 m 0,34 →
-  ako brána nepoužiteľný. Na spoločných dňoch IFS − ICON-D2 −5,8 cm, MAE 16 cm, zhoda áno/nie 0,81.
-- **Pozor (review 23. 10. 2026):** kalibrovaný BSS je nadsadený. Stanice, ktorých páry pokrývajú len jednu
-  sezónu (eHYD, LWD; 1 538 zo 6 971 párov ICON-D2), dostávajú v `withClimatology`
-  (`scripts/cover-verify.ts`) klimatológiu natvrdo 0,2 namiesto vlastnej (okolo 0,6). „17 staníc“ je
-  17 radov na 15 miestach (Kanzelhöhe a Flattnitz ručne aj automat). IFS 9 km má výšku snehu v zime 2024/25
-  len 9.–16. 1. 2025, „2 zimy“ sú teda fakticky jedna. Krivku (fit nepoužíva klimatológiu) ani rozhodnutie
-  „brána len z ICON-D2“ to nemení; čísla sa prepočítajú v kroku 10d.
+  06 UTC proti nameranej výške snehu ráno na 17 radoch z 15 miest (ručné GeoSphere, automaty, LWD, eHYD do
+  2023; Kanzelhöhe a Flattnitz ručne aj automat; SNOWGRID vynechaný ako model), mesiace nov–apr, udalosť
+  stanica ≥ 30 cm (podmienka pokrývky z kroku 1). BSS proti klimatológii radu a mesiaca z jeho dlhého
+  záznamu od 1998/99 bez testovanej sezóny (krátke rady ju berú z dlhého ručného radu na tom istom mieste
+  alebo z blízkej stanice), CI blokový bootstrap so 60-dňovými blokmi. ICON-D2: 6 971 dvojíc, 4 zimy,
+  kalibrovaný BSS 0,31 (0,17–0,43), AUC 0,95, P(stanica ≥ 30 │ model 0 cm) = 0,01, P = 0,5 pri 30,5 cm
+  modelu; samotné áno/nie „model ≥ 30 cm“ má BSS len 0,02 (−0,18–0,20) – hodnotu dáva kalibrovaná krivka.
+  Bias +2,5 cm v pásme 1 200–1 700 m, −15 cm nad 1 700 m (ťahá Villacher Alpe −28 cm, LWD body v
+  1 800–1 900 m sú bez biasu). IFS 9 km: v zime 2024/25 má výšku snehu len 7 dní (vynechané), ostáva jedna
+  zima a 1 609 dvojíc; krivka sa mimo vzorky overiť nedá a aj v rámci vzorky má BSS −0,50, AUC 0,82,
+  biasy staníc −43 až +23 cm → ako brána nepoužiteľný. Na spoločných dňoch IFS − ICON-D2 −5,7 cm, MAE
+  16 cm, zhoda áno/nie 0,80.
+- **Prepočet 23. 10. 2026 (krok 10d):** pôvodné čísla (ICON-D2 BSS 0,46 (0,36–0,55), IFS 0,25, „17 staníc“,
+  IFS „2 zimy“) stáli na klimatológii len z dvojíc: rady s jednou sezónou dvojíc (eHYD, LWD; 1 538 zo 6 971)
+  dostali natvrdo 0,2 namiesto vlastných okolo 0,6, čo BSS nadsadilo, a 10-dňové bloky podhodnotili
+  neistotu. Krivka (fit klimatológiu nepoužíva) ani rozhodnutie „brána len z ICON-D2“ sa nemenia.
 - **Rozhodnutia:** krivka len z ICON-D2 (`src/cover-model.ts`: a −6,7266, b 1,2188 na √cm, kópia
   `data/cover/cover-model.json`, test rovnosti v `src/ski.test.ts` od kroku 10b, 23. 10. 2026). Úroveň
   pokrývky pre všetky horizonty = ICON-D2 pri hornej
@@ -780,55 +784,56 @@ všetky stanice dňa spolu); BSS a AUC v bootstrape len z výberov s ≥ 5 udalo
 pri predstihu 0 aj 2016/17 →): 646 staničných dní, 24 udalostí; výber riadkov (všetky v REPORT.md):
 
 | Zdroj | Verzia | Predstih | n | udalostí | Brier | Brier klim. | **BSS** (95 % CI) | POD | FAR | CSI | AUC | bias [cm] | MAE / MAE klim. [cm] |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 23 h | 646 | 24 | 0,03 | 0,04 | **0,13 (-0,02–0,27)** | 0,25 (0,04–0,43) | 0,25 (0,00–0,50) | 0,23 | 0,96 (0,93–0,98) | -0,1 | 1,9 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 23 h | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,43–0,25)** | 0,29 (0,00–0,56) | 0,50 (0,25–1,00) | 0,23 | 0,97 (0,94–0,98) | 0,4 | 1,8 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 35 h | 646 | 24 | 0,04 | 0,04 | **-0,08 (-0,37–0,18)** | 0,13 (0,00–0,28) | 0,57 (0,00–1,00) | 0,11 | 0,97 (0,94–0,99) | -0,1 | 1,9 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 35 h | 646 | 24 | 0,04 | 0,04 | **0,00 (-0,43–0,29)** | 0,33 (0,09–0,50) | 0,47 (0,21–0,83) | 0,26 | 0,97 (0,95–0,98) | 0,3 | 1,8 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 47 h | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,22–0,20)** | 0,21 (0,00–0,45) | 0,50 (0,29–1,00) | 0,17 | 0,90 (0,79–0,97) | -0,1 | 2,0 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 47 h | 646 | 24 | 0,04 | 0,04 | **-0,08 (-0,47–0,27)** | 0,29 (0,00–0,60) | 0,53 (0,32–1,00) | 0,22 | 0,96 (0,94–0,98) | 0,2 | 1,8 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 71 h | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,22–0,16)** | 0,21 (0,00–0,46) | 0,50 (0,20–1,00) | 0,17 | 0,90 (0,80–0,97) | -0,1 | 2,1 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 71 h | 646 | 24 | 0,04 | 0,04 | **-0,08 (-0,49–0,23)** | 0,29 (0,00–0,56) | 0,53 (0,25–1,00) | 0,22 | 0,96 (0,92–0,98) | 0,3 | 2,0 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 83 h | 646 | 24 | 0,04 | 0,04 | **-0,08 (-0,28–0,09)** | 0,08 (0,00–0,18) | 0,60 (0,00–1,00) | 0,07 | 0,89 (0,77–0,95) | -0,1 | 2,3 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 83 h | 646 | 24 | 0,04 | 0,04 | **-0,26 (-0,63–0,01)** | 0,13 (0,00–0,24) | 0,73 (0,50–1,00) | 0,09 | 0,92 (0,83–0,96) | 0,3 | 2,3 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 107 h | 646 | 24 | 0,04 | 0,04 | **-0,26 (-0,50–-0,04)** | 0,13 (0,03–0,29) | 0,73 (0,67–0,80) | 0,09 | 0,91 (0,84–0,97) | 0,1 | 2,2 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 107 h | 646 | 24 | 0,05 | 0,04 | **-0,30 (-0,61–-0,05)** | 0,25 (0,07–0,50) | 0,67 (0,54–0,81) | 0,17 | 0,95 (0,92–0,97) | 0,5 | 2,2 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 131 h | 646 | 24 | 0,05 | 0,04 | **-0,52 (-1,47–-0,02)** | 0,08 (0,00–0,13) | 0,87 (0,50–1,00) | 0,05 | 0,78 (0,56–0,92) | 0,1 | 2,8 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 131 h | 646 | 24 | 0,06 | 0,04 | **-0,78 (-1,81–-0,24)** | 0,08 (0,00–0,13) | 0,90 (0,82–1,00) | 0,05 | 0,79 (0,56–0,93) | 0,6 | 2,9 / 3,9 |
-| ICON-D2, previous runs | surový `snowfall` | 1 d (24–47 h) | 646 | 24 | 0,03 | 0,04 | **0,18 (-0,12–0,50)** | 0,38 (0,09–0,63) | 0,31 (0,00–0,62) | 0,32 | 0,98 (0,96–0,99) | -0,1 | 1,7 / 3,9 |
-| ICON-D2, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 637 | 24 | 0,03 | 0,04 | **0,09 (-0,20–0,35)** | 0,38 (0,08–0,64) | 0,40 (0,18–0,73) | 0,30 | 0,98 (0,97–0,99) | 0,1 | 1,6 / 3,8 |
-| ICON-EU, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,32–0,23)** | 0,13 (0,00–0,28) | 0,50 (0,00–1,00) | 0,11 | 0,98 (0,96–0,99) | -0,2 | 1,7 / 3,9 |
-| ICON-EU, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 2 d (48–71 h) | 646 | 24 | 0,03 | 0,04 | **0,18 (-0,08–0,47)** | 0,33 (0,08–0,65) | 0,27 (0,00–0,67) | 0,30 | 0,96 (0,92–0,98) | -0,1 | 1,8 / 3,9 |
-| IFS 0,25°, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 646 | 24 | 0,03 | 0,04 | **0,05 (-0,24–0,24)** | 0,38 (0,17–0,57) | 0,44 (0,20–0,67) | 0,29 | 0,97 (0,94–0,98) | 0,3 | 1,8 / 3,9 |
-| GFS, previous runs | surový `snowfall` | 1 d (24–47 h) | 646 | 24 | 0,03 | 0,04 | **0,05 (-0,12–0,20)** | 0,13 (0,00–0,22) | 0,25 (0,00–1,00) | 0,12 | 0,92 (0,81–0,98) | -0,5 | 2,0 / 3,9 |
-| GFS, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,38–0,23)** | 0,25 (0,08–0,36) | 0,50 (0,00–0,80) | 0,20 | 0,96 (0,94–0,98) | 0,4 | 2,0 / 3,9 |
-| IFS 9 km, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 3590 | 187 | 0,04 | 0,05 | **0,28 (0,19–0,39)** | 0,37 (0,28–0,48) | 0,14 (0,07–0,22) | 0,35 | 0,96 (0,95–0,98) | -0,7 | 1,7 / 4,0 |
-| IFS 9 km, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 3590 | 187 | 0,04 | 0,05 | **0,30 (0,19–0,42)** | 0,47 (0,37–0,57) | 0,23 (0,15–0,33) | 0,41 | 0,97 (0,96–0,98) | -0,3 | 1,6 / 4,0 |
-| ICON-D2, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 542 | 32 | 0,05 | 0,06 | **0,17 (-0,01–0,42)** | 0,19 (0,02–0,43) | 0,00 (0,00–0,00) | 0,19 | 0,97 (0,94–0,99) | -1,6 | 2,3 / 4,6 |
-| ICON-D2, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 542 | 32 | 0,04 | 0,06 | **0,36 (0,13–0,61)** | 0,44 (0,19–0,67) | 0,13 (0,00–0,30) | 0,41 | 0,97 (0,95–0,99) | -1,0 | 1,9 / 4,6 |
-| – | klimatológia (LOSO) | (vzorka IFS 23 h) | 646 | 24 | 0,04 | 0,04 | 0,00 | – | – | – | 0,64 (0,46–0,74) | 1,2 | 3,9 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 23 h | 646 | 24 | 0,03 | 0,04 | **0,13 (-0,02–0,27)** | 0,25 (0,04–0,43) | 0,25 (0,00–0,50) | 0,23 | 0,96 (0,93–0,98) | -0,7 | 1,3 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 23 h | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,43–0,25)** | 0,29 (0,00–0,56) | 0,50 (0,25–1,00) | 0,23 | 0,97 (0,94–0,98) | -0,3 | 1,2 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 35 h | 646 | 24 | 0,04 | 0,04 | **-0,08 (-0,37–0,18)** | 0,13 (0,00–0,28) | 0,57 (0,00–1,00) | 0,11 | 0,97 (0,94–0,99) | -0,7 | 1,3 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 35 h | 646 | 24 | 0,04 | 0,04 | **0,00 (-0,43–0,29)** | 0,33 (0,09–0,50) | 0,47 (0,21–0,83) | 0,26 | 0,97 (0,95–0,98) | -0,3 | 1,2 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 47 h | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,22–0,20)** | 0,21 (0,00–0,45) | 0,50 (0,29–1,00) | 0,17 | 0,90 (0,79–0,97) | -0,7 | 1,4 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 47 h | 646 | 24 | 0,04 | 0,04 | **-0,08 (-0,47–0,27)** | 0,29 (0,00–0,60) | 0,53 (0,32–1,00) | 0,22 | 0,96 (0,94–0,98) | -0,4 | 1,2 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 71 h | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,22–0,16)** | 0,21 (0,00–0,46) | 0,50 (0,20–1,00) | 0,17 | 0,90 (0,80–0,97) | -0,7 | 1,5 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 71 h | 646 | 24 | 0,04 | 0,04 | **-0,08 (-0,49–0,23)** | 0,29 (0,00–0,56) | 0,53 (0,25–1,00) | 0,22 | 0,96 (0,92–0,98) | -0,3 | 1,4 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 83 h | 646 | 24 | 0,04 | 0,04 | **-0,08 (-0,28–0,09)** | 0,08 (0,00–0,18) | 0,60 (0,00–1,00) | 0,07 | 0,89 (0,77–0,95) | -0,7 | 1,7 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 83 h | 646 | 24 | 0,04 | 0,04 | **-0,26 (-0,63–0,01)** | 0,13 (0,00–0,24) | 0,73 (0,50–1,00) | 0,09 | 0,92 (0,83–0,96) | -0,3 | 1,7 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 107 h | 646 | 24 | 0,04 | 0,04 | **-0,26 (-0,50–-0,04)** | 0,13 (0,03–0,29) | 0,73 (0,67–0,80) | 0,09 | 0,91 (0,84–0,97) | -0,6 | 1,6 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 107 h | 646 | 24 | 0,05 | 0,04 | **-0,30 (-0,61–-0,05)** | 0,25 (0,07–0,50) | 0,67 (0,54–0,81) | 0,17 | 0,95 (0,92–0,97) | -0,1 | 1,6 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 131 h | 646 | 24 | 0,05 | 0,04 | **-0,52 (-1,47–-0,02)** | 0,08 (0,00–0,13) | 0,87 (0,50–1,00) | 0,05 | 0,78 (0,56–0,92) | -0,5 | 2,1 / 3,2 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 131 h | 646 | 24 | 0,06 | 0,04 | **-0,78 (-1,81–-0,24)** | 0,08 (0,00–0,13) | 0,90 (0,82–1,00) | 0,05 | 0,79 (0,56–0,93) | -0,1 | 2,3 / 3,2 |
+| ICON-D2, previous runs | surový `snowfall` | 1 d (24–47 h) | 646 | 24 | 0,03 | 0,04 | **0,18 (-0,12–0,50)** | 0,38 (0,09–0,63) | 0,31 (0,00–0,62) | 0,32 | 0,98 (0,96–0,99) | -0,8 | 1,1 / 3,2 |
+| ICON-D2, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 637 | 24 | 0,03 | 0,04 | **0,09 (-0,20–0,35)** | 0,38 (0,08–0,64) | 0,40 (0,18–0,73) | 0,30 | 0,98 (0,97–0,99) | -0,5 | 1,0 / 3,3 |
+| ICON-EU, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,32–0,23)** | 0,13 (0,00–0,28) | 0,50 (0,00–1,00) | 0,11 | 0,98 (0,96–0,99) | -0,8 | 1,1 / 3,2 |
+| ICON-EU, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 2 d (48–71 h) | 646 | 24 | 0,03 | 0,04 | **0,18 (-0,08–0,47)** | 0,33 (0,08–0,65) | 0,27 (0,00–0,67) | 0,30 | 0,96 (0,92–0,98) | -0,8 | 1,2 / 3,2 |
+| IFS 0,25°, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 646 | 24 | 0,03 | 0,04 | **0,05 (-0,24–0,24)** | 0,38 (0,17–0,57) | 0,44 (0,20–0,67) | 0,29 | 0,97 (0,94–0,98) | -0,3 | 1,2 / 3,2 |
+| GFS, previous runs | surový `snowfall` | 1 d (24–47 h) | 646 | 24 | 0,03 | 0,04 | **0,05 (-0,12–0,20)** | 0,13 (0,00–0,22) | 0,25 (0,00–1,00) | 0,12 | 0,92 (0,81–0,98) | -1,1 | 1,4 / 3,2 |
+| GFS, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 646 | 24 | 0,04 | 0,04 | **-0,04 (-0,38–0,23)** | 0,25 (0,08–0,36) | 0,50 (0,00–0,80) | 0,20 | 0,96 (0,94–0,98) | -0,2 | 1,3 / 3,2 |
+| IFS 9 km, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 3590 | 187 | 0,04 | 0,05 | **0,28 (0,19–0,39)** | 0,37 (0,28–0,48) | 0,14 (0,07–0,22) | 0,35 | 0,96 (0,95–0,98) | -0,8 | 1,5 / 3,8 |
+| IFS 9 km, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 3590 | 187 | 0,04 | 0,05 | **0,30 (0,19–0,42)** | 0,47 (0,37–0,57) | 0,23 (0,15–0,33) | 0,41 | 0,97 (0,96–0,98) | -0,4 | 1,5 / 3,8 |
+| ICON-D2, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 1458 | 69 | 0,04 | 0,05 | **0,19 (0,04–0,36)** | 0,22 (0,07–0,38) | 0,00 (0,00–0,00) | 0,22 | 0,98 (0,96–0,99) | -1,3 | 1,5 / 3,7 |
+| ICON-D2, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 1458 | 69 | 0,03 | 0,05 | **0,27 (0,09–0,45)** | 0,36 (0,19–0,52) | 0,17 (0,06–0,33) | 0,34 | 0,98 (0,97–0,99) | -0,9 | 1,2 / 3,7 |
+| – | klimatológia (LOSO) | (vzorka IFS 23 h) | 646 | 24 | 0,04 | 0,04 | 0,00 | – | – | – | 0,64 (0,46–0,74) | 0,6 | 3,2 |
 
 **Sekundárna vzorka** (všetky zimné dni s pravdou, bez pokrývky): 1 507 dní, 30 udalostí:
 
 | Zdroj | Verzia | Predstih | n | udalostí | Brier | Brier klim. | **BSS** (95 % CI) | POD | FAR | CSI | AUC | bias [cm] | MAE / MAE klim. [cm] |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 23 h | 646 | 24 | 0,03 | 0,04 | **0,13 (-0,02–0,27)** | 0,25 (0,04–0,43) | 0,25 (0,00–0,50) | 0,23 | 0,96 (0,93–0,98) | -0,1 | 1,9 / 3,9 |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 23 h | 1507 | 30 | 0,02 | 0,02 | **0,23 (0,11–0,37)** | 0,23 (0,06–0,41) | 0,22 (0,00–0,31) | 0,22 | 0,97 (0,95–0,99) | 0,2 | 1,4 / 3,6 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 23 h | 1507 | 30 | 0,02 | 0,02 | **0,04 (-0,21–0,32)** | 0,23 (0,04–0,47) | 0,53 (0,29–0,88) | 0,18 | 0,98 (0,97–0,99) | 0,4 | 1,4 / 3,6 |
-| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 71 h | 1507 | 27 | 0,02 | 0,02 | **0,12 (-0,01–0,30)** | 0,26 (0,07–0,46) | 0,46 (0,20–0,70) | 0,21 | 0,92 (0,84–0,98) | 0,2 | 1,5 / 3,6 |
-| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 71 h | 1507 | 27 | 0,02 | 0,02 | **0,09 (-0,17–0,37)** | 0,33 (0,10–0,58) | 0,50 (0,21–0,80) | 0,25 | 0,97 (0,96–0,99) | 0,4 | 1,5 / 3,6 |
-| ICON-D2, previous runs | surový `snowfall` | 1 d (24–47 h) | 1787 | 34 | 0,02 | 0,02 | **0,24 (0,07–0,48)** | 0,29 (0,08–0,55) | 0,29 (0,00–0,50) | 0,26 | 0,99 (0,98–0,99) | 0,0 | 1,2 / 3,4 |
-| ICON-D2, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 1769 | 34 | 0,02 | 0,02 | **0,18 (0,02–0,37)** | 0,32 (0,13–0,54) | 0,39 (0,20–0,63) | 0,27 | 0,99 (0,98–0,99) | 0,2 | 1,1 / 3,4 |
-| ICON-EU, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 1787 | 34 | 0,02 | 0,02 | **0,07 (-0,07–0,24)** | 0,12 (0,00–0,24) | 0,50 (0,00–1,00) | 0,11 | 0,98 (0,97–0,99) | 0,0 | 1,2 / 3,4 |
-| IFS 9 km, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 7481 | 275 | 0,03 | 0,04 | **0,23 (0,15–0,30)** | 0,32 (0,25–0,40) | 0,21 (0,14–0,31) | 0,30 | 0,96 (0,95–0,97) | -0,3 | 1,4 / 3,6 |
-| IFS 9 km, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 7481 | 275 | 0,03 | 0,04 | **0,21 (0,10–0,31)** | 0,42 (0,35–0,50) | 0,33 (0,24–0,43) | 0,35 | 0,98 (0,97–0,98) | 0,0 | 1,4 / 3,6 |
-| ICON-D2, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 1066 | 40 | 0,03 | 0,04 | **0,15 (-0,01–0,38)** | 0,15 (0,00–0,36) | 0,00 (0,00–0,00) | 0,15 | 0,98 (0,96–0,99) | -1,0 | 1,8 / 3,9 |
-| ICON-D2, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 1066 | 40 | 0,02 | 0,04 | **0,37 (0,15–0,59)** | 0,42 (0,20–0,64) | 0,11 (0,00–0,25) | 0,40 | 0,98 (0,96–1,00) | -0,5 | 1,5 / 3,9 |
-| – | klimatológia (LOSO) | (vzorka IFS 23 h) | 1507 | 30 | 0,02 | 0,02 | 0,00 | – | – | – | 0,55 (0,42–0,66) | 2,1 | 3,6 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 23 h | 1507 | 30 | 0,02 | 0,02 | **0,23 (0,11–0,37)** | 0,23 (0,06–0,41) | 0,22 (0,00–0,31) | 0,22 | 0,97 (0,95–0,99) | -0,4 | 0,9 / 3,1 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 23 h | 1507 | 30 | 0,02 | 0,02 | **0,23 (0,11–0,37)** | 0,23 (0,06–0,41) | 0,22 (0,00–0,31) | 0,22 | 0,97 (0,95–0,99) | -0,4 | 0,9 / 3,1 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 23 h | 1507 | 30 | 0,02 | 0,02 | **0,04 (-0,21–0,32)** | 0,23 (0,04–0,47) | 0,53 (0,29–0,88) | 0,18 | 0,98 (0,97–0,99) | -0,1 | 0,8 / 3,1 |
+| IFS 9 km, celé behy 00z/12z | surový `snowfall` | 71 h | 1507 | 27 | 0,02 | 0,02 | **0,12 (-0,01–0,30)** | 0,26 (0,07–0,46) | 0,46 (0,20–0,70) | 0,21 | 0,92 (0,84–0,98) | -0,3 | 1,0 / 3,0 |
+| IFS 9 km, celé behy 00z/12z | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 71 h | 1507 | 27 | 0,02 | 0,02 | **0,09 (-0,17–0,37)** | 0,33 (0,10–0,58) | 0,50 (0,21–0,80) | 0,25 | 0,97 (0,96–0,99) | -0,1 | 0,9 / 3,0 |
+| ICON-D2, previous runs | surový `snowfall` | 1 d (24–47 h) | 1787 | 34 | 0,02 | 0,02 | **0,24 (0,07–0,48)** | 0,29 (0,08–0,55) | 0,29 (0,00–0,50) | 0,26 | 0,99 (0,98–0,99) | -0,5 | 0,7 / 3,0 |
+| ICON-D2, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 1769 | 34 | 0,02 | 0,02 | **0,18 (0,02–0,37)** | 0,32 (0,13–0,54) | 0,39 (0,20–0,63) | 0,27 | 0,99 (0,98–0,99) | -0,3 | 0,7 / 3,0 |
+| ICON-EU, previous runs | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 1 d (24–47 h) | 1787 | 34 | 0,02 | 0,02 | **0,07 (-0,07–0,24)** | 0,12 (0,00–0,24) | 0,50 (0,00–1,00) | 0,11 | 0,98 (0,97–0,99) | -0,5 | 0,7 / 3,0 |
+| IFS 9 km, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 7481 | 275 | 0,03 | 0,04 | **0,23 (0,15–0,30)** | 0,32 (0,25–0,40) | 0,21 (0,14–0,31) | 0,30 | 0,96 (0,95–0,97) | -0,5 | 1,2 / 3,4 |
+| IFS 9 km, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 7481 | 275 | 0,03 | 0,04 | **0,21 (0,10–0,31)** | 0,42 (0,35–0,50) | 0,33 (0,24–0,43) | 0,35 | 0,98 (0,97–0,98) | -0,2 | 1,2 / 3,4 |
+| ICON-D2, Historical Forecast | surový `snowfall` | 0 h (zošité behy) | 3324 | 96 | 0,02 | 0,03 | **0,19 (0,08–0,33)** | 0,18 (0,07–0,31) | 0,00 (0,00–0,00) | 0,18 | 0,99 (0,98–0,99) | -0,9 | 1,0 / 3,2 |
+| ICON-D2, Historical Forecast | dnešné pravidlo (zrážky × 0,7 pri T ≤ 1 °C) | 0 h (zošité behy) | 3324 | 96 | 0,02 | 0,03 | **0,32 (0,17–0,45)** | 0,35 (0,22–0,49) | 0,13 (0,04–0,24) | 0,34 | 0,99 (0,98–0,99) | -0,5 | 0,8 / 3,2 |
+| – | klimatológia (LOSO) | (vzorka IFS 23 h) | 1507 | 30 | 0,02 | 0,02 | 0,00 | – | – | – | 0,55 (0,42–0,66) | 1,6 | 3,1 |
 
-**Pozor (review 23. 10. 2026):** riadky „ICON-D2, Historical Forecast“ (predstih 0) v oboch tabuľkách sú
-zo správy vygenerovanej 4. 10. 2026 o 00:16, keď archív ICON-D2 ešte nebol celý (dosťahovaný o 00:27; preto
-n 542 a 1 066). Model prašanu (§4) bežal až na úplnom archíve, jeho čísla to nemení. Backtest navyše
-neoreže záporné ΔHS automatov na 0 cm ako model (§2, krok 3), takže MAE a bias sú trochu horšie, ako by
-mali byť; BSS, POD, FAR a AUC to nemení. Prepočet v kroku 10d.
+**Prepočet 23. 10. 2026 (krok 10d):** pôvodná správa (4. 10. 2026, 00:16) vznikla skôr, než sa archív
+ICON-D2 Historical Forecast dosťahoval (00:27): riadky ICON-D2 pri predstihu 0 mali n 542 a 1 066 a BSS
+pravidla 0,36 a 0,37, na úplnom archíve 0,27 (0,09–0,45) a 0,32 (0,17–0,45). Backtest navyše neorezával
+záporné ΔHS automatov (sadanie) na 0 cm ako model (§2, krok 3); po oprave sú MAE a bias v tabuľkách nižšie
+(napr. IFS 23 h MAE 1,3 cm namiesto 1,9, klimatológia 3,2 namiesto 3,9). BSS, POD, FAR a AUC ostatných
+riadkov sa nezmenili. Model prašanu (§4) bežal na úplnom archíve a s orezaním, jeho čísla to nemení.
 
 **Podľa stanice** (IFS surový `snowfall`, primárna vzorka; CI pri 1–4 udalostiach nič nehovoria):
 
@@ -837,14 +842,14 @@ mali byť; BSS, POD, FAR a AUC to nemení. Prepočet v kroku 10d.
 | Villacher Alpe 2140 m (ručne) | 71 h | 216 | 11 | -0,07 (-0,48–0,32) | 0,18 (0,00–0,50) | 0,50 (0,00–1,00) | 0,86 (0,69–0,99) | -1,0 | 1,7 |
 | Kanzelhöhe 1520 m (ručne, automat) | 23 h | 99 | 4 | -0,06 (-0,09–-0,06) | 0,00 (0,00–0,00) | – (–––) | 0,98 (0,96–1,00) | -1,7 | 1,7 |
 | Kanzelhöhe 1520 m (ručne, automat) | 71 h | 99 | 4 | 0,20 (-0,08–0,79) | 0,25 (0,00–1,00) | 0,00 (0,00–0,00) | 0,93 (0,94–1,00) | -1,8 | 1,9 |
-| Flattnitz 1437 m (ručne, automat) | 23 h | 73 | 2 | 0,53 (0,10–0,79) | 0,50 (0,00–1,00) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 1,1 | 1,9 |
-| Flattnitz 1437 m (ručne, automat) | 71 h | 73 | 2 | 0,53 (0,14–0,82) | 0,50 (0,00–1,00) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 1,2 | 2,1 |
-| Katschberg 1635 m (automat) | 23 h | 58 | 3 | 0,31 (0,09–0,79) | 0,33 (0,00–1,00) | 0,00 (0,00–0,00) | 0,94 (0,88–1,00) | 1,0 | 2,4 |
-| Katschberg 1635 m (automat) | 71 h | 58 | 3 | -0,38 (-0,51–-0,06) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 0,96 (0,92–1,00) | 1,1 | 2,8 |
-| LWD Turracherhoehe 1795 m (automat, 2025/26) | 23 h | 108 | 1 | -0,74 (-0,47–-0,26) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 0,99 (0,99–1,00) | 1,0 | 2,2 |
-| LWD Turracherhoehe 1795 m (automat, 2025/26) | 71 h | 108 | 1 | -0,74 (-0,05–-0,05) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 0,96 (0,97–0,98) | 0,9 | 2,3 |
-| LWD Falkert 1886 m (automat, 2025/26) | 23 h | 92 | 3 | 0,30 (-0,07–0,79) | 0,33 (0,00–1,00) | 0,00 (0,00–0,00) | 0,98 (0,95–1,00) | 1,0 | 2,5 |
-| LWD Falkert 1886 m (automat, 2025/26) | 71 h | 92 | 3 | -0,04 (-0,48–0,79) | 0,33 (0,00–1,00) | 0,50 (0,00–1,00) | 0,91 (0,80–0,97) | 0,9 | 2,6 |
+| Flattnitz 1437 m (ručne, automat) | 23 h | 73 | 2 | 0,53 (0,10–0,79) | 0,50 (0,00–1,00) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 0,1 | 0,9 |
+| Flattnitz 1437 m (ručne, automat) | 71 h | 73 | 2 | 0,53 (0,14–0,82) | 0,50 (0,00–1,00) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 0,2 | 1,1 |
+| Katschberg 1635 m (automat) | 23 h | 58 | 3 | 0,31 (0,09–0,79) | 0,33 (0,00–1,00) | 0,00 (0,00–0,00) | 0,94 (0,88–1,00) | -0,2 | 1,1 |
+| Katschberg 1635 m (automat) | 71 h | 58 | 3 | -0,38 (-0,51–-0,06) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 0,96 (0,92–1,00) | -0,1 | 1,6 |
+| LWD Turracherhoehe 1795 m (automat, 2025/26) | 23 h | 108 | 1 | -0,74 (-0,47–-0,26) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 0,99 (0,99–1,00) | -0,3 | 1,0 |
+| LWD Turracherhoehe 1795 m (automat, 2025/26) | 71 h | 108 | 1 | -0,74 (-0,05–-0,05) | 0,00 (0,00–0,00) | 1,00 (1,00–1,00) | 0,96 (0,97–0,98) | -0,4 | 1,1 |
+| LWD Falkert 1886 m (automat, 2025/26) | 23 h | 92 | 3 | 0,30 (-0,07–0,79) | 0,33 (0,00–1,00) | 0,00 (0,00–0,00) | 0,98 (0,95–1,00) | -0,3 | 1,2 |
+| LWD Falkert 1886 m (automat, 2025/26) | 71 h | 92 | 3 | -0,04 (-0,48–0,79) | 0,33 (0,00–1,00) | 0,50 (0,00–1,00) | 0,91 (0,80–0,97) | -0,3 | 1,4 |
 
 **Čo z toho plynie (overené):**
 
@@ -853,26 +858,28 @@ mali byť; BSS, POD, FAR a AUC to nemení. Prepočet v kroku 10d.
   až 0,50); od ~80 h je záporná (FAR 0,6–0,9 – model hlási udalosti, ktoré neprídu). Dnešné pravidlo
   stránky dopadá rovnako alebo horšie (23 h: −0,04).
 - Rozlišovacia schopnosť úhrnu je však výborná: AUC 0,96–0,98 do ~35 h, 0,90 pri 47–71 h, 0,86–0,91
-  pri 95–119 h, 0,78 pri 131 h; klimatológia 0,64. MAE úhrnu 1,9 cm pri 23 h oproti 3,9 cm klimatológie
-  a stále 2,8 cm pri 131 h. Informácia je v predpovedi do ~5 dní; chýba kalibrácia – prevod úhrnu
+  pri 95–119 h, 0,78 pri 131 h; klimatológia 0,64. MAE úhrnu 1,3 cm pri 23 h oproti 3,2 cm klimatológie
+  a stále 2,1 cm pri 131 h. Informácia je v predpovedi do ~5 dní; chýba kalibrácia – prevod úhrnu
   a jeho neistoty na pravdepodobnosť. To je úloha kroku 3.
 - Ani predstih 0 (zošité behy, 3 590 dní, 187 udalostí) nedá deterministickému prahu viac než POD 0,37
   (surový) / 0,47 (pravidlo) pri BSS 0,28–0,30: strop „áno/nie“ je nízky, pravdepodobnostný výstup
   je nutný, nie kozmetický.
-- Bias závisí od výšky: IFS podhodnocuje na Villacher Alpe 2 140 m (−0,9 cm/deň) a nadhodnocuje na
-  staniciach 1 400–1 900 m (+1,0 cm/deň). ICON-EU surový `snowfall` je sústavne nízky (−0,5 cm/deň,
-  POD 0,04) – ako surový nepoužiteľný; pravidlo z jeho zrážok je lepšie.
+- Bias: IFS podhodnocuje na ručných staniciach (Villacher Alpe 2 140 m −0,9 cm/deň, Kanzelhöhe −1,7);
+  na automatoch 1 400–1 900 m je bias blízko nuly (−0,4 až +0,2 cm/deň). Pôvodne uvádzané nadhodnotenie
+  +1,0 cm/deň v tomto pásme bolo artefaktom neorezaného záporného ΔHS (prepočet 23. 10. 2026). ICON-EU
+  surový `snowfall` je sústavne nízky (−1,2 cm/deň, POD 0,04) – ako surový nepoužiteľný; pravidlo z jeho
+  zrážok je lepšie.
 - Previous Runs ICON-D2 (2,2 km) je pri ~1 dni najlepší surový zdroj (POD 0,38, FAR 0,31, AUC 0,98,
-  MAE 1,7 cm) – kandidát na D0–D+1 namiesto AROME, ktorý archív nemá.
+  MAE 1,1 cm) – kandidát na D0–D+1 namiesto AROME, ktorý archív nemá (prijaté v kroku 4a).
 
 **Brána pre krok 3** (tá istá vzorka, tie isté CI): pri 23 h prekonať BSS 0,13 surového IFS aj −0,04
 pravidla s CI nad nulou; pri 71–83 h prekonať −0,04 až −0,26; pri predstihu 0 prekonať 0,28–0,30.
 
 **Predpoklady a limity kroku 2:** oneskorenie IFS 7 h; len behy 00z/12z (06z a 18z by dali predstihy
 17 h a 29 h pre sloty CI 16:13 a 04:13 UTC – stiahnuť, keď dovolí denný limit); kompozity Previous Runs
-miešajú predstihy v rámci dňa; ICON-D2 Historical Forecast zatiaľ len do 12/2023 (hodinový limit
-Open-Meteo, dokončiť); 24 udalostí v primárnej vzorke – všetky intervaly sú široké a rozhodujúci test
-ostáva sezóna 2026/27.
+miešajú predstihy v rámci dňa; ICON-D2 Historical Forecast bol pri prvej správe neúplný (do 12/2023),
+riadky ICON-D2 pri predstihu 0 sú od 23. 10. 2026 z úplného archívu; 24 udalostí v primárnej vzorke –
+všetky intervaly sú široké a rozhodujúci test ostáva sezóna 2026/27.
 
 
 ### 5.2 Krok 5 – prospektívne overovanie (od 11/2026, vyhodnotenie po sezóne 2026/27)
@@ -990,25 +997,24 @@ rovnako: súčin P(dážď ≥ 1 mm) a P(náraz > 60 km/h) = priamy fit, z ICON-
 
 ### 5.5 Krok 8 – snehová pokrývka z modelu (16. 10. 2026)
 
-Pravda: nameraná výška snehu ráno (06 UTC), 17 staníc 704–2 140 m, nov–apr; model Historical Forecast
-`snow_depth` o 06 UTC, predstih 0. Udalosť: stanica ≥ 30 cm. Plné tabuľky v `data/cover/REPORT.md`.
+Pravda: nameraná výška snehu ráno (06 UTC), 17 radov z 15 miest 704–2 140 m, nov–apr; model Historical
+Forecast `snow_depth` o 06 UTC, predstih 0. Udalosť: stanica ≥ 30 cm. BSS proti klimatológii z dlhých radov
+a CI so 60-dňovými blokmi (prepočet 23. 10. 2026, §4.7). Plné tabuľky v `data/cover/REPORT.md`.
 
 | Model | dvojíc | zimy | klim. | model ≥ 30 ako áno/nie (BSS, POD / FAR) | **BSS kal.** (CI) | AUC | P(≥ 30 │ model 0 / 10 / 20 / 30 / 50 cm) |
 |---|---|---|---|---|---|---|---|
-| ICON-D2 | 6 971 | 4 | 0,28 | 0,25 (0,08–0,37), 0,81 / 0,19 | **0,46 (0,36–0,55)** | 0,95 | 0,00 / 0,05 / 0,22 / 0,49 / 0,87 |
-| IFS 9 km | 1 665 | 2 | 0,35 | 0,28 (0,12–0,43), 0,47 / 0,18 | 0,25 (0,15–0,36) | 0,81 | 0,10 / 0,34 / 0,49 / 0,60 / 0,77 |
+| ICON-D2 | 6 971 | 4 | 0,29 | 0,02 (-0,18–0,20), 0,81 / 0,19 | **0,31 (0,17–0,43)** | 0,95 | 0,00 / 0,05 / 0,22 / 0,49 / 0,87 |
+| IFS 9 km | 1 609 | 1 | 0,36 | -1,09 (-1,79–-0,78), 0,49 / 0,18 | -0,50 (-0,68–-0,38), v rámci vzorky | 0,82 | 0,10 / 0,34 / 0,49 / 0,61 / 0,77 |
 
 Podiel dní so stanicou ≥ 30 cm podľa modelovej výšky ICON-D2: 0 cm → 0,01 (nad 1 700 m 0,11), 1–10 → 0,03,
 11–20 → 0,08, 21–30 → 0,35, 31–50 → 0,70, 51–100 → 0,98. Bias ICON-D2 podľa pásma: údolie +0,8 cm,
 1 200–1 700 m +2,5 cm, nad 1 700 m −15 cm (Villacher Alpe −28, LWD Falkert −0,1, LWD Turracherhöhe −2,6).
-IFS 9 km podľa stanice: LWD +18 / +23 cm, Kanzelhöhe −20, Flattnitz −13, Villacher Alpe −43 → žiadna
-jedna korekcia; prah ≥ 50 cm má kalibrovaný BSS −0,15.
+IFS 9 km podľa stanice (zima 2025/26): LWD +18 / +23 cm, Kanzelhöhe −20 / −19, Flattnitz −14, Villacher
+Alpe −43 → žiadna jedna korekcia; prah ≥ 50 cm má BSS kal. −0,24 (v rámci vzorky).
 
 **Čo z toho plynie (overené):** výška snehu ICON-D2 je dobrý predpoklad lyžovania – keď model ukáže
-0 cm, sneh na lyžovanie je len v 1 % dní, pri 30 cm v polovici; IFS 9 km sa na to nehodí.
-
-**Pozor (review 23. 10. 2026):** stĺpec „BSS kal.“ je nadsadený a IFS má fakticky jednu zimu (§4.7);
-podiely podľa modelovej výšky, AUC a krivka platia. Prepočet v kroku 10d.
+0 cm, sneh na lyžovanie je len v 1 % dní, pri 30 cm v polovici; kalibrovaná krivka má BSS 0,31 (0,17–0,43)
+proti klimatológii stanice, pevný prah „model ≥ 30 cm“ takmer nič. IFS 9 km sa na to nehodí.
 
 ## 6. Limity
 
