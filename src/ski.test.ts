@@ -5,12 +5,15 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import { SKI_CONFIG } from "./config.js";
+import { fetchJson } from "./fetch-json.js";
 import { clientBundle, clientRender, renderSkiPage } from "./ski-page.js";
 import { fetchAvalanche, readSnapshot } from "./ski.js";
 import {
   HOUR_MS,
   addDays,
+  avalancheCurrent,
   avalancheDates,
   avalancheUrl,
   buildSkiSnapshot,
@@ -36,6 +39,7 @@ import {
   requestDates,
   requestPoints,
   resolveRun,
+  snapshotStale,
   summarizeEnsemble,
 } from "./ski-core.js";
 
@@ -234,6 +238,10 @@ test("ansámbel: percentá z očakávaného počtu členov, sneh ako p10-p50-p90
   assert.equal(day.goodPct, Math.round((100 * 21) / expected));
   const snows = Array.from({ length: expected }, (_, m) => (m / 10) * cfg.rules.snowCmPerMm).sort((a, b) => a - b);
   assert.deepEqual(day.snowCm, { p10: percentile(snows, 0.1), p50: percentile(snows, 0.5), p90: percentile(snows, 0.9) });
+  // 8 bad, 8 fair, 35 good members: rounded one by one that showed 16 + 16 + 69 = 101 %.
+  const odd: Fill = (p, m, t) => (p === TOP && t === at(13) ? { gust: m < 8 ? 80 : m < 16 ? 50 : 10 } : {});
+  const oddDay = summarizeEnsemble(parsePoints(response(DAY, addDays(DAY, 1), odd, expected), "test"), cfg, [DAY])[0].days[0];
+  assert.deepEqual([oddDay.goodPct, oddDay.fairPct, oddDay.badPct], [69, 15, 16]);
 });
 
 test("neúplný ansámbel ani člen s medzerou sa nevydávajú za celok", () => {
@@ -415,6 +423,7 @@ test("snímka v6: powderSnow na deterministických dňoch, ansámbel bez zákona
   assert.deepEqual(cfg.powder.laws.ecmwf_ifs, fitted.sources.ecmwf_ifs.law);
   assert.deepEqual(cfg.powder.laws.icon_d2, fitted.sources.icon_d2.law);
   assert.equal(cfg.powder.thresholdCm, fitted.event.thresholdCm);
+  assert.equal(cfg.powder.thresholdCm, fitted.event.continuousThresholdCm);
   assert.equal(cfg.rules.snowMaxTempC, fitted.physics.phaseMidC);
   assert.equal(cfg.rules.snowCmPerMm, fitted.physics.slr0 / 10);
 });
@@ -478,6 +487,7 @@ test("kvalita dňa: pravdepodobnosti rastú so vstupom, dobrý deň je súčin, 
     assert.deepEqual((cfg.quality.curves[model] as Record<string, { a: number; b: unknown }>)[k], { a: fitted.curves[model][k].a, b: fitted.curves[model][k].b }, `${model} ${k}`);
   }
   assert.deepEqual(cfg.quality.inversion.icon_d2, { a: fitted.inversion.icon_d2.a, b: fitted.inversion.icon_d2.b });
+  assert.deepEqual(cfg.quality.snowTemp, fitted.snowTemp);
   assert.equal(curveProb({ a: 0, b: 1 }, 0), 0.5);
   assert.ok(Math.abs(curveProb({ a: 0, b: [1, 1] }, [1, -1]) - 0.5) < 1e-12);
 });
@@ -565,6 +575,14 @@ test("snehová pokrývka: ICON-D2 priamo, ostatné horizonty od jej úrovne plus
   const gap = snapshotFor(() => ({ depth: 0.4 }), undefined, DAY, { now: (p, _m, t) => ({ depth: p === TOP && t === at(9) ? null : 0.4 }) });
   assert.equal(coverOf(gap, "now"), null);
   assert.equal(coverOf(gap, "short", 1), null);
+});
+
+test("snehová pokrývka: krivka na stránke je kópia fitu z data/cover/cover-model.json", () => {
+  const fitted = JSON.parse(readFileSync(join(REPO_ROOT, "data", "cover", "cover-model.json"), "utf8"));
+  assert.equal(cfg.cover.version, fitted.version);
+  assert.equal(cfg.cover.coverCm, fitted.coverCm);
+  assert.deepEqual(Object.keys(cfg.cover.curves), [cfg.cover.anchor]);
+  assert.deepEqual(cfg.cover.curves.icon_d2, { a: fitted.curves.icon_d2.a, b: fitted.curves.icon_d2.b });
 });
 
 test("výhľad: posledný deň bez hodín prevádzky sa vypustí, medzera uprostred ostane medzerou", () => {
@@ -663,6 +681,13 @@ type Entry = { regionId: string; regionName: string; ratings: Rating[]; maxLevel
 function bulletin(date: string): unknown {
   return JSON.parse(readFileSync(new URL(`./fixtures/avalanche/${date}_AT-02_de.json`, import.meta.url), "utf8"));
 }
+
+/** One bulletin for all four regions as a regular winter edition: out at 17:00 the evening before
+ * `date`, valid until 17:00 on it. */
+function bulletinFor(date: string, mainValue = "moderate") {
+  const from = `${addDays(date, -1)}T16:00:00Z`;
+  return { bulletins: [{ regions: cfg.resorts.map((r) => ({ regionID: r.avalancheRegion, name: "R" })), dangerRatings: [{ mainValue, validTimePeriod: "all_day" }], publicationTime: from, validTime: { startTime: from, endTime: `${date}T16:00:00Z` } }] };
+}
 const entry = (ava: Avalanche, id: string): Entry => ava.resorts[id] as Entry;
 
 test("lavíny: adresa správy podľa dňa; najprv deň lanoviek, potom deň pred ním, nič staršie", () => {
@@ -730,7 +755,7 @@ test("lavíny: snímka v6 nesie správu alebo null; staršia snímka sa odmietne
   assert.equal(readSnapshot(path), null);
 });
 
-test("lavíny: generátor berie správu na deň lanoviek, inak včerajšiu; 404 je stav, zlyhanie siete necháva stránku bez správy", async () => {
+test("lavíny: generátor berie správu na deň lanoviek, inak včerajšiu, kým platí; 404 je stav, zlyhanie siete necháva stránku bez správy", async () => {
   const real = globalThis.fetch;
   const calls: string[] = [];
   const stub = (handler: (url: string) => Response) => {
@@ -741,21 +766,49 @@ test("lavíny: generátor berie správu na deň lanoviek, inak včerajšiu; 404 
     }) as typeof fetch;
   };
   const notFound = () => new Response("", { status: 404, statusText: "Not Found" });
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  const lift = "2027-01-15";
+  const before = "2027-01-14";
   try {
-    stub((url) => (url.includes("/2027-01-15/") ? notFound() : new Response(JSON.stringify(bulletin("2026-02-10")), { status: 200, headers: { "content-type": "application/json" } })));
-    const ava = await fetchAvalanche(cfg, "2027-01-15");
-    assert.equal(ava!.date, "2027-01-14");
-    assert.equal(entry(ava!, "falkert")!.maxLevel, 3);
-    assert.deepEqual(calls, [avalancheUrl(cfg, "2027-01-15"), avalancheUrl(cfg, "2027-01-14")]);
+    // 16:30 the day before: the lift day's edition is not out yet, the day before's runs until 17:00.
+    stub((url) => (url.includes(`/${lift}/`) ? notFound() : json(bulletinFor(before))));
+    const ava = await fetchAvalanche(cfg, lift, at(16, before) + 30 * 60_000);
+    assert.equal(ava!.date, before);
+    assert.equal(entry(ava!, "falkert")!.maxLevel, 2);
+    assert.deepEqual(calls, [avalancheUrl(cfg, lift), avalancheUrl(cfg, before)]);
+    // At 18:00 it has run out and nothing newer came: no bulletin rather than an expired level.
+    assert.equal(await fetchAvalanche(cfg, lift, at(18, before)), null);
+    // The lift day's own bulletin counts whenever it is there.
+    stub(() => json(bulletinFor(lift)));
+    assert.equal((await fetchAvalanche(cfg, lift, at(12, lift)))!.date, lift);
     stub(notFound);
-    assert.equal(await fetchAvalanche(cfg, "2027-01-15"), null);
+    assert.equal(await fetchAvalanche(cfg, lift, at(12, lift)), null);
     stub(() => {
       throw new TypeError("fetch failed");
     });
-    assert.equal(await fetchAvalanche(cfg, "2027-01-15"), null);
+    assert.equal(await fetchAvalanche(cfg, lift, at(12, lift)), null);
   } finally {
     globalThis.fetch = real;
   }
+});
+
+test("lavíny: včerajšia správa platí len do 17:00, nič staršie; potom ju stránka neukáže", () => {
+  const lift = "2026-02-10";
+  const eve = "2026-02-09";
+  const yesterday = parseAvalanche(bulletinFor(eve), cfg, eve);
+  assert.equal(avalancheCurrent(null, lift, at(16, eve)), false);
+  assert.equal(avalancheCurrent(parseAvalanche(bulletinFor(lift), cfg, lift), lift, at(20, lift)), true, "správa na deň lanoviek platí vždy");
+  assert.equal(avalancheCurrent(yesterday, lift, at(16, eve) + 59 * 60_000), true);
+  assert.equal(avalancheCurrent(yesterday, lift, at(17, eve)), false);
+  assert.equal(avalancheCurrent(parseAvalanche(bulletinFor("2026-02-08"), cfg, "2026-02-08"), lift, at(10, "2026-02-08")), false, "nič staršie ako deň pred dňom lanoviek");
+  // The same snapshot drawn at 16:45 shows the level with its end, drawn at 17:30 no level at all.
+  const render = clientRender();
+  const snap = snapshotFor(() => ({}), at(16, eve) + 30 * 60_000, lift, {}, yesterday);
+  assert.match(render.renderSki(snap, at(16, eve) + 45 * 60_000), /· správa na \S+ 9\. 2\., platí do dnes 17:00<\/p>/);
+  const late = render.renderSki(snap, at(17, eve) + 30 * 60_000);
+  assert.doesNotMatch(late, /class="sk-ava"/);
+  assert.doesNotMatch(late, /lawinen\.report\/bulletin/);
+  assert.match(late, /Lavínová správa pre tento deň nie je k dispozícii\./);
 });
 
 test("stránka: lavínový stupeň na karte s výškou, denným chodom a tendenciou, odkaz na správu; bez správy jedna veta", () => {
@@ -793,6 +846,149 @@ test("stránka: lavínový stupeň na karte s výškou, denným chodom a tendenc
   assert.doesNotMatch(none, /class="sk-ava"/);
   assert.doesNotMatch(none, /lawinen\.report\/bulletin/);
   assert.equal([...none.matchAll(/Lavínová správa pre tento deň nie je k dispozícii\./g)].length, 1);
+});
+
+test("snímka je zastaraná po hodine, po zmene najbližšieho dňa aj po skončení platnosti lavínovej správy", () => {
+  const max = cfg.clientRefreshMinutes;
+  const morning = snapshotFor();
+  assert.equal(snapshotStale(morning, at(10) + 59 * 60_000, max), false);
+  assert.equal(snapshotStale(morning, at(11), max), true);
+  // Fetched at 15:50: still fresh at 15:59, stale at 16:00 - the next lift day is tomorrow.
+  const afternoon = snapshotFor(() => ({}), at(15) + 50 * 60_000);
+  assert.equal(snapshotStale(afternoon, at(15) + 59 * 60_000, max), false);
+  assert.equal(snapshotStale(afternoon, at(16), max), true);
+  // Fetched at 16:30 with the day's own bulletin, tomorrow's not out yet: stale when it runs out at 17:00.
+  const evening = snapshotFor(() => ({}), at(16) + 30 * 60_000, addDays(DAY, 1), {}, parseAvalanche(bulletinFor(DAY), cfg, DAY));
+  assert.equal(snapshotStale(evening, at(16) + 59 * 60_000, max), false);
+  assert.equal(snapshotStale(evening, at(17), max), true);
+  // The generator asks the same question with its own 20 minutes.
+  assert.equal(snapshotStale(morning, at(10) + 25 * 60_000, cfg.serverMinRefreshMinutes), true);
+});
+
+/**
+ * The page's real inline bundle booted against a fake document, fetch, clock and timers - the part of
+ * the page the prerender never runs: staleness checks, refresh, timeouts.
+ */
+function bootPage(snapshot: unknown, startMs: number, fetchImpl: (url: string, signal: AbortSignal) => Promise<unknown>) {
+  const els = new Map<string, Record<string, unknown>>();
+  const el = (id: string) => {
+    if (!els.has(id)) els.set(id, { textContent: "", innerHTML: "", hidden: true, disabled: false, addEventListener() {} });
+    return els.get(id)!;
+  };
+  el("sk-snapshot").textContent = JSON.stringify(snapshot);
+  const timers: { fn: () => void; ms: number; every: boolean; live: boolean }[] = [];
+  const calls: string[] = [];
+  const clock = { now: startMs };
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  vm.runInNewContext(`Date.now = () => clock.now;\n${clientBundle()}`, {
+    clock,
+    console,
+    AbortController,
+    document: { visibilityState: "visible", getElementById: el, querySelectorAll: () => [], addEventListener() {} },
+    fetch: (url: string, init: { signal: AbortSignal }) => {
+      calls.push(String(url));
+      return fetchImpl(String(url), init.signal);
+    },
+    setTimeout: (fn: () => void, ms: number) => timers.push({ fn, ms, every: false, live: true }),
+    clearTimeout: (id: number) => {
+      if (timers[id - 1]) timers[id - 1].live = false;
+    },
+    setInterval: (fn: () => void, ms: number) => timers.push({ fn, ms, every: true, live: true }),
+  });
+  return {
+    calls,
+    el,
+    settle,
+    /** Moves the clock and runs the page's minute check. */
+    async minuteAt(ms: number) {
+      clock.now = ms;
+      for (const t of timers) if (t.every && t.live) t.fn();
+      await settle();
+    },
+    /** Runs the pending one-off timers of this delay (the fetch timeout). */
+    async elapse(ms: number) {
+      for (const t of timers) {
+        if (t.every || !t.live || t.ms !== ms) continue;
+        t.live = false;
+        t.fn();
+      }
+      await settle();
+    },
+  };
+}
+
+const serverDown = async () => ({ ok: false, status: 503, json: async () => ({}) });
+
+test("otvorená stránka: po 16:00 sa obnoví aj bez návratu na kartu, po chybe počká, zaseknuté sťahovanie preruší", async () => {
+  // Fetched at 15:50, opened at 15:55: fresh. The minute check at 16:01 fetches for tomorrow.
+  const page = bootPage(snapshotFor(() => ({}), at(15) + 50 * 60_000), at(15) + 55 * 60_000, serverDown);
+  await page.settle();
+  assert.equal(page.calls.length, 0);
+  await page.minuteAt(at(16) + 60_000);
+  assert.deepEqual(page.calls, [horizonUrl(cfg, "now", addDays(DAY, 1))]);
+  assert.match(String(page.el("sk-status").textContent), /Predpoveď sa nepodarilo obnoviť \(HTTP 503\)/);
+  assert.equal(page.el("sk-refresh").disabled, false);
+  // After a failure it waits ten minutes before trying again by itself.
+  await page.minuteAt(at(16) + 5 * 60_000);
+  assert.equal(page.calls.length, 1);
+  await page.minuteAt(at(16) + 12 * 60_000);
+  assert.equal(page.calls.length, 2);
+  // A request that never answers is cut off after 45 s, and the button comes back.
+  const hang = (_url: string, signal: AbortSignal) => new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
+  const stuck = bootPage(snapshotFor(), at(12), hang);
+  await stuck.settle();
+  assert.equal(stuck.calls.length, 1, "dáta z 10:00 sú o 12:00 staré");
+  assert.equal(stuck.el("sk-refresh").disabled, true);
+  await stuck.elapse(45_000);
+  assert.equal(stuck.el("sk-refresh").disabled, false);
+  assert.match(String(stuck.el("sk-status").textContent), /server neodpovedal včas/);
+});
+
+test("otvorená stránka: po polnoci prekreslí „dnes“ na „včera“ bez sťahovania; po 17:00 skryje včerajšiu lavínovú správu a obnoví sa", async () => {
+  const night = bootPage(snapshotFor(() => ({}), at(23) + 50 * 60_000, addDays(DAY, 1)), at(23) + 55 * 60_000, serverDown);
+  await night.settle();
+  assert.match(String(night.el("sk-meta").textContent), /Načítané dnes 23:50/);
+  await night.minuteAt(at(0, addDays(DAY, 1)) + 5 * 60_000);
+  assert.match(String(night.el("sk-meta").textContent), /Načítané včera 23:50/);
+  assert.equal(night.calls.length, 0);
+  const evening = snapshotFor(() => ({}), at(16) + 30 * 60_000, addDays(DAY, 1), {}, parseAvalanche(bulletinFor(DAY), cfg, DAY));
+  const page = bootPage(evening, at(16) + 35 * 60_000, serverDown);
+  await page.settle();
+  assert.match(String(page.el("sk-main").innerHTML), /class="sk-ava"/);
+  await page.minuteAt(at(16) + 50 * 60_000);
+  assert.equal(page.calls.length, 0);
+  await page.minuteAt(at(17) + 60_000);
+  assert.equal(page.calls.length, 1);
+  assert.doesNotMatch(String(page.el("sk-main").innerHTML), /class="sk-ava"/);
+  assert.match(String(page.el("sk-main").innerHTML), /Lavínová správa pre tento deň nie je k dispozícii/);
+});
+
+test("generátor: chybovú odpoveď Open-Meteo pod HTTP 200 skúsi znova, pri 429 počká dlhšie, chybnú požiadavku nie", async () => {
+  const real = globalThis.fetch;
+  let n = 0;
+  const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const stub = (handler: (i: number) => Response) => {
+    n = 0;
+    globalThis.fetch = (async () => handler(n++)) as typeof fetch;
+  };
+  const busy = { error: true, reason: "Too many concurrent requests" };
+  try {
+    stub((i) => (i === 0 ? reply(200, busy) : reply(200, { ok: 1 })));
+    assert.deepEqual(await fetchJson("https://example.test/a", { backoffMs: 1 }), { ok: 1 });
+    assert.equal(n, 2);
+    stub(() => reply(200, busy));
+    await assert.rejects(fetchJson("https://example.test/a", { backoffMs: 1, retries: 2 }), /Open-Meteo: Too many concurrent requests/);
+    assert.equal(n, 3);
+    stub((i) => (i === 0 ? reply(429, { error: true, reason: "Minutely API request limit exceeded" }) : reply(200, { ok: 2 })));
+    const t0 = Date.now();
+    assert.deepEqual(await fetchJson("https://example.test/a", { backoffMs: 1, rateLimitWaitMs: 40 }), { ok: 2 });
+    assert.ok(Date.now() - t0 >= 35, "pri 429 sa čaká aspoň rateLimitWaitMs");
+    stub(() => reply(400, { error: true, reason: "Cannot initialize WeatherVariable" }));
+    await assert.rejects(fetchJson("https://example.test/a", { backoffMs: 1 }), /^Error: 400 /);
+    assert.equal(n, 1, "chybná požiadavka sa neopakuje");
+  } finally {
+    globalThis.fetch = real;
+  }
 });
 
 test("vložená snímka sa dá prečítať späť a vložený kód je bez import/export", () => {

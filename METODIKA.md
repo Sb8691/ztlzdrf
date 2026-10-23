@@ -33,6 +33,7 @@ sú po anglicky, tento dokument po slovensky. Dátumy sú absolútne.
 
 | Dátum | Rozhodnutie / predpoklad | Kto |
 |---|---|---|
+| 23. 10. 2026 | Krok 10b (stránka a log): včerajšia lavínová správa len kým platí, prepadnutá sa nekreslí; otvorená stránka kontroluje každú minútu a pri návrate na kartu, či sú dáta staršie ako 60 min, či sa zmenil najbližší lyžiarsky deň alebo skončila platnosť lavínovej správy (generátor to isté s 20 min); po polnoci prekreslí relatívne časy; sťahovanie v prehliadači má limit 45 s a po neúspešnej obnove čaká 10 min; generátor opakuje chybové odpovede Open-Meteo pod HTTP 200 a pri 429 čaká aspoň 60 s; nečitateľná odpoveď pre stanice zahodí len stanice horizontu (`stationsError`), nie riadok logu; podiely ansámblu so súčtom 100 ako pri deterministických dňoch; testy zhody pre pokrývku a `snowTemp`. Prahy 45 s, 10 min a 60 s sú voľby, nie merania | majiteľ (áno 23. 10.), Claude |
 | 23. 10. 2026 | Krok 10 (review repozitára): dokumentácia = README.md ako vstupný bod (TODO.md zlúčené doň) + METODIKA.md s podrobnosťami; opravy z review v poradí 10a dokumentácia, 10b stránka a log, 10c CI, 10d čísla, každý krok jeden commit; odvodené čísla zo staníc LWD v `data/` ostávajú, majiteľ požiadal LWD o súhlas s ich použitím. Review našlo nadsadený BSS brány pokrývky (§4.7, §5.5) a riadky ICON-D2 v backteste z neúplného archívu (§5.1) – prepočet v 10d | majiteľ (voľby 23. 10.), Claude |
 | 16. 10. 2026 | Krok 9: lavínový stupeň na karte najbližšieho dňa zo správy LWD Kärnten v systéme Euregia (CAAML v6 na static.avalanche.report, CC BY 4.0 podľa Open Data avalanche.report – súhlas LWD netreba, žiadosť majiteľa ostáva pre staničné súbory); región = mikroregión EAWS hornej stanice (Turracher Höhe korutánsky, dolná stanica v Štajersku ignorovaná); zobrazenie stupeň + výška + denný chod + tendencia, bez nemeckého textu (voľba majiteľa z troch); správa na deň lanoviek, inak včerajšia, nič staršie; 404 = bez správy; len karta, nie tabuľky; snímka v6 | majiteľ (žiadosť LWD odoslaná, plán a zobrazenie schválené 16. 10.), Fable |
 | 16. 10. 2026 | Krok 8: deň sa hodnotí len s pokrývkou – brána z modelovej výšky snehu ICON-D2 (overená, 4 zimy, 17 staníc), IFS 9 km ako brána zamietnutý (2 zimy, biasy oboch znamienok); ostatné horizonty kotvené na úroveň ICON-D2 prvého dňa + vlastná zmena (predpoklad, overí sezóna 2026/27); „Bez snehu“ pod P 0,5 bez pruhu a dôvodov, prašan ostáva; sezónne termíny stredísk len ako poznámka; posledný deň výhľadu bez hodín prevádzky sa vypúšťa; snímka v5 | majiteľ (plán schválený 16. 10.), Fable |
@@ -663,8 +664,8 @@ ostáva; posledný deň výhľadu) schválený s odporúčanými voľbami.
   len 9.–16. 1. 2025, „2 zimy“ sú teda fakticky jedna. Krivku (fit nepoužíva klimatológiu) ani rozhodnutie
   „brána len z ICON-D2“ to nemení; čísla sa prepočítajú v kroku 10d.
 - **Rozhodnutia:** krivka len z ICON-D2 (`src/cover-model.ts`: a −6,7266, b 1,2188 na √cm, kópia
-  `data/cover/cover-model.json`; hodnoty sa 23. 10. 2026 zhodujú, test rovnosti chýba a pribudne v kroku
-  10b). Úroveň pokrývky pre všetky horizonty = ICON-D2 pri hornej
+  `data/cover/cover-model.json`, test rovnosti v `src/ski.test.ts` od kroku 10b, 23. 10. 2026). Úroveň
+  pokrývky pre všetky horizonty = ICON-D2 pri hornej
   stanici o otváracej hodine prvého dňa (`coverAnchors` v `src/ski-core.js`); ostatné modely k nej
   pridajú len svoju zmenu odvtedy (`snowCover` s `anchorCm`), ansámbel po členoch (medián cm, priemer
   P). Brána na stránke: P(pokrývka ≥ 30 cm) < 0,5 → „Bez snehu“, deň sa nehodnotí (pruh a dôvody sa
@@ -717,7 +718,11 @@ Plán schválený s odporúčaným zobrazením (stupeň + výška + denný chod 
   „správa na D−1, platí do 17:00“); nič staršie, lebo správa, ktorá skončila včera, o dnešku nehovorí. 404 je
   stav „bez správy“, nie chyba (bez opakovania); zlyhanie siete alebo neznámy tvar nechá stránku bez správy
   s vetou pod nadpisom a predpoveď nestratí. CI o 16:13 UTC už vidí večerné vydanie; otvorená stránka sa
-  obnoví do hodiny a vezme aj rannú aktualizáciu.
+  obnoví do hodiny a vezme aj rannú aktualizáciu. **Od kroku 10b (23. 10. 2026)** sa D−1 berie len kým platí
+  (`avalancheCurrent`): na konci sezóny služby alebo v deň bez nového vydania by sa inak prepadnutý stupeň
+  tváril ako dnešný. Snímka s prepadnutou správou sa kreslí ako bez správy a otvorená stránka sa vtedy
+  obnoví sama (`snapshotStale`, §2). Ak nové vydanie o 17:00 ešte nie je vonku, stránka je do ďalšej
+  obnovy (najneskôr o hodinu) bez správy.
 - **Regióny:** mikroregióny EAWS z `regions.avalanches.org/micro-regions/AT-02_micro-regions.geojson.json`
   (polygóny s `start_date`/`end_date`; Kärnten prekreslené k 1. 10. 2022 a 1. 8. 2025), bod v polygóne pre
   stanice lanoviek: Kaiserburgbahn II → AT-02-04-02 Nockberge Süd (Sonnwiesenbahn dole je v AT-02-04-01),
@@ -887,7 +892,9 @@ stránkou). Riadok (`src/prospective.ts`, formát `v: 1`):
   pre šesť staníc s pravdou – Villacher Alpe 2 140 m, Kanzelhöhe 1 520 m, Flattnitz 1 437 m,
   Katschberg 1 635 m, LWD Turracherhoehe 1 795 m, LWD Falkert 1 886 m – s `powderSnow` na deň, pre
   horizonty ICON-D2 a IFS (dve požiadavky navyše na beh, 6 bodov, v limitoch). Keď sa stanice
-  nepodarí stiahnuť, riadok sa zapíše bez nich a generátor to vypíše; log nikdy nezastaví stránku.
+  nepodarí stiahnuť, riadok sa zapíše bez nich a generátor to vypíše; log nikdy nezastaví stránku. Keď
+  odpoveď pre stanice prišla, ale nedá sa prečítať (chybová odpoveď, chýbajúci bod), horizont nesie
+  `stationsError` namiesto `stations` (od kroku 10b, 23. 10. 2026; predtým sa stratil celý riadok).
 
 Veľkosť: ~20 kB na riadok, ~3 riadky denne, ~10 MB za sezónu v jednom textovom súbore. Riadok
 s rovnakým `fetchedAtMs` sa nezdvojí. Overené naživo 4. 10. 2026 (`SKI_LOG_DIR` do scratch adresára).

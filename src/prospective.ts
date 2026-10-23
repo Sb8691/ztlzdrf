@@ -44,6 +44,8 @@ export interface ForecastLogLine {
     publishedAtMs: number | null;
     resorts: Record<string, Record<string, unknown>[]>;
     stations?: Record<string, Record<string, unknown>[]>;
+    /** Why `stations` is missing although the station forecast arrived (unreadable answer, step 10b). */
+    stationsError?: string;
   }>;
 }
 
@@ -74,7 +76,8 @@ type Member = { temperature: (number | null)[]; precipitation: (number | null)[]
 type ParsedPoint = { timesMs: number[]; members: Member[] };
 
 /** One line of the log from what the generator has in hand. Station responses are optional - a failed
- * station fetch still leaves the resorts' line. */
+ * station fetch, or a station answer that cannot be read (that horizon then carries `stationsError`
+ * instead of `stations`), still leaves the resorts' line. */
 export function buildForecastLog(snapshot: SkiSnapshot, responses: Responses, stations: StationResponses | null, cfg: SkiConfig): ForecastLogLine {
   const line: ForecastLogLine = { v: FORECAST_LOG_VERSION, fetchedAtMs: snapshot.fetchedAtMs, firstDate: snapshot.firstDate, snapshotVersion: SKI_SNAPSHOT_VERSION, modelVersion: cfg.powder.version, horizons: {} };
   /** The anchor model's depth at each verification station on the first day (as coverAnchors does for resorts). */
@@ -100,21 +103,28 @@ export function buildForecastLog(snapshot: SkiSnapshot, responses: Responses, st
     const entry: ForecastLogLine["horizons"][string] = { model: h.model, runAtMs: h.runAtMs, publishedAtMs: h.publishedAtMs, resorts };
     const raw = stations?.[key];
     if (!ensemble && raw) {
-      const law = cfg.powder.laws[h.model] ?? null;
-      const publishedMs = h.publishedAtMs ?? snapshot.fetchedAtMs;
-      const pts = parsePoints(raw, `${h.model} stanice`) as ParsedPoint[];
-      if (pts.length !== VERIFICATION_STATIONS.length) throw new Error(`stanice: ${pts.length} bodov namiesto ${VERIFICATION_STATIONS.length}`);
-      entry.stations = {};
-      if (h.model === cfg.cover.anchor && !stationAnchors) {
-        stationAnchors = pts.map((p) => { const i = indexByTime(p.timesMs).get(localTimeMs(snapshot.firstDate, cfg.liftOpenHour, cfg.timezone)); const v = i === undefined ? null : p.members[0].snowDepth?.[i]; return v == null ? null : Math.max(0, v * 100); });
+      // An unreadable station answer (an error body, a point short) costs the stations of this
+      // horizon, never the line: the resorts and the ensemble members are the season's record.
+      try {
+        const law = cfg.powder.laws[h.model] ?? null;
+        const publishedMs = h.publishedAtMs ?? snapshot.fetchedAtMs;
+        const pts = parsePoints(raw, `${h.model} stanice`) as ParsedPoint[];
+        if (pts.length !== VERIFICATION_STATIONS.length) throw new Error(`stanice: ${pts.length} bodov namiesto ${VERIFICATION_STATIONS.length}`);
+        if (h.model === cfg.cover.anchor && !stationAnchors) {
+          stationAnchors = pts.map((p) => { const i = indexByTime(p.timesMs).get(localTimeMs(snapshot.firstDate, cfg.liftOpenHour, cfg.timezone)); const v = i === undefined ? null : p.members[0].snowDepth?.[i]; return v == null ? null : Math.max(0, v * 100); });
+        }
+        const byStation: Record<string, Record<string, unknown>[]> = {};
+        VERIFICATION_STATIONS.forEach((s, si) => {
+          const idx = indexByTime(pts[si].timesMs);
+          const anchorCm = h.model === cfg.cover.anchor ? null : stationAnchors?.[si] ?? null;
+          const cover = (date: string) => (h.model === cfg.cover.anchor ? snowCover(pts[si].members, date, cfg, idx, coverCurve) : anchorCm === null ? null : snowCover(pts[si].members, date, cfg, idx, coverCurve, anchorCm, snapshot.firstDate));
+          // A station is its own base: no inversion, rain at the station itself.
+          byStation[s.id] = h.dates.map((date, di) => ({ date, powderSnow: powderSnow(pts[si].members[0], date, cfg, idx, law, publishedMs, di), quality: dayQuality(pts[si].members[0], pts[si].members[0], date, cfg, idx, h.model), snowCover: cover(date) }));
+        });
+        entry.stations = byStation;
+      } catch (err) {
+        entry.stationsError = err instanceof Error ? err.message : String(err);
       }
-      VERIFICATION_STATIONS.forEach((s, si) => {
-        const idx = indexByTime(pts[si].timesMs);
-        const anchorCm = h.model === cfg.cover.anchor ? null : stationAnchors?.[si] ?? null;
-        const cover = (date: string) => (h.model === cfg.cover.anchor ? snowCover(pts[si].members, date, cfg, idx, coverCurve) : anchorCm === null ? null : snowCover(pts[si].members, date, cfg, idx, coverCurve, anchorCm, snapshot.firstDate));
-        // A station is its own base: no inversion, rain at the station itself.
-        entry.stations![s.id] = h.dates.map((date, di) => ({ date, powderSnow: powderSnow(pts[si].members[0], date, cfg, idx, law, publishedMs, di), quality: dayQuality(pts[si].members[0], pts[si].members[0], date, cfg, idx, h.model), snowCover: cover(date) }));
-      });
     }
     line.horizons[key] = entry;
   }

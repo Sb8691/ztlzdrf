@@ -851,12 +851,15 @@ export function summarizeEnsemble(points, cfg, dates, anchors = null) {
         if (s !== null) snows.push(s);
       }
       snows.sort((a, b) => a - b);
-      const pct = (n) => Math.round((100 * n) / expected);
+      // Rounded as dayShares rounds: bad first, good capped by what is left, fair the rest - three
+      // whole percentages that always sum to 100 (rounded separately, 35/8/8 members gave 101).
+      const badPct = Math.round((100 * counts.bad) / expected);
+      const goodPct = Math.min(Math.round((100 * counts.good) / expected), 100 - badPct);
       return {
         date,
-        goodPct: pct(counts.good),
-        fairPct: pct(counts.fair),
-        badPct: pct(counts.bad),
+        goodPct,
+        fairPct: 100 - goodPct - badPct,
+        badPct,
         snowCm: snows.length === expected ? { p10: percentile(snows, 0.1), p50: percentile(snows, 0.5), p90: percentile(snows, 0.9) } : null,
         expected,
         reason: null,
@@ -884,10 +887,26 @@ export function avalancheUrl(cfg, date) {
  * Which bulletin days to try for a lift day, in order: the day itself (its bulletin comes out the
  * evening before, around 17:00), else the day before - still valid until 17:00 when the lift day is
  * tomorrow and tomorrow's edition is not out yet. Nothing older: a bulletin that ended yesterday
- * says nothing about today.
+ * says nothing about today. Whether the day before's is still valid is avalancheCurrent's call.
  */
 export function avalancheDates(firstDate) {
   return [firstDate, addDays(firstDate, -1)];
+}
+
+/**
+ * Whether a bulletin still speaks for the lift day at `nowMs` (step 10b): the lift day's own always
+ * does, the day before's only until its validity ends - from the lifts closing at 16:00 until the
+ * next edition at 17:00. Past that it says nothing about the lift day: at the end of the service's
+ * season, or on a day without a new edition, it would otherwise pass for the current danger level.
+ *
+ * @param {Avalanche | null} ava
+ * @param {string} firstDate
+ * @param {number} nowMs
+ */
+export function avalancheCurrent(ava, firstDate, nowMs) {
+  if (!ava) return false;
+  if (ava.date === firstDate) return true;
+  return ava.date === addDays(firstDate, -1) && ava.validToMs !== null && nowMs < ava.validToMs;
 }
 
 function isoMs(s) {
@@ -1033,4 +1052,20 @@ export function buildSkiSnapshot(responses, cfg, fetchedAtMs, avalanche = null) 
     };
   }
   return { version: SKI_SNAPSHOT_VERSION, fetchedAtMs, firstDate, config: cfg, horizons, avalanche };
+}
+
+/**
+ * Whether a snapshot should be fetched again (step 10b): it is at least `maxAgeMinutes` old, it was
+ * made for a first lift day that has passed (once the lifts close the next one is tomorrow), or the
+ * avalanche bulletin it carries has run out. The generator asks with serverMinRefreshMinutes, the
+ * open page with clientRefreshMinutes.
+ *
+ * @param {{ fetchedAtMs: number, firstDate: string, config: { timezone: string, liftCloseHour: number }, avalanche: Avalanche | null }} snapshot
+ * @param {number} nowMs
+ * @param {number} maxAgeMinutes
+ */
+export function snapshotStale(snapshot, nowMs, maxAgeMinutes) {
+  if (nowMs - snapshot.fetchedAtMs >= maxAgeMinutes * 60_000) return true;
+  if (firstSkiDate(nowMs, snapshot.config) !== snapshot.firstDate) return true;
+  return !!snapshot.avalanche && !avalancheCurrent(snapshot.avalanche, snapshot.firstDate, nowMs);
 }

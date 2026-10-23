@@ -91,6 +91,21 @@ test("riadok logu: strediská, stanice a členovia ansámblu; D0 ansámblu bez o
   assert.ok(JSON.stringify(line).length < 60_000, "riadok musí ostať malý, pribúda trikrát denne");
 });
 
+test("nečitateľná odpoveď pre stanice zahodí len stanice toho horizontu, nie riadok", () => {
+  const { snapshot, responses, stations } = fixtures();
+  const broken = { now: { error: true, reason: "Too many concurrent requests" }, short: (stations.short as unknown[]).slice(1) };
+  const line = buildForecastLog(snapshot, responses, broken, cfg);
+  assert.equal(line.horizons.now.stations, undefined);
+  assert.match(line.horizons.now.stationsError!, /Too many concurrent requests/);
+  assert.equal(line.horizons.short.stations, undefined);
+  assert.match(line.horizons.short.stationsError!, /bodov namiesto/);
+  assert.deepEqual(Object.keys(line.horizons.now.resorts), cfg.resorts.map((r) => r.id));
+  const days = line.horizons.long.resorts[cfg.resorts[0].id] as { members: unknown[] }[];
+  assert.equal(days[1].members.length, cfg.horizons.long.expectedMembers);
+  // Readable stations carry no error field.
+  assert.equal(buildForecastLog(snapshot, responses, stations, cfg).horizons.now.stationsError, undefined);
+});
+
 test("bez staníc sa riadok zapíše aj tak; rovnaké načítanie sa nezdvojí; súbor podľa sezóny", () => {
   const { snapshot, responses } = fixtures();
   const line = buildForecastLog(snapshot, responses, null, cfg);

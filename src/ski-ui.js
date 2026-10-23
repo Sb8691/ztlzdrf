@@ -488,16 +488,18 @@ function renderSki(snapshot, nowMs) {
   const long = resortsById(H.long);
   const source = (h) => `${h.label}${h.runAtMs ? `, beh ${clockLabel(h.runAtMs, nowMs, cfg.timezone)}` : ""}`;
   const stale = firstSkiDate(nowMs, cfg) > snapshot.firstDate;
+  // A bulletin past its validity says nothing about the lift day: it is drawn as no bulletin (step 10b).
+  const ava = avalancheCurrent(snapshot.avalanche, snapshot.firstDate, nowMs) ? snapshot.avalanche : null;
 
   return (
     (stale ? `<p class="sk-warn">Tieto dáta sú staršie a začínajú dňom, ktorý už je za nami. Obnovte predpoveď.</p>` : "") +
-    `<section class="sk-section"><h2>${esc(longDayLabel(H.now.dates[0]))}</h2><p class="sk-src">Najbližší lyžiarsky deň · ${esc(source(H.now))}${avalancheSource(snapshot.avalanche, nowMs, cfg)}</p>` +
-    `<p class="sk-note">Pruh a percento sú pravdepodobnosť, že deň bude dobrý, ujde alebo zlý; pod názvom strediska je, čo ho môže pokaziť. „Bez snehu“: model nevidí hore pokrývku aspoň ${cfg.cover.coverCm}${NB}cm.${snapshot.avalanche ? "" : " Lavínová správa pre tento deň nie je k dispozícii."}</p>` +
+    `<section class="sk-section"><h2>${esc(longDayLabel(H.now.dates[0]))}</h2><p class="sk-src">Najbližší lyžiarsky deň · ${esc(source(H.now))}${avalancheSource(ava, nowMs, cfg)}</p>` +
+    `<p class="sk-note">Pruh a percento sú pravdepodobnosť, že deň bude dobrý, ujde alebo zlý; pod názvom strediska je, čo ho môže pokaziť. „Bez snehu“: model nevidí hore pokrývku aspoň ${cfg.cover.coverCm}${NB}cm.${ava ? "" : " Lavínová správa pre tento deň nie je k dispozícii."}</p>` +
     LEGEND +
-    `<div class="sk-cards">${cfg.resorts.map((r, i) => nowCard(r, now[i].days[0], cfg, snapshot.avalanche, nowMs)).join("")}</div></section>` +
+    `<div class="sk-cards">${cfg.resorts.map((r, i) => nowCard(r, now[i].days[0], cfg, ava, nowMs)).join("")}</div></section>` +
     `<section class="sk-section"><h2>Najbližšie ${H.short.dates.length} dni</h2><p class="sk-src">${esc(source(H.short))}</p>` +
     `<p class="sk-note">Pod pruhom: teplota pri hornej stanici počas prevádzky, šanca na prašan, nový sneh za 3 dni a silnejší vietor.</p>` +
-    dayTable(H.short.dates, short, cfg, shortCell, `Pravdepodobnosti dobrého, priemerného a zlého dňa na najbližšie ${H.short.dates.length} dni`) +
+    dayTable(H.short.dates, short, cfg, shortCell, `Pravdepodobnosti, že deň bude dobrý, ujde alebo zlý, na najbližšie ${H.short.dates.length} dni`) +
     cfg.resorts.map((r, i) => hourlyChart(r, short[i].hourly, H.short.dates, cfg)).join("") +
     `</section>` +
     `<section class="sk-section"><h2>Výhľad na ${H.long.dates.length} dní</h2><p class="sk-src">${esc(source(H.long))}</p>` +
@@ -517,26 +519,36 @@ function renderMetaText(snapshot, nowMs) {
 // Browser only
 // ---------------------------------------------------------------------------
 
-const state = { snapshot: null, pending: false, seq: 0, error: null };
+/** `paintedDay` is the local day of the last drawing, `failedAtMs` the last failed refresh. */
+const state = { snapshot: null, pending: false, seq: 0, error: null, paintedDay: null, failedAtMs: 0 };
 
-async function getJson(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  if (json && json.error) throw new Error(json.reason || "chyba Open-Meteo");
-  return json;
-}
+/** A request that never settles would keep the button on "Sťahujem…" and block every later refresh. */
+const FETCH_TIMEOUT_MS = 45_000;
+/** After a failed refresh the page waits this long before trying again by itself; the button still works. */
+const RETRY_AFTER_FAILURE_MS = 10 * 60_000;
 
-/** fetch + JSON for a file that may simply not exist: null on 404, an error on anything else. */
-async function getJsonOrNull(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+/** fetch + JSON with a timeout. `allow404` turns a missing file into null - the avalanche bulletin of
+ * a day may simply not exist; anything else that is not OK is an error. */
+async function getJson(url, allow404 = false) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: ctrl.signal });
+    if (allow404 && res.status === 404) return null;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json && json.error) throw new Error(json.reason || "chyba Open-Meteo");
+    return json;
+  } catch (err) {
+    throw ctrl.signal.aborted ? new Error("server neodpovedal včas") : err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function paint() {
   const nowMs = Date.now();
+  state.paintedDay = localDateOf(nowMs, state.snapshot.config.timezone);
   document.getElementById("sk-meta").textContent = renderMetaText(state.snapshot, nowMs);
   // Keep open hourly charts open across a re-render.
   const open = new Set([...document.querySelectorAll("#sk-main details[open] > summary")].map((s) => s.textContent));
@@ -573,9 +585,10 @@ async function refresh() {
     let avalanche = null;
     try {
       for (const date of avalancheDates(first)) {
-        const json = await getJsonOrNull(avalancheUrl(cfg, date));
+        const json = await getJson(avalancheUrl(cfg, date), true);
         if (json) {
-          avalanche = parseAvalanche(json, cfg, date);
+          const parsed = parseAvalanche(json, cfg, date);
+          avalanche = avalancheCurrent(parsed, first, Date.now()) ? parsed : null;
           break;
         }
       }
@@ -586,8 +599,10 @@ async function refresh() {
     if (seq !== state.seq) return;
     state.snapshot = next;
     state.error = null;
+    state.failedAtMs = 0;
   } catch (err) {
     if (seq !== state.seq) return;
+    state.failedAtMs = Date.now();
     const when = clockLabel(state.snapshot.fetchedAtMs, Date.now(), state.snapshot.config.timezone);
     state.error = `Predpoveď sa nepodarilo obnoviť (${err && err.message ? err.message : "chyba siete"}). Ukazujem dáta z ${when}.`;
   } finally {
@@ -601,9 +616,21 @@ async function refresh() {
 }
 
 function refreshIfStale() {
+  if (document.visibilityState !== "visible" || state.pending) return;
+  const nowMs = Date.now();
+  if (nowMs - state.failedAtMs < RETRY_AFTER_FAILURE_MS) return;
+  if (snapshotStale(state.snapshot, nowMs, state.snapshot.config.clientRefreshMinutes)) refresh();
+}
+
+/**
+ * Every minute and whenever the page becomes visible again (step 10b): redraw once the local day has
+ * changed, so "dnes" and "včera" stay true past midnight, and fetch again once the data are stale -
+ * an hour old, made for a lift day that has passed, or carrying a bulletin that has run out.
+ */
+function tick() {
   if (document.visibilityState !== "visible") return;
-  const ageMin = (Date.now() - state.snapshot.fetchedAtMs) / 60_000;
-  if (ageMin >= state.snapshot.config.clientRefreshMinutes) refresh();
+  if (localDateOf(Date.now(), state.snapshot.config.timezone) !== state.paintedDay) paint();
+  refreshIfStale();
 }
 
 function boot() {
@@ -611,7 +638,8 @@ function boot() {
   if (!raw) return;
   state.snapshot = JSON.parse(raw.textContent);
   document.getElementById("sk-refresh").addEventListener("click", () => refresh());
-  document.addEventListener("visibilitychange", refreshIfStale);
+  document.addEventListener("visibilitychange", tick);
+  setInterval(tick, 60_000);
   paint();
   refreshIfStale();
 }

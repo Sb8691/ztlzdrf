@@ -74,8 +74,9 @@ Open-Meteo ───────┐                              ┌─> docs/da
                   ├─> src/ski.ts (CI 3× denne) ──┼─> docs/index.html      (predkreslená stránka + kód)
 avalanche.report ─┘                              └─> data/prospective/<sezóna>.jsonl (log na overenie)
 
-prehliadač: tlačidlo „Obnoviť predpoveď“, alebo pri otvorení či návrate na stránku s dátami staršími
-ako 60 min → ten istý výpočet znova
+prehliadač: tlačidlo „Obnoviť predpoveď“, alebo sám (pri otvorení, návrate na stránku a každú minútu),
+keď sú dáta staršie ako 60 min, keď sa po 16:00 zmení najbližší lyžiarsky deň alebo keď skončí platnosť
+lavínovej správy → ten istý výpočet znova
 ```
 
 - `src/ski-core.js` – **celý výpočet**, čisté ESM bez importov. Beží v Node (generátor, testy) a ten
@@ -84,7 +85,8 @@ ako 60 min → ten istý výpočet znova
 - `src/ski-page.ts` – HTML, CSS, pätička; obsah predkreslí tým istým kódom vo `vm`, takže stránka je
   čitateľná aj bez JavaScriptu.
 - `src/ski.ts` – generátor: stiahne tri horizonty a lavínovú správu, uloží snímku, zapíše stránku.
-  Snímku mladšiu ako 20 min použije znova; keď sťahovanie zlyhá, publikuje poslednú platnú.
+  Snímku mladšiu ako 20 min použije znova (ak sa medzitým nezmenil najbližší deň); keď sťahovanie zlyhá,
+  publikuje poslednú platnú.
 - `src/prospective.ts` – pri každom čerstvom stiahnutí pripíše riadok do sezónneho logu predpovedí.
 - `src/config.ts` – strediská (stanice, odkazy, sezóna, lavínový región), horizonty, pravidlá, zdroje.
   `src/*-model.ts` sú kópie `data/*/…-model.json`, z ktorých ich vyrábajú offline skripty.
@@ -156,12 +158,12 @@ dátumom sú v METODIKA §2.
 | 7 – pravdepodobnosti na stránke | 5. 10. 2026 | pruh dobré / ujde / zlé namiesto áno/nie | §4.6 |
 | 8 – predpoklad snehu | 16. 10. 2026 | „Bez snehu“ z modelovej pokrývky ICON-D2 (AUC 0,95) | §4.7, §5.5 |
 | 9 – lavínový stupeň | 16. 10. 2026 | stupeň EAWS regiónu hornej stanice na karte najbližšieho dňa | §4.8 |
-| 10 – review a opravy | 10a 23. 10. 2026 | review kódu, skriptov, dokumentácie a CI; 10a jeden README (TODO.md zlúčené), opravy METODIKA; čakajú 10b–10d (Otvorené) | §2 |
+| 10 – review a opravy | 10a, 10b 23. 10. 2026 | review kódu, skriptov, dokumentácie a CI; 10a jeden README (TODO.md zlúčené), opravy METODIKA; 10b stránka a log: platná lavínová správa, obnova otvorenej stránky, časové limity, log bez straty riadku; čakajú 10c–10d (Otvorené) | §2, §4.8, §5.2 |
 
 ## Sezóna 2026/27
 
-- **Pred 1. 11.** – kroky 10b a 10c (Otvorené) a skúšobný beh CI; `npm run regions` (polygóny EAWS majú
-  dátumy platnosti, skript skončí chybou, keď `avalancheRegion` nesedí).
+- **Pred 1. 11.** – krok 10c (Otvorené) a skúšobný beh CI; `npm run regions` (polygóny EAWS majú dátumy
+  platnosti, skript skončí chybou, keď `avalancheRegion` nesedí).
 - **1. 11. – CI štartuje.** Po prvom behu: pribudol commit s `docs/` a `data/prospective/2026-27.jsonl`;
   riadok má `stations` (6 staníc) aj `members` (51 hodnôt od D+1); ~3 riadky denne po 17–24 kB. Ak log CI
   hlási „log bude bez staníc“, pozrieť `pointsUrl` a limity Open-Meteo.
@@ -190,12 +192,6 @@ dátumom sú v METODIKA §2.
 
 **Schválené 23. 10. 2026, čaká na prácu (krok 10, každé písmeno jeden commit):**
 
-- **10b – stránka a log (pred 1. 11.):** včerajšiu lavínovú správu brať len kým platí (`avalancheDates`);
-  otvorenú stránku obnoviť aj časovačom a pri zmene najbližšieho dňa po 16:00, vždy prekresliť; časový
-  limit sťahovania v prehliadači; zlá odpoveď staníc nesmie zahodiť riadok logu (`buildForecastLog`);
-  generátor má opakovať chybové odpovede Open-Meteo pod HTTP 200 a pri 429 čakať aspoň minútu; test
-  rovnosti `src/cover-model.ts` a `snowTemp` s JSON; podiely výhľadu so súčtom 100 %; v tabuľke „ujde“
-  namiesto „priemerný“; `docs/` pregenerovať.
 - **10c – CI:** akcie v7, `timeout-minutes`, ručný beh mimo sezóny bez zápisu do logu; potom skúšobný beh.
 - **10d – čísla:** klimatológia v `scripts/cover-verify.ts` z celého radu stanice (dnes 0,2 pri staniciach s
   jednou sezónou), záporné ΔHS v `scripts/backtest-report.ts` orezať na 0, znova `npm run cover` a
